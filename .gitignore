@@ -1,0 +1,83 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.idea/
+
+# .NET
+bin/
+obj/
+*.tsbuildinfo
+*.dll
+*.exe
+*.pdb
+*.cache
+project.lock.json
+project.fragment.lock.json
+artifacts/
+*.nupkg
+
+# Node
+node_modules/
+.next/
+out/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.env
+
+# Secrets
+appsettings.Development.json
+appsettings.Local.json
+secrets.json
+
+# Android
+*.apk
+*.aab
+*.keystore
+local.properties
+.gradle/
+build/
+captures/
+.externalNativeBuild/
+
+# iOS
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+DerivedData/
+*.ipa
+*.dSYM.zip
+Pods/
+
+# Docker
+docker-data/
+
+# Logs
+logs/
+*.log
+
+# Test coverage
+coverage/
+TestResults/
+*.coverage
+
+# Azure
+.azure/
+
+# Terraform/Bicep
+*.tfstate
+*.tfstate.*

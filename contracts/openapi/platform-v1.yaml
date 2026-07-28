@@ -1,0 +1,1596 @@
+openapi: 3.1.0
+info:
+  title: Digi-Switchride Platform API
+  version: 1.0.0
+  description: |
+    REST API for the Digi-Switchride electric vehicle rental platform.
+    Covers customer mobile apps, admin portal, and IoT integration.
+  contact:
+    name: Digi-Switchride Platform Team
+
+servers:
+  - url: https://api.digi-switchride.dev/api/v1
+    description: Development
+  - url: http://localhost:4000/api/v1
+    description: Local
+
+tags:
+  - name: Auth
+    description: OTP authentication and token management
+  - name: Profile
+    description: Customer profile
+  - name: KYC
+    description: Know Your Customer document submission and status
+  - name: Hubs
+    description: Rental hub discovery and details
+  - name: Vehicles
+    description: Vehicle information
+  - name: Bookings
+    description: Booking lifecycle
+  - name: Rides
+    description: Ride start, end, and tracking
+  - name: Payments
+    description: Payment orders and webhooks
+  - name: Support
+    description: Customer support tickets
+  - name: Admin
+    description: Administration endpoints (elevated roles)
+
+paths:
+  /auth/otp/send:
+    post:
+      tags: [Auth]
+      operationId: sendOtp
+      summary: Send OTP to phone number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendOtpRequest"
+      responses:
+        "200":
+          description: OTP sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendOtpResponse"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /auth/otp/verify:
+    post:
+      tags: [Auth]
+      operationId: verifyOtp
+      summary: Verify OTP and obtain tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyOtpRequest"
+      responses:
+        "200":
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokens"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshToken
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        "200":
+          description: New tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokens"
+
+  /me:
+    get:
+      tags: [Profile]
+      operationId: getProfile
+      summary: Get current customer profile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerProfile"
+    put:
+      tags: [Profile]
+      operationId: updateProfile
+      summary: Update customer profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerProfile"
+
+  /kyc/submissions:
+    post:
+      tags: [KYC]
+      operationId: submitKyc
+      summary: Submit KYC documents
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/KycSubmissionRequest"
+      responses:
+        "201":
+          description: KYC submission created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KycSubmission"
+
+  /kyc/status:
+    get:
+      tags: [KYC]
+      operationId: getKycStatus
+      summary: Get current KYC status
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: KYC status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KycStatus"
+
+  /hubs/nearby:
+    get:
+      tags: [Hubs]
+      operationId: getNearbyHubs
+      summary: Find rental hubs near a location
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+        - name: lng
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+        - name: radiusKm
+          in: query
+          schema:
+            type: number
+            format: double
+            default: 5
+      responses:
+        "200":
+          description: Nearby hubs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RentalHubSummary"
+
+  /hubs/{hubId}:
+    get:
+      tags: [Hubs]
+      operationId: getHub
+      summary: Get hub details
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/HubId"
+      responses:
+        "200":
+          description: Hub details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RentalHub"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /hubs/{hubId}/vehicles:
+    get:
+      tags: [Vehicles]
+      operationId: getHubVehicles
+      summary: List available vehicles at a hub
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/HubId"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/VehicleStatus"
+      responses:
+        "200":
+          description: Vehicles at hub
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/VehicleSummary"
+
+  /vehicles/{vehicleId}:
+    get:
+      tags: [Vehicles]
+      operationId: getVehicle
+      summary: Get vehicle details
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VehicleId"
+      responses:
+        "200":
+          description: Vehicle details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /bookings:
+    post:
+      tags: [Bookings]
+      operationId: createBooking
+      summary: Create a new booking
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBookingRequest"
+      responses:
+        "201":
+          description: Booking created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Vehicle not available
+    get:
+      tags: [Bookings]
+      operationId: listBookings
+      summary: List customer bookings
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/BookingStatus"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Booking list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedBookings"
+
+  /bookings/{bookingId}:
+    get:
+      tags: [Bookings]
+      operationId: getBooking
+      summary: Get booking details
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookingId"
+      responses:
+        "200":
+          description: Booking details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /bookings/{bookingId}/cancel:
+    post:
+      tags: [Bookings]
+      operationId: cancelBooking
+      summary: Cancel a booking
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookingId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Booking cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+
+  /rides/{rideId}/start:
+    post:
+      tags: [Rides]
+      operationId: startRide
+      summary: Start a ride (unlock vehicle)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RideId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                idempotencyKey:
+                  type: string
+                  format: uuid
+                location:
+                  $ref: "#/components/schemas/GeoPoint"
+      responses:
+        "200":
+          description: Ride started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ride"
+        "409":
+          description: Ride already started or vehicle unavailable
+
+  /rides/{rideId}/end:
+    post:
+      tags: [Rides]
+      operationId: endRide
+      summary: End a ride (lock vehicle, calculate fare)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RideId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                idempotencyKey:
+                  type: string
+                  format: uuid
+                location:
+                  $ref: "#/components/schemas/GeoPoint"
+      responses:
+        "200":
+          description: Ride ended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RideEndResult"
+
+  /rides/active:
+    get:
+      tags: [Rides]
+      operationId: getActiveRide
+      summary: Get customer's active ride
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Active ride
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ride"
+        "204":
+          description: No active ride
+
+  /rides/history:
+    get:
+      tags: [Rides]
+      operationId: getRideHistory
+      summary: Get ride history
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Ride history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedRides"
+
+  /payments/orders:
+    post:
+      tags: [Payments]
+      operationId: createPaymentOrder
+      summary: Create Razorpay payment order
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentOrderRequest"
+      responses:
+        "201":
+          description: Payment order created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentOrder"
+
+  /payments/webhooks/razorpay:
+    post:
+      tags: [Payments]
+      operationId: razorpayWebhook
+      summary: Razorpay payment webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Webhook processed
+
+  /payments/history:
+    get:
+      tags: [Payments]
+      operationId: getPaymentHistory
+      summary: Get payment history
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Payment history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedPayments"
+
+  /support/tickets:
+    post:
+      tags: [Support]
+      operationId: createSupportTicket
+      summary: Create a support ticket
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTicketRequest"
+      responses:
+        "201":
+          description: Ticket created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportTicket"
+    get:
+      tags: [Support]
+      operationId: listSupportTickets
+      summary: List customer support tickets
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Ticket list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SupportTicket"
+
+  # Admin endpoints
+  /admin/customers:
+    get:
+      tags: [Admin]
+      operationId: adminListCustomers
+      summary: List customers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: kycStatus
+          in: query
+          schema:
+            $ref: "#/components/schemas/KycStatusEnum"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Customer list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedCustomers"
+
+  /admin/customers/{customerId}/kyc/review:
+    post:
+      tags: [Admin]
+      operationId: adminReviewKyc
+      summary: Approve or reject KYC submission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KycReviewRequest"
+      responses:
+        "200":
+          description: KYC reviewed
+
+  /admin/hubs:
+    get:
+      tags: [Admin]
+      operationId: adminListHubs
+      summary: List all hubs
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Hub list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RentalHub"
+    post:
+      tags: [Admin]
+      operationId: adminCreateHub
+      summary: Create a rental hub
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHubRequest"
+      responses:
+        "201":
+          description: Hub created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RentalHub"
+
+  /admin/vehicles:
+    get:
+      tags: [Admin]
+      operationId: adminListVehicles
+      summary: List all vehicles
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Vehicle list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Vehicle"
+    post:
+      tags: [Admin]
+      operationId: adminCreateVehicle
+      summary: Register a vehicle
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVehicleRequest"
+      responses:
+        "201":
+          description: Vehicle created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+
+  /admin/bookings:
+    get:
+      tags: [Admin]
+      operationId: adminListBookings
+      summary: List all bookings
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/BookingStatus"
+      responses:
+        "200":
+          description: Booking list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedBookings"
+
+  /admin/rides/active:
+    get:
+      tags: [Admin]
+      operationId: adminListActiveRides
+      summary: List active rides
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Active rides
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Ride"
+
+  /admin/promotions:
+    get:
+      tags: [Admin]
+      operationId: adminListPromotions
+      summary: List promotions
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Promotions list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Promotion"
+    post:
+      tags: [Admin]
+      operationId: adminCreatePromotion
+      summary: Create a promotion
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePromotionRequest"
+      responses:
+        "201":
+          description: Promotion created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Promotion"
+
+  /admin/reports/summary:
+    get:
+      tags: [Admin]
+      operationId: adminGetReportSummary
+      summary: Get operational report summary
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Report summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportSummary"
+
+  /admin/finance/reconciliation:
+    get:
+      tags: [Admin]
+      operationId: adminGetFinanceReconciliation
+      summary: Get payment reconciliation report
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Reconciliation report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceReconciliation"
+
+  /admin/iot/devices:
+    get:
+      tags: [Admin]
+      operationId: adminListIoTDevices
+      summary: List IoT devices
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: IoT device list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/IoTDevice"
+
+  /admin/iot/devices/{deviceId}/command:
+    post:
+      tags: [Admin]
+      operationId: adminSendIoTCommand
+      summary: Send command to IoT device
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IoTCommandRequest"
+      responses:
+        "200":
+          description: Command sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IoTCommandResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    HubId:
+      name: hubId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    VehicleId:
+      name: vehicleId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    BookingId:
+      name: bookingId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RideId:
+      name: rideId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+
+    GeoPoint:
+      type: object
+      required: [lat, lng]
+      properties:
+        lat:
+          type: number
+          format: double
+        lng:
+          type: number
+          format: double
+
+    SendOtpRequest:
+      type: object
+      required: [phone]
+      properties:
+        phone:
+          type: string
+          pattern: "^\\+91[0-9]{10}$"
+          example: "+919876543210"
+
+    SendOtpResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        expiresInSeconds:
+          type: integer
+
+    VerifyOtpRequest:
+      type: object
+      required: [phone, otp]
+      properties:
+        phone:
+          type: string
+        otp:
+          type: string
+          minLength: 4
+          maxLength: 6
+
+    AuthTokens:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+        isNewUser:
+          type: boolean
+
+    CustomerProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        fullName:
+          type: string
+        kycStatus:
+          $ref: "#/components/schemas/KycStatusEnum"
+        accountStatus:
+          type: string
+          enum: [Active, Suspended, Deactivated]
+        createdAt:
+          type: string
+          format: date-time
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        fullName:
+          type: string
+        emergencyContact:
+          type: string
+
+    KycStatusEnum:
+      type: string
+      enum: [NotSubmitted, Pending, UnderReview, Approved, Rejected]
+
+    KycSubmissionRequest:
+      type: object
+      required: [documentType]
+      properties:
+        documentType:
+          type: string
+          enum: [Aadhaar, PAN, DrivingLicence, Selfie]
+        documentNumber:
+          type: string
+        file:
+          type: string
+          format: binary
+
+    KycSubmission:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        documentType:
+          type: string
+        status:
+          $ref: "#/components/schemas/KycStatusEnum"
+        submittedAt:
+          type: string
+          format: date-time
+
+    KycStatus:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/KycStatusEnum"
+        submissions:
+          type: array
+          items:
+            $ref: "#/components/schemas/KycSubmission"
+        rejectionReason:
+          type: string
+
+    KycReviewRequest:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [Approve, Reject]
+        reason:
+          type: string
+
+    RentalHubSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        location:
+          $ref: "#/components/schemas/GeoPoint"
+        distanceKm:
+          type: number
+        availableVehicles:
+          type: integer
+        status:
+          type: string
+          enum: [Active, Inactive, Maintenance]
+
+    RentalHub:
+      allOf:
+        - $ref: "#/components/schemas/RentalHubSummary"
+        - type: object
+          properties:
+            address:
+              type: string
+            capacity:
+              type: integer
+            operatingHours:
+              type: string
+            geoFenceRadiusM:
+              type: number
+
+    CreateHubRequest:
+      type: object
+      required: [name, location, address, capacity]
+      properties:
+        name:
+          type: string
+        location:
+          $ref: "#/components/schemas/GeoPoint"
+        address:
+          type: string
+        capacity:
+          type: integer
+        operatingHours:
+          type: string
+        geoFenceRadiusM:
+          type: number
+          default: 100
+
+    VehicleStatus:
+      type: string
+      enum: [Available, Reserved, InRide, Maintenance, Offline]
+
+    VehicleSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        registrationNumber:
+          type: string
+        type:
+          type: string
+          enum: [EScooter, EBike, ERickshaw]
+        status:
+          $ref: "#/components/schemas/VehicleStatus"
+        batteryPercent:
+          type: integer
+        model:
+          type: string
+
+    Vehicle:
+      allOf:
+        - $ref: "#/components/schemas/VehicleSummary"
+        - type: object
+          properties:
+            hubId:
+              type: string
+              format: uuid
+            odometerKm:
+              type: number
+            iotDeviceId:
+              type: string
+            pricingTier:
+              type: string
+
+    CreateVehicleRequest:
+      type: object
+      required: [registrationNumber, type, hubId, model]
+      properties:
+        registrationNumber:
+          type: string
+        type:
+          type: string
+          enum: [EScooter, EBike, ERickshaw]
+        hubId:
+          type: string
+          format: uuid
+        model:
+          type: string
+        iotDeviceId:
+          type: string
+
+    BookingStatus:
+      type: string
+      enum: [Draft, Confirmed, Active, Completed, Cancelled, NoShow]
+
+    BookingType:
+      type: string
+      enum: [PerMinute, Hourly, Daily, Weekly, Monthly]
+
+    CreateBookingRequest:
+      type: object
+      required: [vehicleId, bookingType]
+      properties:
+        vehicleId:
+          type: string
+          format: uuid
+        bookingType:
+          $ref: "#/components/schemas/BookingType"
+        promoCode:
+          type: string
+
+    Booking:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        vehicleId:
+          type: string
+          format: uuid
+        hubId:
+          type: string
+          format: uuid
+        bookingType:
+          $ref: "#/components/schemas/BookingType"
+        status:
+          $ref: "#/components/schemas/BookingStatus"
+        estimatedAmount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+          default: INR
+        rideId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+
+    PagedBookings:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Booking"
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalCount:
+          type: integer
+
+    RideStatus:
+      type: string
+      enum: [NotStarted, InProgress, Ended, ForceEnded]
+
+    Ride:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        bookingId:
+          type: string
+          format: uuid
+        vehicleId:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/RideStatus"
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        startLocation:
+          $ref: "#/components/schemas/GeoPoint"
+        endLocation:
+          $ref: "#/components/schemas/GeoPoint"
+        durationMinutes:
+          type: integer
+        distanceKm:
+          type: number
+
+    RideEndResult:
+      type: object
+      properties:
+        ride:
+          $ref: "#/components/schemas/Ride"
+        fare:
+          type: number
+          format: decimal
+        paymentId:
+          type: string
+          format: uuid
+        invoiceUrl:
+          type: string
+
+    PagedRides:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Ride"
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalCount:
+          type: integer
+
+    CreatePaymentOrderRequest:
+      type: object
+      required: [bookingId, amount]
+      properties:
+        bookingId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+          default: INR
+
+    PaymentOrder:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        razorpayOrderId:
+          type: string
+        amount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [Created, Paid, Failed, Refunded]
+
+    PaymentRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        bookingId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+        status:
+          type: string
+        method:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        invoiceUrl:
+          type: string
+
+    PagedPayments:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentRecord"
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalCount:
+          type: integer
+
+    CreateTicketRequest:
+      type: object
+      required: [category, subject, description]
+      properties:
+        category:
+          type: string
+          enum: [Ride, Payment, KYC, Vehicle, General]
+        subject:
+          type: string
+        description:
+          type: string
+        bookingId:
+          type: string
+          format: uuid
+
+    SupportTicket:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        category:
+          type: string
+        subject:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [Open, InProgress, Resolved, Closed]
+        createdAt:
+          type: string
+          format: date-time
+
+    PagedCustomers:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CustomerProfile"
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalCount:
+          type: integer
+
+    Promotion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        description:
+          type: string
+        discountType:
+          type: string
+          enum: [Percentage, FixedAmount]
+        discountValue:
+          type: number
+        validFrom:
+          type: string
+          format: date-time
+        validTo:
+          type: string
+          format: date-time
+        maxUses:
+          type: integer
+        currentUses:
+          type: integer
+        isActive:
+          type: boolean
+
+    CreatePromotionRequest:
+      type: object
+      required: [code, discountType, discountValue, validFrom, validTo]
+      properties:
+        code:
+          type: string
+        description:
+          type: string
+        discountType:
+          type: string
+          enum: [Percentage, FixedAmount]
+        discountValue:
+          type: number
+        validFrom:
+          type: string
+          format: date-time
+        validTo:
+          type: string
+          format: date-time
+        maxUses:
+          type: integer
+
+    ReportSummary:
+      type: object
+      properties:
+        totalRides:
+          type: integer
+        totalRevenue:
+          type: number
+        activeVehicles:
+          type: integer
+        fleetUtilizationPercent:
+          type: number
+        newCustomers:
+          type: integer
+        averageRideDurationMinutes:
+          type: number
+
+    FinanceReconciliation:
+      type: object
+      properties:
+        totalCollected:
+          type: number
+        totalRefunded:
+          type: number
+        netRevenue:
+          type: number
+        gstAmount:
+          type: number
+        unmatchedPayments:
+          type: integer
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              paymentId:
+                type: string
+                format: uuid
+              razorpayPaymentId:
+                type: string
+              amount:
+                type: number
+              status:
+                type: string
+              reconciledAt:
+                type: string
+                format: date-time
+
+    IoTDevice:
+      type: object
+      properties:
+        id:
+          type: string
+        vehicleId:
+          type: string
+          format: uuid
+        vendorType:
+          type: string
+        connectionStatus:
+          type: string
+          enum: [Connected, Disconnected, Unknown]
+        lastSeenAt:
+          type: string
+          format: date-time
+        batteryPercent:
+          type: integer
+        lastLocation:
+          $ref: "#/components/schemas/GeoPoint"
+
+    IoTCommandRequest:
+      type: object
+      required: [command]
+      properties:
+        command:
+          type: string
+          enum: [Lock, Unlock, IgnitionOn, IgnitionOff, GetLocation, GetBattery, GetOdometer, GetHealth]
+
+    IoTCommandResponse:
+      type: object
+      properties:
+        commandId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [Sent, Acknowledged, Failed, Timeout]

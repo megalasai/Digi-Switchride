@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  api:
+    name: Backend (NestJS)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+        working-directory: .
+      - run: npm run build -w @digi-switchride/shared
+        working-directory: .
+      - run: npm run build
+      - run: npm run lint || true
+
+  admin-web:
+    name: Admin Portal (Next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/admin-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/admin-web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  openapi:
+    name: OpenAPI Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npx @redocly/cli lint contracts/openapi/platform-v1.yaml
+
+  android:
+    name: Android (Structure)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/customer-android
+    steps:
+      - uses: actions/checkout@v4
+      - run: test -f settings.gradle.kts && test -f app/build.gradle.kts

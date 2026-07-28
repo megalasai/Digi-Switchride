@@ -1,0 +1,50 @@
+package com.digiswitchride.customer.di
+
+import com.digiswitchride.customer.BuildConfig
+import com.digiswitchride.customer.data.TokenManager
+import com.digiswitchride.customer.data.api.SwitchrideApi
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.runBlocking
+import okhttp3.Interceptor
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import javax.inject.Singleton
+
+@Module
+@InstallIn(SingletonComponent::class)
+object NetworkModule {
+
+    @Provides
+    @Singleton
+    fun provideOkHttpClient(tokenManager: TokenManager): OkHttpClient {
+        val authInterceptor = Interceptor { chain ->
+            val token = runBlocking { tokenManager.getAccessToken() }
+            val request = if (token != null) {
+                chain.request().newBuilder().addHeader("Authorization", "Bearer $token").build()
+            } else chain.request()
+            chain.proceed(request)
+        }
+        return OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)
+            .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY })
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideRetrofit(client: OkHttpClient): Retrofit =
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.API_BASE_URL + "/")
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+
+    @Provides
+    @Singleton
+    fun provideApi(retrofit: Retrofit): SwitchrideApi = retrofit.create(SwitchrideApi::class.java)
+}

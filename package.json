@@ -1,0 +1,23 @@
+{
+  "name": "digi-switchride",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Digi-Switchride — Electric vehicle rental platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run build -w @digi-switchride/shared && concurrently \"npm run dev -w @digi-switchride/api\" \"npm run dev -w admin-web\"",
+    "dev:api": "npm run dev -w @digi-switchride/api",
+    "dev:admin": "npm run dev -w admin-web",
+    "build": "npm run build -w @digi-switchride/shared && npm run build -w @digi-switchride/api && npm run build -w admin-web",
+    "lint": "npm run lint -w @digi-switchride/api && npm run lint -w admin-web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
