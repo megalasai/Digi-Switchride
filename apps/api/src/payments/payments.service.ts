@@ -102,6 +102,22 @@ export class PromotionsService {
     return promos.map((p) => this.toDto(p));
   }
 
+  async update(id: string, data: { description?: string; discountType?: string; discountValue?: number; validFrom?: Date; validTo?: Date; maxUses?: number; isActive?: boolean }) {
+    const promo = await this.promotionModel.findById(id);
+    if (!promo) throw new NotFoundException('Promotion not found');
+
+    if (data.description != null) promo.description = data.description;
+    if (data.discountType != null) promo.discountType = data.discountType as any;
+    if (data.discountValue != null) promo.discountValue = data.discountValue;
+    if (data.validFrom != null) promo.validFrom = data.validFrom;
+    if (data.validTo != null) promo.validTo = data.validTo;
+    if (data.maxUses != null) promo.maxUses = data.maxUses;
+    if (data.isActive != null) promo.isActive = data.isActive;
+
+    await promo.save();
+    return this.toDto(promo);
+  }
+
   private toDto(p: PromotionDocument) {
     return {
       id: p._id.toString(),
@@ -130,8 +146,10 @@ export class ReportsService {
   async getSummary(from: Date, to: Date) {
     const rides = await this.rideModel.find({ status: 'Ended', endedAt: { $gte: from, $lte: to } });
     const payments = await this.paymentModel.find({ status: 'Paid', paidAt: { $gte: from, $lte: to } });
-    const totalVehicles = await this.vehicleModel.countDocuments();
-    const inRide = await this.vehicleModel.countDocuments({ status: 'InRide' });
+    const totalFleet = await this.vehicleModel.countDocuments();
+    const availableVehicles = await this.vehicleModel.countDocuments({ status: 'Available' });
+    const inRideVehicles = await this.vehicleModel.countDocuments({ status: 'InRide' });
+    const iotLinkedVehicles = await this.vehicleModel.countDocuments({ iotDeviceId: { $exists: true, $ne: null } });
     const newCustomers = await this.customerModel.countDocuments({ createdAt: { $gte: from, $lte: to } });
     const avgDuration = rides.length
       ? rides.reduce((s, r) => s + (r.durationMinutes ?? 0), 0) / rides.length
@@ -140,10 +158,126 @@ export class ReportsService {
     return {
       totalRides: rides.length,
       totalRevenue: payments.reduce((s, p) => s + p.amount, 0),
-      activeVehicles: inRide,
-      fleetUtilizationPercent: totalVehicles > 0 ? (inRide / totalVehicles) * 100 : 0,
+      totalFleet,
+      availableVehicles,
+      inRideVehicles,
+      /** @deprecated use inRideVehicles — kept for backward compatibility */
+      activeVehicles: inRideVehicles,
+      iotLinkedVehicles,
+      fleetUtilizationPercent: totalFleet > 0 ? (inRideVehicles / totalFleet) * 100 : 0,
       newCustomers,
       averageRideDurationMinutes: avgDuration,
+    };
+  }
+}
+
+@Injectable()
+export class DashboardService {
+  constructor(
+    @InjectModel(Ride.name) private rideModel: Model<RideDocument>,
+    @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
+    @InjectModel(Vehicle.name) private vehicleModel: Model<VehicleDocument>,
+    @InjectModel(Customer.name) private customerModel: Model<CustomerDocument>,
+  ) {}
+
+  async getSnapshot() {
+    const from = new Date(Date.now() - 30 * 86400000);
+    const to = new Date();
+
+    const [
+      totalRiders,
+      activeRiders,
+      suspendedRiders,
+      deactivatedRiders,
+      vehiclesByStatus,
+      outstanding,
+      kycGroups,
+      recentRiders,
+      attentionVehicles,
+      paidPayments,
+      endedRides,
+    ] = await Promise.all([
+      this.customerModel.countDocuments(),
+      this.customerModel.countDocuments({ accountStatus: 'Active' }),
+      this.customerModel.countDocuments({ accountStatus: 'Suspended' }),
+      this.customerModel.countDocuments({ accountStatus: 'Deactivated' }),
+      this.vehicleModel.aggregate<{ _id: string; count: number }>([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+      this.paymentModel.aggregate<{ count: number; amount: number }>([
+        { $match: { status: { $in: ['Created', 'Failed'] } } },
+        { $group: { _id: null, count: { $sum: 1 }, amount: { $sum: '$amount' } } },
+      ]),
+      this.customerModel.aggregate<{ _id: string; count: number }>([{ $group: { _id: '$kycStatus', count: { $sum: 1 } } }]),
+      this.customerModel.find().sort({ createdAt: -1 }).limit(5),
+      this.vehicleModel
+        .find({
+          $or: [{ status: { $in: ['Maintenance', 'Offline'] } }, { batteryPercent: { $lte: 20 } }],
+        })
+        .sort({ batteryPercent: 1 })
+        .limit(8),
+      this.paymentModel.find({ status: 'Paid', paidAt: { $gte: from, $lte: to } }),
+      this.rideModel.find({ status: 'Ended', endedAt: { $gte: from, $lte: to } }),
+    ]);
+
+    const statusCounts: Record<string, number> = {};
+    for (const row of vehiclesByStatus) statusCounts[row._id] = row.count;
+    const kycCounts: Record<string, number> = {};
+    for (const row of kycGroups) kycCounts[row._id] = row.count;
+
+    const totalFleet = Object.values(statusCounts).reduce((s, n) => s + n, 0);
+
+    return {
+      riders: {
+        total: totalRiders,
+        active: activeRiders,
+        inactive: suspendedRiders + deactivatedRiders,
+        suspended: suspendedRiders,
+        deactivated: deactivatedRiders,
+      },
+      vehicles: {
+        total: totalFleet,
+        byStatus: {
+          Available: statusCounts.Available ?? 0,
+          Reserved: statusCounts.Reserved ?? 0,
+          InRide: statusCounts.InRide ?? 0,
+          Maintenance: statusCounts.Maintenance ?? 0,
+          Offline: statusCounts.Offline ?? 0,
+        },
+      },
+      outstandingPayments: {
+        count: outstanding[0]?.count ?? 0,
+        amount: outstanding[0]?.amount ?? 0,
+      },
+      kyc: {
+        NotSubmitted: kycCounts.NotSubmitted ?? 0,
+        Pending: kycCounts.Pending ?? 0,
+        UnderReview: kycCounts.UnderReview ?? 0,
+        Approved: kycCounts.Approved ?? 0,
+        Rejected: kycCounts.Rejected ?? 0,
+      },
+      upcomingModules: {
+        serviceRequests: { count: 0, operational: false },
+        breakdownAlerts: { count: 0, operational: false },
+        chargingStations: { count: 0, operational: false },
+      },
+      last30Days: {
+        totalRides: endedRides.length,
+        totalRevenue: paidPayments.reduce((s, p) => s + p.amount, 0),
+      },
+      recentRiders: recentRiders.map((c) => ({
+        id: c._id.toString(),
+        fullName: c.fullName,
+        phone: c.phone,
+        accountStatus: c.accountStatus,
+        kycStatus: c.kycStatus,
+        createdAt: (c as { createdAt?: Date }).createdAt,
+      })),
+      vehiclesNeedingAttention: attentionVehicles.map((v) => ({
+        id: v._id.toString(),
+        registrationNumber: v.registrationNumber,
+        status: v.status,
+        batteryPercent: v.batteryPercent,
+        assignedRiderId: v.assignedRiderId,
+      })),
     };
   }
 }

@@ -1,85 +1,119 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Alert } from "@/components/ui/Alert";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { FormPanel } from "@/components/ui/Card";
+import { FormModeLabel, RowActions } from "@/components/ui/RowActions";
+import { DataTable, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/DataTable";
+import { Input, Select } from "@/components/ui/Input";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { api, Vehicle, Hub } from "@/lib/api";
+
+const emptyForm = { registrationNumber: "", type: "EScooter", hubId: "", model: "", iotDeviceId: "", status: "Available" };
 
 export default function VehiclesPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [hubs, setHubs] = useState<Hub[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ registrationNumber: "", type: "EScooter", hubId: "", model: "", iotDeviceId: "" });
+  const [editId, setEditId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [form, setForm] = useState(emptyForm);
 
   const load = () => {
-    api.vehicles().then((r) => setVehicles(r.items)).catch(() => {});
+    api.vehicles().then((r) => setVehicles(r.items)).catch((e) => setError(e.message));
     api.hubs().then((r) => setHubs(r.items)).catch(() => {});
   };
   useEffect(() => { load(); }, []);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await api.createVehicle({ ...form, iotDeviceId: form.iotDeviceId || undefined });
-    setShowForm(false);
-    load();
+  const openCreate = () => { setEditId(null); setForm(emptyForm); setShowForm(true); setError(""); };
+  const openEdit = (v: Vehicle) => {
+    setEditId(v.id);
+    setForm({ registrationNumber: v.registrationNumber, type: v.type, hubId: v.hubId, model: v.model, iotDeviceId: v.iotDeviceId ?? "", status: v.status });
+    setShowForm(true); setError("");
   };
 
-  const statusColor = (s: string) => {
-    const map: Record<string, string> = {
-      Available: "text-green-600", InRide: "text-blue-600", Maintenance: "text-orange-600", Offline: "text-gray-400",
-    };
-    return map[s] ?? "text-gray-600";
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(""); setSuccess("");
+    try {
+      const iotDeviceId = form.iotDeviceId.trim() || null;
+      if (editId) {
+        await api.updateVehicle(editId, {
+          registrationNumber: form.registrationNumber,
+          type: form.type,
+          hubId: form.hubId,
+          model: form.model,
+          status: form.status,
+          iotDeviceId,
+        });
+        setSuccess("Vehicle updated");
+      } else {
+        await api.createVehicle({ ...form, iotDeviceId: form.iotDeviceId || undefined });
+        setSuccess("Vehicle registered");
+      }
+      setShowForm(false); setEditId(null); load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    }
   };
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Vehicles</h1>
-        <button onClick={() => setShowForm(!showForm)} className="px-4 py-2 bg-green-600 text-white rounded-lg">
-          {showForm ? "Cancel" : "Add Vehicle"}
-        </button>
-      </div>
+      <PageHeader title="Vehicles" description="Edit vehicles and change IoT device mapping"
+        actions={<Button variant={showForm && !editId ? "secondary" : "primary"} onClick={() => showForm && !editId ? setShowForm(false) : openCreate()}>{showForm && !editId ? "Cancel" : "Add Vehicle"}</Button>} />
+      {success && <div className="mb-4"><Alert variant="success" message={success} /></div>}
+      {error && !showForm && <div className="mb-4"><Alert message={error} /></div>}
 
       {showForm && (
-        <form onSubmit={handleCreate} className="bg-white rounded-lg shadow p-6 mb-6 grid grid-cols-2 gap-4">
-          <input placeholder="Registration number" className="border rounded px-3 py-2" value={form.registrationNumber} onChange={(e) => setForm({ ...form, registrationNumber: e.target.value })} required />
-          <select className="border rounded px-3 py-2" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-            <option value="EScooter">E-Scooter</option>
-            <option value="EBike">E-Bike</option>
-            <option value="ERickshaw">E-Rickshaw</option>
-          </select>
-          <select className="border rounded px-3 py-2" value={form.hubId} onChange={(e) => setForm({ ...form, hubId: e.target.value })} required>
-            <option value="">Select hub</option>
-            {hubs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-          </select>
-          <input placeholder="Model" className="border rounded px-3 py-2" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} required />
-          <input placeholder="IoT Device ID (optional)" className="border rounded px-3 py-2" value={form.iotDeviceId} onChange={(e) => setForm({ ...form, iotDeviceId: e.target.value })} />
-          <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-lg">Register Vehicle</button>
-        </form>
+        <FormPanel title={editId ? "Edit vehicle" : "Register vehicle"}>
+          <FormModeLabel editing={!!editId} />
+          <form onSubmit={handleSubmit} className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Input placeholder="Registration number" value={form.registrationNumber} onChange={(e) => setForm({ ...form, registrationNumber: e.target.value })} required />
+            <Select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+              <option value="EScooter">E-Scooter</option><option value="EBike">E-Bike</option><option value="ERickshaw">E-Rickshaw</option>
+            </Select>
+            <Select value={form.hubId} onChange={(e) => setForm({ ...form, hubId: e.target.value })} required>
+              <option value="">Select hub</option>
+              {hubs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+            </Select>
+            <Input placeholder="Model" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} required />
+            <Input placeholder="IoT Device ID (blank to unlink)" value={form.iotDeviceId} onChange={(e) => setForm({ ...form, iotDeviceId: e.target.value })} />
+            <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              <option value="Available">Available</option><option value="Reserved">Reserved</option><option value="InRide">InRide</option>
+              <option value="Maintenance">Maintenance</option><option value="Offline">Offline</option>
+            </Select>
+            {error && <div className="md:col-span-2"><Alert message={error} /></div>}
+            <div className="md:col-span-2 flex gap-2">
+              <Button type="submit">{editId ? "Save changes" : "Register vehicle"}</Button>
+              <Button type="button" variant="secondary" onClick={() => { setShowForm(false); setEditId(null); }}>Cancel</Button>
+            </div>
+          </form>
+        </FormPanel>
       )}
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b">
-            <tr>
-              <th className="text-left p-4">Registration</th>
-              <th className="text-left p-4">Type</th>
-              <th className="text-left p-4">Model</th>
-              <th className="text-left p-4">Battery</th>
-              <th className="text-left p-4">Status</th>
-            </tr>
-          </thead>
-          <tbody>
+      <DataTable>
+        <Table>
+          <TableHead>
+            <TableHeaderCell>Registration</TableHeaderCell><TableHeaderCell>Model</TableHeaderCell><TableHeaderCell>IoT Device</TableHeaderCell>
+            <TableHeaderCell>Battery</TableHeaderCell><TableHeaderCell>Status</TableHeaderCell><TableHeaderCell />
+          </TableHead>
+          <TableBody>
             {vehicles.map((v) => (
-              <tr key={v.id} className="border-b hover:bg-gray-50">
-                <td className="p-4 font-medium">{v.registrationNumber}</td>
-                <td className="p-4">{v.type}</td>
-                <td className="p-4">{v.model}</td>
-                <td className="p-4">{v.batteryPercent}%</td>
-                <td className={`p-4 font-medium ${statusColor(v.status)}`}>{v.status}</td>
-              </tr>
+              <TableRow key={v.id}>
+                <TableCell className="font-semibold">{v.registrationNumber}</TableCell>
+                <TableCell>{v.model}</TableCell>
+                <TableCell className="font-mono text-xs text-text-secondary">{v.iotDeviceId ?? "—"}</TableCell>
+                <TableCell>{v.batteryPercent}%</TableCell>
+                <TableCell><Badge status={v.status} /></TableCell>
+                <TableCell><RowActions onEdit={() => openEdit(v)} /></TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      </DataTable>
     </div>
   );
 }

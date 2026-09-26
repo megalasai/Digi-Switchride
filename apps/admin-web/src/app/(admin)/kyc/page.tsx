@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { IconShield } from "@/components/icons";
 import { api, Customer } from "@/lib/api";
 
 export default function KycReviewPage() {
@@ -20,33 +26,30 @@ export default function KycReviewPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">KYC Review Queue</h1>
+      <PageHeader title="KYC Review Queue" description="Approve or reject pending identity verifications" />
       {customers.length === 0 ? (
-        <p className="text-gray-500">No pending KYC submissions.</p>
+        <EmptyState
+          icon={<IconShield className="h-7 w-7" />}
+          title="No pending submissions"
+          description="New KYC requests from the mobile app will appear here for review."
+        />
       ) : (
         <div className="space-y-4">
           {customers.map((c) => (
-            <div key={c.id} className="bg-white rounded-lg shadow p-6 flex justify-between items-center">
+            <Card key={c.id} className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="font-medium">{c.fullName ?? c.phone}</p>
-                <p className="text-sm text-gray-500">{c.phone}</p>
-                <p className="text-sm text-gray-500">Submitted: {new Date(c.createdAt).toLocaleDateString()}</p>
+                <p className="font-semibold text-text-primary">{c.fullName ?? c.phone}</p>
+                <p className="text-sm text-text-secondary">{c.phone}</p>
+                <p className="mt-1 text-sm text-text-muted">
+                  Submitted {new Date(c.createdAt).toLocaleDateString()}
+                </p>
+                <div className="mt-2"><Badge status="Pending" /></div>
               </div>
               <div className="flex gap-2">
-                <button
-                  onClick={() => handleReview(c.id, "Approve")}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                >
-                  Approve
-                </button>
-                <button
-                  onClick={() => handleReview(c.id, "Reject")}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                >
-                  Reject
-                </button>
+                <Button onClick={() => handleReview(c.id, "Approve")}>Approve</Button>
+                <Button variant="danger" onClick={() => handleReview(c.id, "Reject")}>Reject</Button>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}

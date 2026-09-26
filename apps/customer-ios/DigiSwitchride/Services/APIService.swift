@@ -1,8 +1,7 @@
 import Foundation
 
-struct SendOtpRequest: Codable { let phone: String }
-struct SendOtpResponse: Codable { let message: String; let expiresInSeconds: Int }
-struct VerifyOtpRequest: Codable { let phone: String; let otp: String }
+struct RegisterRequest: Codable { let username: String; let password: String; let fullName: String? }
+struct LoginRequest: Codable { let username: String; let password: String }
 struct AuthTokens: Codable { let accessToken: String; let refreshToken: String; let expiresIn: Int; let isNewUser: Bool }
 struct GeoPoint: Codable { let lat: Double; let lng: Double }
 struct RentalHubSummary: Codable, Identifiable { let id: String; let name: String; let location: GeoPoint; let distanceKm: Double; let availableVehicles: Int; let status: String }
@@ -12,7 +11,7 @@ struct Booking: Codable { let id: String; let vehicleId: String; let bookingType
 struct Ride: Codable, Identifiable { let id: String; let bookingId: String; let vehicleId: String; let status: String; let startedAt: String?; let endedAt: String? }
 struct RideEndResult: Codable { let ride: Ride; let fare: Double; let paymentId: String? }
 struct KycStatus: Codable { let status: String }
-struct CustomerProfile: Codable { let id: String; let phone: String; let fullName: String?; let kycStatus: String }
+struct CustomerProfile: Codable { let id: String; let username: String?; let phone: String?; let fullName: String?; let kycStatus: String }
 struct HubsResponse: Codable { let items: [RentalHubSummary] }
 struct VehiclesResponse: Codable { let items: [VehicleSummary] }
 struct CreateTicketRequest: Codable { let category: String; let subject: String; let description: String }
@@ -21,7 +20,8 @@ enum APIError: Error { case invalidURL, requestFailed, unauthorized }
 
 class APIService {
     static let shared = APIService()
-    private let baseURL = "http://localhost:4000/api"
+    // Simulator: localhost. Physical device: replace with your machine IP, e.g. http://192.168.1.10:4000/api/v1
+    private let baseURL = "http://localhost:4000/api/v1"
     var accessToken: String?
 
     private func request<T: Decodable>(_ method: String, _ path: String, body: Encodable? = nil) async throws -> T {
@@ -39,12 +39,12 @@ class APIService {
         return try JSONDecoder().decode(T.self, from: data)
     }
 
-    func sendOtp(phone: String) async throws -> SendOtpResponse {
-        try await request("POST", "/auth/otp/send", body: SendOtpRequest(phone: phone))
+    func register(username: String, password: String, fullName: String?) async throws -> AuthTokens {
+        try await request("POST", "/auth/register", body: RegisterRequest(username: username, password: password, fullName: fullName))
     }
 
-    func verifyOtp(phone: String, otp: String) async throws -> AuthTokens {
-        try await request("POST", "/auth/otp/verify", body: VerifyOtpRequest(phone: phone, otp: otp))
+    func login(username: String, password: String) async throws -> AuthTokens {
+        try await request("POST", "/auth/login", body: LoginRequest(username: username, password: password))
     }
 
     func getNearbyHubs(lat: Double, lng: Double) async throws -> HubsResponse {
@@ -86,24 +86,35 @@ class AuthManager: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
 
-    func sendOtp(phone: String) async {
+    func login(username: String, password: String) async {
         isLoading = true
         error = nil
         do {
-            _ = try await APIService.shared.sendOtp(phone: phone)
-        } catch { self.error = error.localizedDescription }
-        isLoading = false
-    }
-
-    func verifyOtp(phone: String, otp: String) async {
-        isLoading = true
-        error = nil
-        do {
-            let tokens = try await APIService.shared.verifyOtp(phone: phone, otp: otp)
+            let tokens = try await APIService.shared.login(username: username.trimmingCharacters(in: .whitespacesAndNewlines), password: password)
             APIService.shared.accessToken = tokens.accessToken
             KeychainHelper.save(key: "refresh_token", value: tokens.refreshToken)
             isAuthenticated = true
-        } catch { self.error = error.localizedDescription }
+        } catch {
+            self.error = "Unable to reach server or invalid credentials. Check API is running on port 4000."
+        }
+        isLoading = false
+    }
+
+    func register(username: String, password: String, fullName: String?) async {
+        isLoading = true
+        error = nil
+        do {
+            let tokens = try await APIService.shared.register(
+                username: username.trimmingCharacters(in: .whitespacesAndNewlines),
+                password: password,
+                fullName: fullName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true ? nil : fullName
+            )
+            APIService.shared.accessToken = tokens.accessToken
+            KeychainHelper.save(key: "refresh_token", value: tokens.refreshToken)
+            isAuthenticated = true
+        } catch {
+            self.error = "Unable to reach server or username already taken. Check API is running on port 4000."
+        }
         isLoading = false
     }
 

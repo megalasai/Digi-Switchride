@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "prebuild": "node -e \"const fs=require('fs');['dist','tsconfig.build.tsbuildinfo'].forEach(p=>{try{fs.rmSync(p,{recursive:true,force:true})}catch(e){}})\"",
     "build": "nest build",
-    "dev": "npm run build -w @digi-switchride/shared && nest start --watch",
-    "start": "node dist/main",
-    "start:prod": "node dist/main",
+    "dev": "npm run build -w @digi-switchride/shared && npm run build && nest start --watch",
+    "start": "node dist/main.js",
+    "start:prod": "node dist/main.js",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix"
   },
   "dependencies": {

@@ -9,6 +9,8 @@ import { BookingsModule } from './bookings/bookings.module';
 import { PaymentsModule } from './payments/payments.module';
 import { SupportModule } from './support/support.module';
 import { IoTModule } from './iot/iot.module';
+import { AuditAdminModule } from './audit/audit-admin.module';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
@@ -29,6 +31,8 @@ import { IoTModule } from './iot/iot.module';
     PaymentsModule,
     SupportModule,
     IoTModule,
+    AuditModule,
+    AuditAdminModule,
   ],
 })
 export class AppModule {}

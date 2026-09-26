@@ -1,6 +1,9 @@
-import { Body, Controller, Get, Headers, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { PaymentsService, PromotionsService, ReportsService } from './payments.service';
+import { AdminGuard, RolesGuard } from '../auth/admin.guard';
+import { Roles } from '../auth/roles.decorator';
+import { CreateCustomerDto, UpdateCustomerDto } from '../auth/dto/admin-auth.dto';
+import { PaymentsService, PromotionsService, ReportsService, DashboardService } from './payments.service';
 import { KycService, ProfileService } from '../customers/customers.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -29,7 +32,7 @@ export class PaymentsController {
 }
 
 @Controller('v1/admin')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), AdminGuard, RolesGuard)
 export class AdminController {
   constructor(
     @InjectModel(Customer.name) private customerModel: Model<CustomerDocument>,
@@ -38,6 +41,7 @@ export class AdminController {
     private promotionsService: PromotionsService,
     private reportsService: ReportsService,
     private paymentsService: PaymentsService,
+    private dashboardService: DashboardService,
   ) {}
 
   @Get('customers')
@@ -55,7 +59,20 @@ export class AdminController {
     };
   }
 
+  @Post('customers')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  createCustomer(@Body() body: CreateCustomerDto) {
+    return this.profileService.createCustomer(body);
+  }
+
+  @Put('customers/:customerId')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  updateCustomer(@Param('customerId') customerId: string, @Body() body: UpdateCustomerDto) {
+    return this.profileService.updateCustomer(customerId, body);
+  }
+
   @Post('customers/:customerId/kyc/review')
+  @Roles('SuperAdmin', 'Administrator', 'KycTeam')
   reviewKyc(@Param('customerId') customerId: string, @Body() body: { action: 'Approve' | 'Reject'; reason?: string }) {
     return this.kycService.review(customerId, body.action, body.reason);
   }
@@ -66,6 +83,7 @@ export class AdminController {
   }
 
   @Post('promotions')
+  @Roles('SuperAdmin', 'Administrator', 'Finance')
   createPromotion(@Body() body: { code: string; description?: string; discountType: string; discountValue: number; validFrom: string; validTo: string; maxUses?: number }) {
     return this.promotionsService.create({
       ...body,
@@ -74,9 +92,24 @@ export class AdminController {
     });
   }
 
+  @Put('promotions/:id')
+  @Roles('SuperAdmin', 'Administrator', 'Finance')
+  updatePromotion(@Param('id') id: string, @Body() body: { description?: string; discountType?: string; discountValue?: number; validFrom?: string; validTo?: string; maxUses?: number; isActive?: boolean }) {
+    return this.promotionsService.update(id, {
+      ...body,
+      validFrom: body.validFrom ? new Date(body.validFrom) : undefined,
+      validTo: body.validTo ? new Date(body.validTo) : undefined,
+    });
+  }
+
   @Get('reports/summary')
   reportSummary(@Query('from') from: string, @Query('to') to: string) {
     return this.reportsService.getSummary(new Date(from), new Date(to));
+  }
+
+  @Get('dashboard')
+  dashboard() {
+    return this.dashboardService.getSnapshot();
   }
 
   @Get('finance/reconciliation')

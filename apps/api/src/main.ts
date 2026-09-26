@@ -16,14 +16,16 @@ async function bootstrap() {
   );
 
   app.setGlobalPrefix('api');
+  const corsOrigin = config.get<string>('CORS_ORIGIN', 'http://localhost:3000');
   app.enableCors({
-    origin: config.get<string>('CORS_ORIGIN', 'http://localhost:3000'),
+    origin: corsOrigin.includes(',') ? corsOrigin.split(',').map((o) => o.trim()) : corsOrigin,
     credentials: true,
   });
 
   const port = config.get<number>('PORT', 4000);
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   console.log(`Digi-Switchride API running on http://localhost:${port}/api`);
+  console.log(`  LAN access: http://<your-ip>:${port}/api/v1  (use ipconfig / ifconfig)`);
 }
 
 bootstrap();

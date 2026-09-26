@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/Badge";
+import { DataTable, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/DataTable";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Select } from "@/components/ui/Input";
 import { api, Booking } from "@/lib/api";
 
 export default function BookingsPage() {
@@ -13,40 +17,41 @@ export default function BookingsPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Bookings</h1>
-        <select className="border rounded-lg px-4 py-2" value={filter} onChange={(e) => setFilter(e.target.value)}>
-          <option value="">All statuses</option>
-          <option value="Confirmed">Confirmed</option>
-          <option value="Active">Active</option>
-          <option value="Completed">Completed</option>
-          <option value="Cancelled">Cancelled</option>
-        </select>
-      </div>
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b">
-            <tr>
-              <th className="text-left p-4">ID</th>
-              <th className="text-left p-4">Type</th>
-              <th className="text-left p-4">Status</th>
-              <th className="text-left p-4">Amount</th>
-              <th className="text-left p-4">Created</th>
-            </tr>
-          </thead>
-          <tbody>
+      <PageHeader
+        title="Bookings"
+        description="All ride reservations and their status"
+        actions={
+          <Select className="w-48" value={filter} onChange={(e) => setFilter(e.target.value)}>
+            <option value="">All statuses</option>
+            <option value="Confirmed">Confirmed</option>
+            <option value="Active">Active</option>
+            <option value="Completed">Completed</option>
+            <option value="Cancelled">Cancelled</option>
+          </Select>
+        }
+      />
+      <DataTable>
+        <Table>
+          <TableHead>
+            <TableHeaderCell>ID</TableHeaderCell>
+            <TableHeaderCell>Type</TableHeaderCell>
+            <TableHeaderCell>Status</TableHeaderCell>
+            <TableHeaderCell>Amount</TableHeaderCell>
+            <TableHeaderCell>Created</TableHeaderCell>
+          </TableHead>
+          <TableBody>
             {bookings.map((b) => (
-              <tr key={b.id} className="border-b hover:bg-gray-50">
-                <td className="p-4 font-mono text-xs">{b.id.slice(0, 8)}...</td>
-                <td className="p-4">{b.bookingType}</td>
-                <td className="p-4">{b.status}</td>
-                <td className="p-4">₹{b.estimatedAmount}</td>
-                <td className="p-4">{new Date(b.createdAt).toLocaleString()}</td>
-              </tr>
+              <TableRow key={b.id}>
+                <TableCell className="font-mono text-xs text-text-secondary">{b.id.slice(0, 8)}…</TableCell>
+                <TableCell>{b.bookingType}</TableCell>
+                <TableCell><Badge status={b.status} /></TableCell>
+                <TableCell className="font-semibold">₹{b.estimatedAmount}</TableCell>
+                <TableCell className="text-text-secondary">{new Date(b.createdAt).toLocaleString()}</TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      </DataTable>
     </div>
   );
 }

@@ -6,8 +6,14 @@ export type CustomerDocument = HydratedDocument<Customer>;
 
 @Schema({ timestamps: true, collection: 'customers' })
 export class Customer {
-  @Prop({ required: true, unique: true, trim: true })
-  phone!: string;
+  @Prop({ trim: true, lowercase: true, unique: true, sparse: true })
+  username?: string;
+
+  @Prop()
+  passwordHash?: string;
+
+  @Prop({ trim: true, unique: true, sparse: true })
+  phone?: string;
 
   @Prop({ trim: true, lowercase: true })
   email?: string;
@@ -23,10 +29,22 @@ export class Customer {
 
   @Prop({ required: true, enum: ['Active', 'Suspended', 'Deactivated'], default: 'Active' })
   accountStatus!: AccountStatus;
+
+  @Prop({ type: String })
+  assignedVehicleId?: string;
+
+  @Prop({ type: String })
+  rentalPlanId?: string;
+
+  @Prop({ default: 0 })
+  walletBalance!: number;
 }
 
 export const CustomerSchema = SchemaFactory.createForClass(Customer);
 CustomerSchema.index({ phone: 1 });
+CustomerSchema.index({ username: 1 });
+CustomerSchema.index({ accountStatus: 1, kycStatus: 1 });
+CustomerSchema.index({ assignedVehicleId: 1 }, { sparse: true });
 
 @Schema({ timestamps: true, collection: 'kyc_submissions' })
 export class KycSubmission {

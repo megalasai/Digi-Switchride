@@ -1,8 +1,13 @@
 import { createHash, randomInt } from 'crypto';
-import { PRICING_RATES, GST_RATE, type BookingType } from '@digi-switchride/shared';
+import { PRICING_RATES, GST_RATE } from '@digi-switchride/shared';
+import type { BookingType } from '@digi-switchride/shared';
 
 export function hashOtp(otp: string): string {
   return createHash('sha256').update(otp).digest('base64');
+}
+
+export function hashPassword(password: string, salt: string): string {
+  return createHash('sha256').update(`${salt}:${password}`).digest('hex');
 }
 
 export function generateOtp(): string {
@@ -42,4 +47,15 @@ export function haversineDistanceKm(lat1: number, lng1: number, lat2: number, ln
 
 export function toGeoLocation(lat: number, lng: number) {
   return { type: 'Point' as const, coordinates: [lng, lat] as [number, number] };
+}
+
+export function normalizeIndiaPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
+  if (digits.length === 11 && digits.startsWith('0')) return digits.slice(1);
+  return digits;
+}
+
+export function normalizeVehicleRegistration(value: string): string {
+  return value.replace(/[\s-]/g, '').toUpperCase();
 }

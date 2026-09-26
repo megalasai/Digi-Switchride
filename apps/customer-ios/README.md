@@ -20,7 +20,11 @@ Native Swift + SwiftUI customer application for the Digi-Switchride platform.
 ```
 DigiSwitchride/
 ├── App/
-│   └── DigiSwitchrideApp.swift      # App entry point
+│   └── DigiSwitchrideApp.swift      # App entry point + tab navigation
+├── Theme/
+│   └── AppTheme.swift               # Brand colors and button styles
+├── Components/
+│   └── Components.swift             # Reusable UI components
 ├── Services/
 │   └── APIService.swift             # REST API client + AuthManager
 └── Views/
@@ -29,17 +33,18 @@ DigiSwitchride/
 
 ## Features
 
-- OTP login
+- Modern SwiftUI design matching Android (green EV brand, cards, bottom tabs)
+- Username/password login and registration
 - KYC document upload
-- Nearby hub discovery
+- Nearby hub discovery with map placeholder
 - Vehicle booking and ride start/end
-- Ride history
+- Ride history empty state
 - Support tickets
-- Profile management
+- Profile with KYC shortcuts
 
 ## API
 
-Connects to Platform API at `/v1` — see `contracts/openapi/platform-v1.yaml`.
+Connects to Platform API at `/api/v1` — see `contracts/openapi/platform-v1.yaml`.
 
-For simulator: use `http://localhost:5000/v1`
-For device: use your machine's local IP.
+For simulator: use `http://localhost:4000/api/v1`
+For device: use your machine's local IP (e.g. `http://192.168.x.x:4000/api/v1`).

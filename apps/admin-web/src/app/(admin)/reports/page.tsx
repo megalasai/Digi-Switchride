@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Input } from "@/components/ui/Input";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatCard } from "@/components/ui/StatCard";
 import { api, ReportSummary } from "@/lib/api";
 
 export default function ReportsPage() {
@@ -14,30 +17,29 @@ export default function ReportsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Reports & Analytics</h1>
-      <div className="flex gap-4 mb-6">
-        <input type="date" className="border rounded px-3 py-2" value={from} onChange={(e) => setFrom(e.target.value)} />
-        <input type="date" className="border rounded px-3 py-2" value={to} onChange={(e) => setTo(e.target.value)} />
-      </div>
+      <PageHeader
+        title="Reports & Analytics"
+        description="Fleet counts are current; rides and revenue use the selected date range"
+        actions={
+          <div className="flex gap-3">
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+        }
+      />
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <StatCard label="Total Rides" value={String(summary.totalRides)} />
-          <StatCard label="Total Revenue" value={`₹${summary.totalRevenue.toLocaleString()}`} />
-          <StatCard label="Active Vehicles" value={String(summary.activeVehicles)} />
-          <StatCard label="Fleet Utilization" value={`${summary.fleetUtilizationPercent.toFixed(1)}%`} />
-          <StatCard label="New Customers" value={String(summary.newCustomers)} />
-          <StatCard label="Avg Ride Duration" value={`${summary.averageRideDurationMinutes.toFixed(0)} min`} />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <StatCard label="Total Fleet" value={String(summary.totalFleet)} accent="slate" icon={<span>🛵</span>} />
+          <StatCard label="Available" value={String(summary.availableVehicles)} accent="brand" icon={<span>✓</span>} />
+          <StatCard label="IoT Linked" value={String(summary.iotLinkedVehicles)} accent="blue" icon={<span>📡</span>} />
+          <StatCard label="In Ride" value={String(summary.inRideVehicles)} accent="amber" icon={<span>⚡</span>} />
+          <StatCard label="Total Rides" value={String(summary.totalRides)} accent="brand" icon={<span>📅</span>} />
+          <StatCard label="Total Revenue" value={`₹${summary.totalRevenue.toLocaleString()}`} accent="blue" icon={<span>₹</span>} />
+          <StatCard label="Fleet Utilization" value={`${summary.fleetUtilizationPercent.toFixed(1)}%`} accent="amber" icon={<span>%</span>} />
+          <StatCard label="New Customers" value={String(summary.newCustomers)} accent="slate" icon={<span>👥</span>} />
+          <StatCard label="Avg Ride Duration" value={`${summary.averageRideDurationMinutes.toFixed(0)} min`} accent="blue" icon={<span>⏱</span>} />
         </div>
       )}
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className="text-2xl font-bold mt-2">{value}</p>
     </div>
   );
 }

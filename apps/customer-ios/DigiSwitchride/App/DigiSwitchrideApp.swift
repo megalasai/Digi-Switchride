@@ -8,6 +8,7 @@ struct DigiSwitchrideApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(authManager)
+                .tint(AppColors.greenPrimary)
         }
     }
 }
@@ -23,6 +24,7 @@ struct ContentView: View {
                 LoginView()
             }
         }
+        .animation(.easeInOut, value: auth.isAuthenticated)
     }
 }
 
@@ -30,14 +32,14 @@ struct MainTabView: View {
     var body: some View {
         TabView {
             HomeView()
-                .tabItem { Label("Map", systemImage: "map") }
+                .tabItem { Label("Explore", systemImage: "map") }
             RideHistoryView()
-                .tabItem { Label("History", systemImage: "clock") }
+                .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
             SupportView()
                 .tabItem { Label("Support", systemImage: "headphones") }
             ProfileView()
                 .tabItem { Label("Profile", systemImage: "person") }
         }
-        .tint(Color("AccentGreen"))
+        .tint(AppColors.greenPrimary)
     }
 }

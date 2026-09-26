@@ -69,11 +69,61 @@ export class Vehicle {
   iotDeviceId?: string;
 
   @Prop()
+  lastLat?: number;
+
+  @Prop()
+  lastLng?: number;
+
+  @Prop()
+  lastTelemetryAt?: Date;
+
+  @Prop()
   pricingTier?: string;
+
+  @Prop({ type: String })
+  assignedRiderId?: string;
+
+  @Prop({ trim: true })
+  notes?: string;
+
+  @Prop()
+  statusChangedAt?: Date;
 }
 
 export const VehicleSchema = SchemaFactory.createForClass(Vehicle);
 VehicleSchema.index({ hubId: 1, status: 1 });
+VehicleSchema.index({ iotDeviceId: 1 }, { sparse: true, unique: true });
+VehicleSchema.index({ assignedRiderId: 1 }, { sparse: true });
+VehicleSchema.index({ registrationNumber: 1 });
+
+export type VehicleEventDocument = HydratedDocument<VehicleEvent>;
+
+@Schema({ timestamps: true, collection: 'vehicle_events' })
+export class VehicleEvent {
+  @Prop({ required: true, type: String })
+  vehicleId!: string;
+
+  @Prop({ required: true, enum: ['StatusChange', 'Assignment', 'Unassignment', 'HubMove', 'Note'] })
+  type!: string;
+
+  @Prop({ required: true })
+  summary!: string;
+
+  @Prop()
+  reason?: string;
+
+  @Prop()
+  actorId?: string;
+
+  @Prop()
+  actorEmail?: string;
+
+  @Prop({ type: Object })
+  metadata?: Record<string, unknown>;
+}
+
+export const VehicleEventSchema = SchemaFactory.createForClass(VehicleEvent);
+VehicleEventSchema.index({ vehicleId: 1, createdAt: -1 });
 
 export type IoTDeviceDocument = HydratedDocument<IoTDevice>;
 
@@ -102,6 +152,10 @@ export class IoTDevice {
 
   @Prop()
   lastLng?: number;
+
+  @Prop()
+  odometerKm?: number;
 }
 
 export const IoTDeviceSchema = SchemaFactory.createForClass(IoTDevice);
+IoTDeviceSchema.index({ vehicleId: 1 }, { sparse: true, unique: true });

@@ -4,9 +4,12 @@ import { PassportModule } from '@nestjs/passport';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
 import { Customer, CustomerSchema, OtpRecord, OtpRecordSchema, RefreshToken, RefreshTokenSchema } from '../schemas/customer.schema';
+import { AdminUser, AdminUserSchema } from '../schemas/admin.schema';
+import { AuditModule } from '../audit/audit.module';
 import { AuthService } from './auth.service';
-import { AuthController } from './auth.controller';
+import { AuthController, AdminUsersController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
+import { AdminGuard, RolesGuard } from './admin.guard';
 
 @Module({
   imports: [
@@ -14,7 +17,9 @@ import { JwtStrategy } from './jwt.strategy';
       { name: Customer.name, schema: CustomerSchema },
       { name: OtpRecord.name, schema: OtpRecordSchema },
       { name: RefreshToken.name, schema: RefreshTokenSchema },
+      { name: AdminUser.name, schema: AdminUserSchema },
     ]),
+    AuditModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       inject: [ConfigService],
@@ -24,8 +29,8 @@ import { JwtStrategy } from './jwt.strategy';
       }),
     }),
   ],
-  controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService, JwtModule],
+  controllers: [AuthController, AdminUsersController],
+  providers: [AuthService, JwtStrategy, AdminGuard, RolesGuard],
+  exports: [AuthService, JwtModule, AdminGuard, RolesGuard],
 })
 export class AuthModule {}

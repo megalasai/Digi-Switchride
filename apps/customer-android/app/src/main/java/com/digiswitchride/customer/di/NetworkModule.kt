@@ -1,6 +1,7 @@
 package com.digiswitchride.customer.di
 
 import com.digiswitchride.customer.BuildConfig
+import com.digiswitchride.customer.data.ApiSettings
 import com.digiswitchride.customer.data.TokenManager
 import com.digiswitchride.customer.data.api.SwitchrideApi
 import dagger.Module
@@ -8,6 +9,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.runBlocking
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -21,15 +23,39 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(tokenManager: TokenManager): OkHttpClient {
+    fun provideOkHttpClient(tokenManager: TokenManager, apiSettings: ApiSettings): OkHttpClient {
+        val baseUrlInterceptor = Interceptor { chain ->
+            val request = chain.request()
+            val configuredBase = runBlocking { apiSettings.getBaseUrl() }.toHttpUrlOrNull()
+                ?: BuildConfig.API_BASE_URL.toHttpUrlOrNull()
+                ?: throw IllegalStateException("Invalid API base URL")
+
+            val path = request.url.encodedPath
+            val suffix = when {
+                path.contains("/api/v1") -> path.substringAfter("/api/v1").ifEmpty { "/" }
+                else -> path
+            }
+
+            val newUrl = configuredBase.newBuilder()
+                .encodedPath(configuredBase.encodedPath.trimEnd('/') + suffix)
+                .query(request.url.query)
+                .build()
+
+            chain.proceed(request.newBuilder().url(newUrl).build())
+        }
+
         val authInterceptor = Interceptor { chain ->
             val token = runBlocking { tokenManager.getAccessToken() }
             val request = if (token != null) {
                 chain.request().newBuilder().addHeader("Authorization", "Bearer $token").build()
-            } else chain.request()
+            } else {
+                chain.request()
+            }
             chain.proceed(request)
         }
+
         return OkHttpClient.Builder()
+            .addInterceptor(baseUrlInterceptor)
             .addInterceptor(authInterceptor)
             .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY })
             .build()

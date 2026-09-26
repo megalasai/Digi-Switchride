@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatCard } from "@/components/ui/StatCard";
 import { api, ReportSummary } from "@/lib/api";
 
 export default function DashboardPage() {
@@ -13,23 +15,22 @@ export default function DashboardPage() {
   }, []);
 
   const cards = [
-    { label: "Total Rides (30d)", value: summary?.totalRides ?? "—" },
-    { label: "Revenue (30d)", value: summary ? `₹${summary.totalRevenue.toLocaleString()}` : "—" },
-    { label: "Active Vehicles", value: summary?.activeVehicles ?? "—" },
-    { label: "Fleet Utilization", value: summary ? `${summary.fleetUtilizationPercent.toFixed(1)}%` : "—" },
-    { label: "New Customers", value: summary?.newCustomers ?? "—" },
-    { label: "Avg Ride Duration", value: summary ? `${summary.averageRideDurationMinutes.toFixed(0)} min` : "—" },
+    { label: "Total Fleet", value: summary?.totalFleet ?? "—", accent: "slate" as const, icon: "🛵" },
+    { label: "Available for Booking", value: summary?.availableVehicles ?? "—", accent: "brand" as const, icon: "✓" },
+    { label: "IoT Linked", value: summary?.iotLinkedVehicles ?? "—", accent: "blue" as const, icon: "📡" },
+    { label: "In Ride Now", value: summary?.inRideVehicles ?? "—", accent: "amber" as const, icon: "⚡" },
+    { label: "Total Rides (30d)", value: summary?.totalRides ?? "—", accent: "brand" as const, icon: "📅" },
+    { label: "Revenue (30d)", value: summary ? `₹${summary.totalRevenue.toLocaleString()}` : "—", accent: "blue" as const, icon: "₹" },
+    { label: "Fleet Utilization", value: summary ? `${summary.fleetUtilizationPercent.toFixed(1)}%` : "—", accent: "amber" as const, icon: "%" },
+    { label: "New Customers", value: summary?.newCustomers ?? "—", accent: "slate" as const, icon: "👥" },
   ];
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <PageHeader title="Dashboard" description="Fleet status is live; ride/revenue stats cover the last 30 days" />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => (
-          <div key={card.label} className="bg-white rounded-lg shadow p-6">
-            <p className="text-sm text-gray-500">{card.label}</p>
-            <p className="text-2xl font-bold mt-2">{card.value}</p>
-          </div>
+          <StatCard key={card.label} label={card.label} value={card.value} accent={card.accent} icon={<span className="text-base">{card.icon}</span>} />
         ))}
       </div>
     </div>

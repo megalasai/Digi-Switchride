@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Input } from "@/components/ui/Input";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatCard } from "@/components/ui/StatCard";
 import { api, FinanceReconciliation } from "@/lib/api";
 
 export default function FinancePage() {
@@ -14,29 +17,25 @@ export default function FinancePage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Finance & Reconciliation</h1>
-      <div className="flex gap-4 mb-6">
-        <input type="date" className="border rounded px-3 py-2" value={from} onChange={(e) => setFrom(e.target.value)} />
-        <input type="date" className="border rounded px-3 py-2" value={to} onChange={(e) => setTo(e.target.value)} />
-      </div>
+      <PageHeader
+        title="Finance & Reconciliation"
+        description="Payment collection, refunds, and GST summary"
+        actions={
+          <div className="flex gap-3">
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+        }
+      />
       {data && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard label="Total Collected" value={`₹${data.totalCollected.toLocaleString()}`} />
-          <StatCard label="Total Refunded" value={`₹${data.totalRefunded.toLocaleString()}`} />
-          <StatCard label="Net Revenue" value={`₹${data.netRevenue.toLocaleString()}`} />
-          <StatCard label="GST Amount" value={`₹${data.gstAmount.toLocaleString()}`} />
-          <StatCard label="Unmatched Payments" value={String(data.unmatchedPayments)} />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <StatCard label="Total Collected" value={`₹${data.totalCollected.toLocaleString()}`} accent="brand" icon={<span>₹</span>} />
+          <StatCard label="Total Refunded" value={`₹${data.totalRefunded.toLocaleString()}`} accent="amber" icon={<span>↩</span>} />
+          <StatCard label="Net Revenue" value={`₹${data.netRevenue.toLocaleString()}`} accent="blue" icon={<span>📈</span>} />
+          <StatCard label="GST Amount" value={`₹${data.gstAmount.toLocaleString()}`} accent="slate" icon={<span>🧾</span>} />
+          <StatCard label="Unmatched Payments" value={String(data.unmatchedPayments)} accent="amber" icon={<span>!</span>} />
         </div>
       )}
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className="text-xl font-bold mt-2">{value}</p>
     </div>
   );
 }

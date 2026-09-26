@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
+import { normalizeAdminRole } from '@digi-switchride/shared';
 import { AuthService } from './auth.service';
 
 @Injectable()
@@ -16,9 +17,20 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: { sub: string; phone: string; role: string }) {
+  async validate(payload: { sub: string; phone?: string; email?: string; role: string; type?: string }) {
+    if (payload.type === 'admin') {
+      const admin = await this.authService.validateAdmin(payload.sub);
+      if (!admin) return null;
+      return {
+        adminId: payload.sub,
+        email: admin.email,
+        role: normalizeAdminRole(admin.role) ?? admin.role,
+        type: 'admin',
+      };
+    }
+
     const customer = await this.authService.validateCustomer(payload.sub);
     if (!customer) return null;
-    return { customerId: payload.sub, phone: payload.phone, role: payload.role };
+    return { customerId: payload.sub, phone: customer.phone, role: 'Customer', type: 'customer' };
   }
 }

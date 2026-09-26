@@ -1,9 +1,11 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { AdminGuard, RolesGuard } from '../auth/admin.guard';
+import { Roles } from '../auth/roles.decorator';
 import { IoTService } from './iot.service';
 
 @Controller('v1/admin/iot')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), AdminGuard, RolesGuard)
 export class IoTController {
   constructor(private iotService: IoTService) {}
 
@@ -12,9 +14,34 @@ export class IoTController {
     return this.iotService.listDevices().then((items) => ({ items }));
   }
 
+  @Post('devices')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  registerDevice(@Body() body: { deviceId: string; vendorType?: string; vehicleId?: string }) {
+    return this.iotService.registerDevice(body.deviceId, body.vendorType, body.vehicleId);
+  }
+
+  @Put('devices/:deviceId')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  updateDevice(@Param('deviceId') deviceId: string, @Body() body: { vendorType?: string; vehicleId?: string | null }) {
+    return this.iotService.updateDevice(deviceId, body);
+  }
+
   @Post('devices/:deviceId/command')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
   sendCommand(@Param('deviceId') deviceId: string, @Body() body: { command: string }) {
     return this.iotService.sendCommand(deviceId, body.command);
+  }
+
+  @Post('devices/:deviceId/link')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  linkDevice(@Param('deviceId') deviceId: string, @Body() body: { vehicleId: string; vendorType?: string }) {
+    return this.iotService.linkDeviceToVehicle(deviceId, body.vehicleId, body.vendorType);
+  }
+
+  @Delete('devices/:deviceId/link')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  unlinkDevice(@Param('deviceId') deviceId: string) {
+    return this.iotService.unlinkDevice(deviceId);
   }
 }
 

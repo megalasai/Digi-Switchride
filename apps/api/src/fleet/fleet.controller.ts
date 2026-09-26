@@ -1,5 +1,9 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { AdminGuard, RolesGuard } from '../auth/admin.guard';
+import { Roles } from '../auth/roles.decorator';
+import { AssignVehicleDto, CreateVehicleDto, UnassignVehicleDto, UpdateVehicleDto, UpdateVehicleStatusDto } from '../auth/dto/admin-auth.dto';
+import { actorFromRequest } from '../common/actor';
 import { FleetService } from './fleet.service';
 
 @Controller('v1')
@@ -29,27 +33,86 @@ export class FleetController {
 }
 
 @Controller('v1/admin')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), AdminGuard, RolesGuard)
 export class FleetAdminController {
   constructor(private fleetService: FleetService) {}
 
   @Get('hubs')
+  @Roles('SuperAdmin', 'Administrator', 'Operations', 'CommandCenter', 'ServiceTeam')
   listHubs() {
     return this.fleetService.listAllHubs().then((items) => ({ items }));
   }
 
   @Post('hubs')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
   createHub(@Body() body: { name: string; location: { lat: number; lng: number }; address: string; capacity: number; operatingHours?: string; geoFenceRadiusM?: number }) {
     return this.fleetService.createHub(body);
   }
 
+  @Put('hubs/:hubId')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  updateHub(@Param('hubId') hubId: string, @Body() body: { name?: string; location?: { lat: number; lng: number }; address?: string; capacity?: number; operatingHours?: string; geoFenceRadiusM?: number; status?: string }) {
+    return this.fleetService.updateHub(hubId, body);
+  }
+
   @Get('vehicles')
-  listVehicles() {
-    return this.fleetService.listAllVehicles().then((items) => ({ items }));
+  @Roles('SuperAdmin', 'Administrator', 'Operations', 'CommandCenter', 'ServiceTeam')
+  listVehicles(
+    @Query('status') status?: string,
+    @Query('hubId') hubId?: string,
+    @Query('search') search?: string,
+    @Query('availability') availability?: string,
+    @Query('page') page = '1',
+    @Query('pageSize') pageSize = '50',
+  ) {
+    return this.fleetService.listVehicles({ status, hubId, search, availability, page: +page, pageSize: +pageSize });
   }
 
   @Post('vehicles')
-  createVehicle(@Body() body: { registrationNumber: string; type: string; hubId: string; model: string; iotDeviceId?: string }) {
-    return this.fleetService.createVehicle(body);
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  createVehicle(@Req() req: Parameters<typeof actorFromRequest>[0], @Body() body: CreateVehicleDto) {
+    return this.fleetService.createVehicle(body, actorFromRequest(req));
+  }
+
+  @Get('vehicles/:vehicleId')
+  @Roles('SuperAdmin', 'Administrator', 'Operations', 'CommandCenter', 'ServiceTeam')
+  getVehicleDetail(@Param('vehicleId') vehicleId: string) {
+    return this.fleetService.getVehicleDetail(vehicleId);
+  }
+
+  @Put('vehicles/:vehicleId')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  updateVehicle(@Req() req: Parameters<typeof actorFromRequest>[0], @Param('vehicleId') vehicleId: string, @Body() body: UpdateVehicleDto) {
+    return this.fleetService.updateVehicle(vehicleId, body, actorFromRequest(req));
+  }
+
+  @Post('vehicles/:vehicleId/status')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  updateVehicleStatus(
+    @Req() req: Parameters<typeof actorFromRequest>[0],
+    @Param('vehicleId') vehicleId: string,
+    @Body() body: UpdateVehicleStatusDto,
+  ) {
+    return this.fleetService.updateVehicleStatus(vehicleId, body.status, body.reason, actorFromRequest(req));
+  }
+
+  @Post('vehicles/:vehicleId/assign')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  assign(
+    @Req() req: Parameters<typeof actorFromRequest>[0],
+    @Param('vehicleId') vehicleId: string,
+    @Body() body: AssignVehicleDto,
+  ) {
+    return this.fleetService.assignVehicle(vehicleId, body.riderId, { override: body.override, reason: body.reason }, actorFromRequest(req));
+  }
+
+  @Post('vehicles/:vehicleId/unassign')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  unassign(
+    @Req() req: Parameters<typeof actorFromRequest>[0],
+    @Param('vehicleId') vehicleId: string,
+    @Body() body: UnassignVehicleDto,
+  ) {
+    return this.fleetService.unassignVehicle(vehicleId, body.reason, actorFromRequest(req));
   }
 }

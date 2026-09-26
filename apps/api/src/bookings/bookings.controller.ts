@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { AdminGuard } from '../auth/admin.guard';
 import { BookingsService } from './bookings.service';
 
 @Controller('v1')
@@ -50,7 +51,7 @@ export class BookingsController {
 }
 
 @Controller('v1/admin')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), AdminGuard)
 export class BookingsAdminController {
   constructor(private bookingsService: BookingsService) {}
 

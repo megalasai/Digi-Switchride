@@ -1,59 +1,102 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Alert } from "@/components/ui/Alert";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { FormPanel } from "@/components/ui/Card";
+import { FormModeLabel, RowActions } from "@/components/ui/RowActions";
+import { Input, Select } from "@/components/ui/Input";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { IconMapPin } from "@/components/icons";
 import { api, Hub } from "@/lib/api";
+
+const emptyForm = { name: "", address: "", lat: "21.1458", lng: "79.0882", capacity: "20", status: "Active" };
 
 export default function HubsPage() {
   const [hubs, setHubs] = useState<Hub[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", address: "", lat: "21.1458", lng: "79.0882", capacity: "20" });
+  const [editId, setEditId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [form, setForm] = useState(emptyForm);
 
-  const load = () => api.hubs().then((r) => setHubs(r.items)).catch(() => {});
+  const load = () => api.hubs().then((r) => setHubs(r.items)).catch((e) => setError(e.message));
   useEffect(() => { load(); }, []);
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const openCreate = () => { setEditId(null); setForm(emptyForm); setShowForm(true); setError(""); };
+  const openEdit = (hub: Hub) => {
+    setEditId(hub.id);
+    setForm({ name: hub.name, address: hub.address, lat: String(hub.location.lat), lng: String(hub.location.lng), capacity: String(hub.capacity), status: hub.status });
+    setShowForm(true); setError("");
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.createHub({
+    setError(""); setSuccess("");
+    const payload = {
       name: form.name,
       address: form.address,
       location: { lat: parseFloat(form.lat), lng: parseFloat(form.lng) },
-      capacity: parseInt(form.capacity),
-    });
-    setShowForm(false);
-    load();
+      capacity: parseInt(form.capacity, 10),
+      status: form.status,
+    };
+    try {
+      if (editId) { await api.updateHub(editId, payload); setSuccess("Hub updated"); }
+      else { await api.createHub(payload); setSuccess("Hub created"); }
+      setShowForm(false); setEditId(null); load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    }
   };
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Rental Hubs</h1>
-        <button onClick={() => setShowForm(!showForm)} className="px-4 py-2 bg-green-600 text-white rounded-lg">
-          {showForm ? "Cancel" : "Add Hub"}
-        </button>
-      </div>
+      <PageHeader title="Rental Hubs" description="Manage pickup locations with GPS coordinates"
+        actions={<Button variant={showForm && !editId ? "secondary" : "primary"} onClick={() => showForm && !editId ? setShowForm(false) : openCreate()}>{showForm && !editId ? "Cancel" : "Add Hub"}</Button>} />
+      {success && <div className="mb-4"><Alert variant="success" message={success} /></div>}
+      {error && !showForm && <div className="mb-4"><Alert message={error} /></div>}
 
       {showForm && (
-        <form onSubmit={handleCreate} className="bg-white rounded-lg shadow p-6 mb-6 grid grid-cols-2 gap-4">
-          <input placeholder="Hub name" className="border rounded px-3 py-2" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-          <input placeholder="Address" className="border rounded px-3 py-2" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} required />
-          <input placeholder="Latitude" className="border rounded px-3 py-2" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} />
-          <input placeholder="Longitude" className="border rounded px-3 py-2" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} />
-          <input placeholder="Capacity" type="number" className="border rounded px-3 py-2" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} />
-          <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-lg">Create Hub</button>
-        </form>
+        <FormPanel title={editId ? "Edit hub" : "Create new hub"}>
+          <FormModeLabel editing={!!editId} />
+          <form onSubmit={handleSubmit} className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Input placeholder="Hub name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+            <Input placeholder="Full address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} required />
+            <Input placeholder="Latitude" type="number" step="any" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} required />
+            <Input placeholder="Longitude" type="number" step="any" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} required />
+            <Input placeholder="Capacity" type="number" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} required />
+            <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+              <option value="Maintenance">Maintenance</option>
+            </Select>
+            {error && <div className="md:col-span-2"><Alert message={error} /></div>}
+            <div className="md:col-span-2 flex gap-2">
+              <Button type="submit">{editId ? "Save changes" : "Create hub"}</Button>
+              <Button type="button" variant="secondary" onClick={() => { setShowForm(false); setEditId(null); }}>Cancel</Button>
+            </div>
+          </form>
+        </FormPanel>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {hubs.map((hub) => (
-          <div key={hub.id} className="bg-white rounded-lg shadow p-6">
-            <h3 className="font-bold text-lg">{hub.name}</h3>
-            <p className="text-sm text-gray-500 mt-1">{hub.address}</p>
-            <div className="mt-4 flex justify-between text-sm">
-              <span>Available: {hub.availableVehicles}</span>
-              <span>Capacity: {hub.capacity}</span>
-              <span className={`font-medium ${hub.status === "Active" ? "text-green-600" : "text-gray-400"}`}>{hub.status}</span>
+          <Card key={hub.id} className="p-5">
+            <div className="mb-3 flex items-start justify-between">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-light text-brand"><IconMapPin className="h-5 w-5" /></div>
+              <RowActions onEdit={() => openEdit(hub)} />
             </div>
-          </div>
+            <h3 className="text-lg font-semibold text-text-primary">{hub.name}</h3>
+            <p className="mt-1 text-sm text-text-secondary">{hub.address}</p>
+            <p className="mt-1 text-xs text-text-muted">{hub.location.lat.toFixed(4)}, {hub.location.lng.toFixed(4)}</p>
+            <div className="mt-4 flex items-center justify-between border-t border-border pt-4 text-sm">
+              <span className="text-text-secondary">{hub.availableVehicles} available</span>
+              <span className="text-text-secondary">{hub.capacity} capacity</span>
+              <Badge status={hub.status} />
+            </div>
+          </Card>
         ))}
       </div>
     </div>

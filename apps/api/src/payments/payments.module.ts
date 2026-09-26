@@ -4,11 +4,13 @@ import { Booking, BookingSchema, Payment, PaymentSchema, Promotion, PromotionSch
 import { Customer, CustomerSchema } from '../schemas/customer.schema';
 import { Vehicle, VehicleSchema } from '../schemas/fleet.schema';
 import { CustomersModule } from '../customers/customers.module';
+import { AuthModule } from '../auth/auth.module';
 import { PaymentsController, AdminController } from './payments.controller';
 import { PaymentsService, PromotionsService, ReportsService } from './payments.service';
 
 @Module({
   imports: [
+    AuthModule,
     CustomersModule,
     MongooseModule.forFeature([
       { name: Payment.name, schema: PaymentSchema },
@@ -20,7 +22,7 @@ import { PaymentsService, PromotionsService, ReportsService } from './payments.s
     ]),
   ],
   controllers: [PaymentsController, AdminController],
-  providers: [PaymentsService, PromotionsService, ReportsService],
-  exports: [PaymentsService, PromotionsService, ReportsService],
+  providers: [PaymentsService, PromotionsService, ReportsService, DashboardService],
+  exports: [PaymentsService, PromotionsService, ReportsService, DashboardService],
 })
 export class PaymentsModule {}
