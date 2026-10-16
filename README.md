@@ -13,7 +13,8 @@ Aligned with [DigiTrack](https://github.com) stack:
 | **Admin Portal** | Next.js 15 + TypeScript + Tailwind |
 | **Customer Android** | Kotlin + Jetpack Compose + Hilt |
 | **Customer iOS** | Swift + SwiftUI |
-| **IoT** | Azure IoT Hub + adapter layer (telemetry via NestJS API) |
+| **Location API** | Standalone Fastify + SQLite (`apps/location`) |
+| **Telemetry API** | Standalone Fastify + SQLite (`apps/telemetry`) |
 
 See [docs/architecture/overview.md](docs/architecture/overview.md) for full details.
 
@@ -22,6 +23,8 @@ See [docs/architecture/overview.md](docs/architecture/overview.md) for full deta
 ```
 apps/
   api/                  # NestJS backend (@digi-switchride/api)
+  location/             # India reverse-geocoding API (hosted separately)
+  telemetry/            # GPS telemetry API (hosted separately, like location)
   admin-web/            # Next.js admin portal
   customer-android/     # Kotlin + Jetpack Compose
   customer-ios/         # Swift + SwiftUI
@@ -67,9 +70,30 @@ npm run dev:admin
 
 API runs at `http://localhost:4000/api` — routes are prefixed `/api/v1/...`
 
+### India location service
+
+A separate app resolves latitude, longitude, and optional altitude to a locality, district, state, and PIN code. Other applications call it over HTTP. It keeps its own SQLite database, built from GeoNames and Natural Earth, and is sized for more than 100,000 requests in 10 minutes.
+
+```bash
+npm run seed:location
+npm run dev:location
+```
+
+Location API: `http://localhost:4100/v1/locations/reverse`. See [apps/location/README.md](apps/location/README.md).
+
+### GPS telemetry service
+
+A separate app, hosted like the location API. Configuration is in SQLite; GPS is stored in the main MongoDB. It pulls vendor GPS APIs and accepts HTTP, TCP, and MQTT, and calls the location API over HTTP for place names.
+
+```bash
+npm run dev:telemetry
+```
+
+Telemetry API: `http://localhost:4200`. See [apps/telemetry/README.md](apps/telemetry/README.md).
+
 ### API Documentation
 
-OpenAPI spec: [contracts/openapi/platform-v1.yaml](contracts/openapi/platform-v1.yaml)
+OpenAPI specs: [platform](contracts/openapi/platform-v1.yaml), [location](contracts/openapi/location-v1.yaml), [telemetry](contracts/openapi/telemetry-v1.yaml)
 
 ## License
 

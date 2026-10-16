@@ -6,7 +6,9 @@ import { Customer, CustomerDocument } from '../schemas/customer.schema';
 import { haversineDistanceKm, normalizeVehicleRegistration, toGeoLocation } from '../common/helpers';
 import { IoTService } from '../iot/iot.service';
 import { AuditService, type AuditActor } from '../audit/audit.service';
-import { INDIA_VEHICLE_REG_PATTERN, VEHICLE_STATUSES } from '@digi-switchride/shared';
+import { INDIA_VEHICLE_REG_PATTERN, VEHICLE_STATUSES, resolveWheelClass } from '@digi-switchride/shared';
+import { applyHubScope, assignedHubIds, hubAllowed } from '../common/hub-scope';
+import { runInWriteTenant } from '../common/tenant-write';
 
 const BLOCKED_ASSIGN_STATUSES = ['Maintenance', 'Offline', 'InRide'];
 
@@ -59,6 +61,7 @@ export class FleetService {
       capacity: hub.capacity,
       operatingHours: hub.operatingHours,
       geoFenceRadiusM: hub.geoFenceRadiusM,
+      tenantId: (hub as { tenantId?: string }).tenantId,
     };
   }
 
@@ -106,12 +109,14 @@ export class FleetService {
     };
   }
 
-  async createHub(data: { name: string; location: { lat: number; lng: number }; address: string; capacity: number; operatingHours?: string; geoFenceRadiusM?: number }) {
-    const hub = await this.hubModel.create({
-      ...data,
-      location: toGeoLocation(data.location.lat, data.location.lng),
+  async createHub(data: { name: string; location: { lat: number; lng: number }; address: string; capacity: number; operatingHours?: string; geoFenceRadiusM?: number; tenantId?: string }) {
+    return runInWriteTenant(data.tenantId, async () => {
+      const hub = await this.hubModel.create({
+        ...data,
+        location: toGeoLocation(data.location.lat, data.location.lng),
+      });
+      return this.getHub(hub._id.toString());
     });
-    return this.getHub(hub._id.toString());
   }
 
   async updateHub(hubId: string, data: { name?: string; location?: { lat: number; lng: number }; address?: string; capacity?: number; operatingHours?: string; geoFenceRadiusM?: number; status?: string }) {
@@ -131,19 +136,22 @@ export class FleetService {
   }
 
   async createVehicle(
-    data: { registrationNumber: string; type: string; hubId: string; model: string; iotDeviceId?: string; notes?: string },
+    data: { registrationNumber: string; type: string; wheelClass?: string; hubId: string; model: string; iotDeviceId?: string; notes?: string; tenantId?: string },
     actor?: AuditActor | null,
   ) {
+    return runInWriteTenant(data.tenantId, async () => {
     const registrationNumber = this.requireValidRegistration(data.registrationNumber);
     const existing = await this.vehicleModel.findOne({ registrationNumber });
     if (existing) throw new ConflictException('Vehicle with this registration already exists');
     const hub = await this.hubModel.findById(data.hubId);
     if (!hub) throw new NotFoundException('Hub not found');
+    if (!hubAllowed(data.hubId)) throw new BadRequestException('You can only add vehicles to an assigned hub');
 
-    const { iotDeviceId, ...vehicleData } = data;
+    const { iotDeviceId, tenantId: _tenantId, ...vehicleData } = data;
     const vehicle = await this.vehicleModel.create({
       ...vehicleData,
       registrationNumber,
+      wheelClass: resolveWheelClass(data.type, data.wheelClass),
       notes: data.notes,
       statusChangedAt: new Date(),
     });
@@ -162,11 +170,12 @@ export class FleetService {
       after: { registrationNumber: result.registrationNumber, hubId: result.hubId, type: result.type },
     });
     return result;
+    });
   }
 
   async updateVehicle(
     vehicleId: string,
-    data: { registrationNumber?: string; type?: string; hubId?: string; model?: string; iotDeviceId?: string | null; status?: string; notes?: string },
+    data: { registrationNumber?: string; type?: string; wheelClass?: string; hubId?: string; model?: string; iotDeviceId?: string | null; status?: string; notes?: string },
     actor?: AuditActor | null,
   ) {
     const vehicle = await this.vehicleModel.findById(vehicleId);
@@ -180,6 +189,9 @@ export class FleetService {
       vehicle.registrationNumber = registrationNumber;
     }
     if (data.type != null) vehicle.type = data.type as typeof vehicle.type;
+    if (data.wheelClass != null || data.type != null) {
+      vehicle.wheelClass = resolveWheelClass(data.type ?? vehicle.type, data.wheelClass ?? vehicle.wheelClass);
+    }
     if (data.model != null) vehicle.set('model', data.model);
     if (data.notes != null) vehicle.notes = data.notes;
     if (data.hubId != null && data.hubId !== vehicle.hubId) {
@@ -223,8 +235,11 @@ export class FleetService {
   }
 
   async listAllHubs() {
-    const hubs = await this.hubModel.find();
-    return Promise.all(hubs.map((h) => this.getHub(h._id.toString())));
+    const filter: Record<string, unknown> = {};
+    const hubs = assignedHubIds();
+    if (hubs) filter._id = { $in: hubs };
+    const items = await this.hubModel.find(filter);
+    return Promise.all(items.map((h) => this.getHub(h._id.toString())));
   }
 
   async listVehicles(params: {
@@ -238,6 +253,7 @@ export class FleetService {
     const filter: Record<string, unknown> = {};
     if (params.status) filter.status = params.status;
     if (params.hubId) filter.hubId = params.hubId;
+    applyHubScope(filter);
     if (params.search) {
       filter.registrationNumber = { $regex: normalizeVehicleRegistration(params.search), $options: 'i' };
     }
@@ -414,6 +430,7 @@ export class FleetService {
       id: v._id.toString(),
       registrationNumber: v.registrationNumber,
       type: v.type,
+      wheelClass: resolveWheelClass(v.type, v.wheelClass),
       status: v.status,
       batteryPercent: v.batteryPercent,
       model: v.model,
@@ -429,10 +446,15 @@ export class FleetService {
       lastLat: v.lastLat,
       lastLng: v.lastLng,
       lastTelemetryAt: v.lastTelemetryAt,
+      lastPlace: v.lastPlace,
+      lastPlaceKind: v.lastPlaceKind,
+      lastHubId: v.lastHubId,
+      locationTrail: (v.locationTrail ?? []).map((p) => ({ lat: p.lat, lng: p.lng, at: p.at })),
       pricingTier: v.pricingTier,
       assignedRiderId: v.assignedRiderId,
       notes: v.notes,
       statusChangedAt: v.statusChangedAt,
+      tenantId: (v as { tenantId?: string }).tenantId,
     };
   }
 }

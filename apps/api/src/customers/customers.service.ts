@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Customer, CustomerDocument, KycSubmission, KycSubmissionDocument } from '../schemas/customer.schema';
@@ -27,7 +27,7 @@ export class ProfileService {
     return this.toProfile(c);
   }
 
-  async updateProfile(customerId: string, data: { email?: string; fullName?: string; emergencyContact?: string }) {
+  async updateProfile(customerId: string, data: { email?: string; fullName?: string; emergencyContact?: string; address?: string }) {
     const c = await this.customerModel.findByIdAndUpdate(customerId, { $set: data }, { new: true });
     if (!c) throw new NotFoundException('Customer not found');
     return this.toProfile(c);
@@ -62,7 +62,11 @@ export class ProfileService {
       assignedVehicleId: c.assignedVehicleId,
       rentalPlanId: c.rentalPlanId,
       walletBalance: c.walletBalance ?? 0,
-      createdAt: (c as any).createdAt,
+      referralCode: c.referralCode,
+      referredBy: c.referredBy,
+      address: c.address,
+      emergencyContact: c.emergencyContact,
+      createdAt: (c as { createdAt?: Date }).createdAt,
     };
   }
 }
@@ -110,11 +114,89 @@ export class KycService {
   }
 
   async review(customerId: string, action: 'Approve' | 'Reject', reason?: string) {
+    if (action === 'Reject' && !reason?.trim()) {
+      throw new BadRequestException('Rejection reason is required');
+    }
     const status = action === 'Approve' ? 'Approved' : 'Rejected';
     await this.customerModel.findByIdAndUpdate(customerId, { kycStatus: status });
     await this.kycModel.updateMany(
       { customerId, status: { $in: ['Pending', 'UnderReview'] } },
       { status, rejectionReason: reason, reviewedAt: new Date() },
     );
+  }
+
+  async listSubmissions(status?: string) {
+    const filter: Record<string, unknown> = {};
+    if (status) filter.status = status;
+    else filter.status = { $in: ['Pending', 'UnderReview'] };
+    const items = await this.kycModel.find(filter).sort({ createdAt: -1 }).limit(100);
+    const riderIds = [...new Set(items.map((s) => s.customerId))];
+    const riders = riderIds.length ? await this.customerModel.find({ _id: { $in: riderIds } }) : [];
+    const riderMap = Object.fromEntries(riders.map((r) => [r._id.toString(), r]));
+    return {
+      items: items.map((s) => {
+        const rider = riderMap[s.customerId];
+        return {
+          id: s._id.toString(),
+          riderId: s.customerId,
+          riderName: rider?.fullName,
+          riderPhone: rider?.phone,
+          riderKycStatus: rider?.kycStatus,
+          documentType: s.documentType,
+          documentNumberMasked: s.documentNumberMasked,
+          blobUrl: s.blobUrl,
+          status: s.status,
+          rejectionReason: s.rejectionReason,
+          submittedAt: (s as { createdAt?: Date }).createdAt,
+          reviewedAt: s.reviewedAt,
+        };
+      }),
+    };
+  }
+
+  async reviewSubmission(submissionId: string, action: 'Approve' | 'Reject', reason?: string, reviewedBy?: string) {
+    if (action === 'Reject' && (!reason || reason.trim().length < 10)) {
+      throw new BadRequestException('Rejection reason must be at least 10 characters');
+    }
+    const submission = await this.kycModel.findById(submissionId);
+    if (!submission) throw new NotFoundException('KYC document not found');
+    if (!['Pending', 'UnderReview'].includes(submission.status)) {
+      throw new BadRequestException('This document has already been reviewed');
+    }
+    submission.status = action === 'Approve' ? 'Approved' : 'Rejected';
+    submission.rejectionReason = action === 'Reject' ? reason?.trim() : undefined;
+    submission.reviewedAt = new Date();
+    submission.reviewedBy = reviewedBy;
+    await submission.save();
+    await this.recalculateRiderKyc(submission.customerId);
+    return { id: submission._id.toString(), status: submission.status };
+  }
+
+  private async recalculateRiderKyc(customerId: string) {
+    const submissions = await this.kycModel.find({ customerId });
+    if (!submissions.length) {
+      await this.customerModel.findByIdAndUpdate(customerId, { kycStatus: 'NotSubmitted' });
+      return;
+    }
+    const latestByType = new Map<string, (typeof submissions)[number]>();
+    for (const s of submissions.sort((a, b) => ((b as { createdAt?: Date }).createdAt?.getTime() ?? 0) - ((a as { createdAt?: Date }).createdAt?.getTime() ?? 0))) {
+      if (!latestByType.has(s.documentType)) latestByType.set(s.documentType, s);
+    }
+    const latest = [...latestByType.values()];
+    if (latest.some((s) => s.status === 'Pending' || s.status === 'UnderReview')) {
+      await this.customerModel.findByIdAndUpdate(customerId, { kycStatus: 'Pending' });
+      return;
+    }
+    const required = ['Aadhaar', 'PAN', 'DrivingLicence'];
+    const approvedRequired = required.every((type) => latestByType.get(type)?.status === 'Approved');
+    if (approvedRequired) {
+      await this.customerModel.findByIdAndUpdate(customerId, { kycStatus: 'Approved' });
+      return;
+    }
+    if (latest.some((s) => s.status === 'Rejected')) {
+      await this.customerModel.findByIdAndUpdate(customerId, { kycStatus: 'Rejected' });
+      return;
+    }
+    await this.customerModel.findByIdAndUpdate(customerId, { kycStatus: 'NotSubmitted' });
   }
 }

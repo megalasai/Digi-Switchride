@@ -1,0 +1,26 @@
+{
+  "name": "@digi-switchride/telemetry",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone GPS telemetry service for Digi-Switchride and other applications",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "build": "tsc -p tsconfig.json",
+    "entrypoint": "node dist/entrypoint.js"
+  },
+  "dependencies": {
+    "fastify": "^5.6.1",
+    "mongoose": "^8.9.5",
+    "mqtt": "^5.10.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "tsx": "^4.20.5",
+    "typescript": "^5.7.3"
+  }
+}

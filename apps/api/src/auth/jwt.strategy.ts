@@ -17,7 +17,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: { sub: string; phone?: string; email?: string; role: string; type?: string }) {
+  async validate(payload: { sub: string; phone?: string; email?: string; role: string; type?: string; tenantId?: string; hubIds?: string[] }) {
     if (payload.type === 'admin') {
       const admin = await this.authService.validateAdmin(payload.sub);
       if (!admin) return null;
@@ -26,11 +26,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         email: admin.email,
         role: normalizeAdminRole(admin.role) ?? admin.role,
         type: 'admin',
+        tenantId: (admin as { tenantId?: string }).tenantId ?? payload.tenantId,
+        hubIds: admin.hubIds?.length ? admin.hubIds : payload.hubIds,
       };
     }
 
     const customer = await this.authService.validateCustomer(payload.sub);
     if (!customer) return null;
-    return { customerId: payload.sub, phone: customer.phone, role: 'Customer', type: 'customer' };
+    return {
+      customerId: payload.sub,
+      phone: customer.phone,
+      role: 'Customer',
+      type: 'customer',
+      tenantId: (customer as { tenantId?: string }).tenantId ?? payload.tenantId,
+    };
   }
 }

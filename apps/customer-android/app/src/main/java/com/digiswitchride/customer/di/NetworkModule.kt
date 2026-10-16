@@ -46,12 +46,11 @@ object NetworkModule {
 
         val authInterceptor = Interceptor { chain ->
             val token = runBlocking { tokenManager.getAccessToken() }
-            val request = if (token != null) {
-                chain.request().newBuilder().addHeader("Authorization", "Bearer $token").build()
-            } else {
-                chain.request()
-            }
-            chain.proceed(request)
+            val tenantSlug = runBlocking { apiSettings.getTenantSlug() }
+            val builder = chain.request().newBuilder()
+            if (token != null) builder.addHeader("Authorization", "Bearer $token")
+            if (tenantSlug.isNotBlank()) builder.addHeader("X-Tenant-Slug", tenantSlug)
+            chain.proceed(builder.build())
         }
 
         return OkHttpClient.Builder()

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatCard } from "@/components/ui/StatCard";
@@ -24,6 +25,16 @@ export default function ReportsPage() {
           <div className="flex gap-3">
             <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
             <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            <Button type="button" variant="secondary" onClick={async () => {
+              const file = await api.reportExport(from, to);
+              const blob = new Blob([file.csv], { type: "text/csv;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = file.fileName;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}>Export CSV</Button>
           </div>
         }
       />

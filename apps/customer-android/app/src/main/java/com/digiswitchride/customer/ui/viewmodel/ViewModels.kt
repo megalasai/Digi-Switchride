@@ -12,7 +12,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-data class AuthState(val isLoading: Boolean = false, val isAuthenticated: Boolean = false, val error: String? = null)
+data class AuthState(
+    val isLoading: Boolean = false,
+    val isAuthenticated: Boolean = false,
+    val error: String? = null,
+    val productName: String = "Digi-Switchride",
+    val optionalLogoUrl: String? = null,
+)
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
@@ -22,29 +28,53 @@ class AuthViewModel @Inject constructor(
 ) : ViewModel() {
     private val _state = MutableStateFlow(AuthState())
     val state: StateFlow<AuthState> = _state
-
     private val _apiHost = MutableStateFlow("")
     val apiHost: StateFlow<String> = _apiHost
-
+    private val _tenantSlug = MutableStateFlow("digi-switchride")
+    val tenantSlug: StateFlow<String> = _tenantSlug
     private val _sessionChecked = MutableStateFlow(false)
     val sessionChecked: StateFlow<Boolean> = _sessionChecked
-
     private val _hasSession = MutableStateFlow(false)
     val hasSession: StateFlow<Boolean> = _hasSession
 
     init {
         viewModelScope.launch {
             _apiHost.value = apiSettings.getDisplayHost()
+            _tenantSlug.value = apiSettings.getTenantSlug()
             _hasSession.value = tokenManager.getAccessToken() != null
             _sessionChecked.value = true
+            try {
+                val branding = api.branding()
+                val logo = if (branding.hasOptionalLogo) "${apiSettings.getBaseUrl().trimEnd('/')}/branding/optional-logo" else null
+                _state.value = _state.value.copy(
+                    productName = branding.productName ?: "Digi-Switchride",
+                    optionalLogoUrl = logo,
+                )
+            } catch (_: Exception) {
+                /* keep defaults if API is offline */
+            }
         }
     }
 
     fun updateApiHost(host: String) { _apiHost.value = host }
+    fun updateTenantSlug(slug: String) {
+        _tenantSlug.value = slug
+        viewModelScope.launch {
+            apiSettings.setTenantSlug(slug)
+            try {
+                val branding = api.branding()
+                val logo = if (branding.hasOptionalLogo) "${apiSettings.getBaseUrl().trimEnd('/')}/branding/optional-logo" else null
+                _state.value = _state.value.copy(
+                    productName = branding.productName ?: "Digi-Switchride",
+                    optionalLogoUrl = logo,
+                )
+            } catch (_: Exception) { }
+        }
+    }
     fun clearError() { _state.value = _state.value.copy(error = null) }
-
     private suspend fun persistApiHost() {
         if (_apiHost.value.isNotBlank()) apiSettings.setBaseUrl(_apiHost.value)
+        apiSettings.setTenantSlug(_tenantSlug.value)
     }
 
     fun login(username: String, password: String) {
@@ -67,9 +97,7 @@ class AuthViewModel @Inject constructor(
             _state.value = _state.value.copy(isLoading = true, error = null)
             try {
                 persistApiHost()
-                val tokens = api.register(
-                    RegisterRequest(username.trim(), password, fullName?.trim()?.takeIf { it.isNotEmpty() })
-                )
+                val tokens = api.register(RegisterRequest(username.trim(), password, fullName?.trim()?.takeIf { it.isNotEmpty() }))
                 tokenManager.saveTokens(tokens.accessToken, tokens.refreshToken)
                 _hasSession.value = true
                 _state.value = _state.value.copy(isLoading = false, isAuthenticated = true)
@@ -83,7 +111,10 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             tokenManager.clear()
             _hasSession.value = false
-            _state.value = AuthState()
+            _state.value = AuthState(
+                productName = _state.value.productName,
+                optionalLogoUrl = _state.value.optionalLogoUrl,
+            )
             onLoggedOut()
         }
     }
@@ -100,92 +131,12 @@ class AuthViewModel @Inject constructor(
     }
 }
 
-data class HomeState(
-    val isLoading: Boolean = false,
-    val hubs: List<RentalHubSummary> = emptyList(),
-    val selectedHubId: String? = null,
-    val selectedHubVehicles: List<VehicleSummary> = emptyList(),
-    val kycStatus: String = "NotSubmitted",
-    val message: String? = null,
-    val error: String? = null,
-)
-
-@HiltViewModel
-class HomeViewModel @Inject constructor(private val api: SwitchrideApi) : ViewModel() {
-    private val _state = MutableStateFlow(HomeState())
-    val state: StateFlow<HomeState> = _state
-
-    fun clearMessage() { _state.value = _state.value.copy(message = null, error = null) }
-
-    fun loadNearbyHubs(lat: Double = 21.1458, lng: Double = 79.0882) {
-        viewModelScope.launch {
-            _state.value = _state.value.copy(isLoading = true, error = null)
-            try {
-                val hubs = api.getNearbyHubs(lat, lng).items
-                val kyc = api.getKycStatus().status
-                _state.value = _state.value.copy(isLoading = false, hubs = hubs, kycStatus = kyc)
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(isLoading = false, error = ApiErrorParser.message(e))
-            }
-        }
-    }
-
-    fun selectHub(hubId: String) {
-        _state.value = _state.value.copy(selectedHubId = hubId, selectedHubVehicles = emptyList(), error = null)
-        viewModelScope.launch {
-            try {
-                val vehicles = api.getHubVehicles(hubId).items.filter { it.status == "Available" }
-                _state.value = _state.value.copy(selectedHubVehicles = vehicles)
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(error = ApiErrorParser.message(e))
-            }
-        }
-    }
-
-    fun bookAndStartRide(vehicleId: String, onStarted: (rideId: String) -> Unit) {
-        if (_state.value.kycStatus != "Approved") {
-            _state.value = _state.value.copy(error = "Complete KYC and wait for admin approval before booking.")
-            return
-        }
-        viewModelScope.launch {
-            _state.value = _state.value.copy(isLoading = true, error = null, message = null)
-            try {
-                val booking = api.createBooking(CreateBookingRequest(vehicleId, "PerMinute"))
-                val rideId = booking.rideId ?: throw IllegalStateException("Booking created but no ride ID returned")
-                api.startRide(rideId)
-                _state.value = _state.value.copy(isLoading = false, message = "Ride started!")
-                onStarted(rideId)
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(isLoading = false, error = ApiErrorParser.message(e))
-            }
-        }
-    }
-
-    fun checkActiveRide(onActive: (String) -> Unit) {
-        viewModelScope.launch {
-            try {
-                api.getActiveRide()?.let { if (it.status == "InProgress") onActive(it.id) }
-            } catch (_: Exception) {}
-        }
-    }
-
-    fun refreshKyc() {
-        viewModelScope.launch {
-            try {
-                val kyc = api.getKycStatus().status
-                _state.value = _state.value.copy(kycStatus = kyc)
-            } catch (_: Exception) {}
-        }
-    }
-}
-
 data class ProfileState(val profile: CustomerProfile? = null, val isLoading: Boolean = false, val error: String? = null)
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(private val api: SwitchrideApi) : ViewModel() {
     private val _state = MutableStateFlow(ProfileState())
     val state: StateFlow<ProfileState> = _state
-
     fun load() {
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true)
@@ -204,11 +155,9 @@ data class KycState(val isLoading: Boolean = false, val uploaded: Set<String> = 
 class KycViewModel @Inject constructor(private val api: SwitchrideApi) : ViewModel() {
     private val _state = MutableStateFlow(KycState())
     val state: StateFlow<KycState> = _state
-
     fun markUploaded(documentType: String) {
         _state.value = _state.value.copy(uploaded = _state.value.uploaded + documentType, error = null)
     }
-
     fun submitAll(onComplete: () -> Unit) {
         val required = listOf("Aadhaar", "PAN", "DrivingLicence", "Selfie")
         val missing = required.filter { it !in _state.value.uploaded }
@@ -231,50 +180,181 @@ class KycViewModel @Inject constructor(private val api: SwitchrideApi) : ViewMod
     }
 }
 
-data class RideHistoryState(val rides: List<Ride> = emptyList(), val isLoading: Boolean = false, val error: String? = null)
+data class RiderUiState(
+    val loading: Boolean = false,
+    val home: HomeResponse? = null,
+    val vehicle: VehicleResponse? = null,
+    val payments: List<PaymentItem> = emptyList(),
+    val wallet: List<WalletItem> = emptyList(),
+    val plans: PlansResponse? = null,
+    val agreements: List<AgreementItem> = emptyList(),
+    val stations: List<StationItem> = emptyList(),
+    val centres: List<CentreItem> = emptyList(),
+    val slots: List<SlotItem> = emptyList(),
+    val appointments: List<AppointmentItem> = emptyList(),
+    val tickets: List<TicketItem> = emptyList(),
+    val referral: ReferralResponse? = null,
+    val message: String? = null,
+    val error: String? = null,
+    val tenantLogoUrl: String? = null,
+)
 
 @HiltViewModel
-class RideHistoryViewModel @Inject constructor(private val api: SwitchrideApi) : ViewModel() {
-    private val _state = MutableStateFlow(RideHistoryState())
-    val state: StateFlow<RideHistoryState> = _state
-
-    fun load() {
+class RiderAppViewModel @Inject constructor(
+    private val api: SwitchrideApi,
+    private val apiSettings: ApiSettings,
+) : ViewModel() {
+    private val _state = MutableStateFlow(RiderUiState())
+    val state: StateFlow<RiderUiState> = _state
+    init {
         viewModelScope.launch {
-            _state.value = _state.value.copy(isLoading = true, error = null)
+            runCatching {
+                val branding = api.branding()
+                val logo = if (branding.hasOptionalLogo) "${apiSettings.getBaseUrl().trimEnd('/')}/branding/optional-logo" else null
+                _state.value = _state.value.copy(tenantLogoUrl = logo)
+            }
+        }
+    }
+    fun clearMessage() { _state.value = _state.value.copy(message = null, error = null) }
+    fun refreshHome() = launch { _state.value = _state.value.copy(home = api.home()) }
+    fun refreshVehicle() = launch { _state.value = _state.value.copy(vehicle = api.vehicle()) }
+    fun refreshPay() = launch {
+        _state.value = _state.value.copy(payments = api.payments().items, wallet = api.wallet().items, home = api.home())
+    }
+    fun refreshPlans() = launch { _state.value = _state.value.copy(plans = api.plans()) }
+    fun refreshDocs() = launch { _state.value = _state.value.copy(agreements = api.agreements().items) }
+    fun refreshStations() = launch { _state.value = _state.value.copy(stations = api.stations().items) }
+    fun refreshService() = launch {
+        _state.value = _state.value.copy(centres = api.centres().items, slots = api.slots().items, appointments = api.appointments().items, vehicle = api.vehicle())
+    }
+    fun refreshSupport() = launch { _state.value = _state.value.copy(tickets = api.tickets().items) }
+    fun refreshReferral() = launch { _state.value = _state.value.copy(referral = api.referral()) }
+    fun applyReferral(code: String) = launch {
+        api.applyReferral(ApplyReferralRequest(code))
+        _state.value = _state.value.copy(message = "Referral applied")
+        refreshReferral()
+    }
+    fun pay(method: String) = launch {
+        api.pay(PayRequest(method))
+        _state.value = _state.value.copy(message = "Payment recorded ($method)")
+        refreshPay()
+    }
+    fun reportBreakdown(issue: String, description: String) = launch {
+        api.reportBreakdown(BreakdownRequest(issue, description))
+        _state.value = _state.value.copy(message = "Breakdown sent to Command Center")
+        refreshVehicle(); refreshHome()
+    }
+    fun raiseService(category: String, description: String) = launch {
+        api.raiseService(ServiceRequestBody(category, description))
+        _state.value = _state.value.copy(message = "Service request raised")
+        refreshService()
+    }
+    fun schedule(centreId: String, slotId: String) = launch {
+        api.schedule(ScheduleRequest(centreId, slotId))
+        _state.value = _state.value.copy(message = "Appointment scheduled")
+        refreshService()
+    }
+    fun cancelAppt(id: String, reason: String) = launch {
+        api.cancelAppointment(id, CancelRequest(reason))
+        _state.value = _state.value.copy(message = "Appointment cancelled")
+        refreshService()
+    }
+    fun reschedule(id: String, slotId: String) = launch {
+        api.rescheduleAppointment(id, RescheduleRequest(slotId))
+        _state.value = _state.value.copy(message = "Appointment rescheduled")
+        refreshService()
+    }
+    fun changePlan(id: String) = launch {
+        api.changePlan(PlanChangeRequest(id))
+        _state.value = _state.value.copy(message = "Plan updated")
+        refreshPlans(); refreshHome()
+    }
+    fun sendFeedback(rating: Int, comment: String, category: String) = launch {
+        api.feedback(FeedbackRequest(rating, comment, category))
+        _state.value = _state.value.copy(message = "Thanks for your feedback")
+    }
+    fun createTicket(subject: String, description: String) = launch {
+        api.createTicket(CreateTicketRequest("General", subject, description))
+        _state.value = _state.value.copy(message = "Support ticket created")
+        refreshSupport()
+    }
+    fun saveProfile(name: String, email: String, address: String) = launch {
+        api.updateProfile(UpdateProfileRequest(name, email, address))
+        _state.value = _state.value.copy(message = "Profile saved", home = api.home())
+    }
+    private fun launch(block: suspend () -> Unit) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(loading = true, error = null)
             try {
-                val rides = api.getRideHistory().items
-                _state.value = _state.value.copy(isLoading = false, rides = rides)
+                block()
+                _state.value = _state.value.copy(loading = false)
             } catch (e: Exception) {
-                _state.value = _state.value.copy(isLoading = false, error = ApiErrorParser.message(e))
+                _state.value = _state.value.copy(loading = false, error = ApiErrorParser.message(e))
             }
         }
     }
 }
 
-data class SupportState(val isLoading: Boolean = false, val error: String? = null, val success: Boolean = false)
+data class BookRideState(
+    val isLoading: Boolean = false,
+    val hubs: List<RentalHubSummary> = emptyList(),
+    val selectedHubId: String? = null,
+    val vehicles: List<VehicleSummary> = emptyList(),
+    val kycStatus: String = "NotSubmitted",
+    val error: String? = null,
+    val message: String? = null,
+)
 
 @HiltViewModel
-class SupportViewModel @Inject constructor(private val api: SwitchrideApi) : ViewModel() {
-    private val _state = MutableStateFlow(SupportState())
-    val state: StateFlow<SupportState> = _state
+class BookRideViewModel @Inject constructor(private val api: SwitchrideApi) : ViewModel() {
+    private val _state = MutableStateFlow(BookRideState())
+    val state: StateFlow<BookRideState> = _state
 
-    fun submit(subject: String, description: String) {
-        if (subject.isBlank() || description.isBlank()) {
-            _state.value = _state.value.copy(error = "Subject and description are required.")
-            return
-        }
+    fun clearMessage() { _state.value = _state.value.copy(error = null, message = null) }
+
+    fun load() {
         viewModelScope.launch {
-            _state.value = _state.value.copy(isLoading = true, error = null, success = false)
+            _state.value = _state.value.copy(isLoading = true, error = null)
             try {
-                api.createTicket(CreateTicketRequest("General", subject.trim(), description.trim()))
-                _state.value = _state.value.copy(isLoading = false, success = true)
+                val hubs = api.getNearbyHubs(21.1458, 79.0882).items
+                val kyc = api.getKycStatus().status
+                _state.value = _state.value.copy(isLoading = false, hubs = hubs, kycStatus = kyc)
             } catch (e: Exception) {
                 _state.value = _state.value.copy(isLoading = false, error = ApiErrorParser.message(e))
             }
         }
     }
 
-    fun clearSuccess() { _state.value = _state.value.copy(success = false) }
+    fun selectHub(hubId: String) {
+        _state.value = _state.value.copy(selectedHubId = hubId, vehicles = emptyList())
+        viewModelScope.launch {
+            try {
+                val vehicles = api.getHubVehicles(hubId).items.filter { it.status == "Available" }
+                _state.value = _state.value.copy(vehicles = vehicles)
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(error = ApiErrorParser.message(e))
+            }
+        }
+    }
+
+    fun bookAndStart(vehicleId: String, onStarted: (String) -> Unit) {
+        if (_state.value.kycStatus != "Approved") {
+            _state.value = _state.value.copy(error = "KYC must be approved before booking.")
+            return
+        }
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isLoading = true, error = null)
+            try {
+                val booking = api.createBooking(CreateBookingRequest(vehicleId, "PerMinute"))
+                val rideId = booking.rideId ?: error("No ride ID")
+                api.startRide(rideId)
+                _state.value = _state.value.copy(isLoading = false, message = "Ride started")
+                onStarted(rideId)
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(isLoading = false, error = ApiErrorParser.message(e))
+            }
+        }
+    }
 }
 
 data class ActiveRideState(
@@ -295,12 +375,7 @@ class ActiveRideViewModel @Inject constructor(private val api: SwitchrideApi) : 
             _state.value = _state.value.copy(isLoading = true, error = null)
             try {
                 val result = api.endRide(rideId)
-                _state.value = _state.value.copy(
-                    isLoading = false,
-                    fare = result.fare,
-                    paymentId = result.paymentId,
-                    ended = true,
-                )
+                _state.value = _state.value.copy(isLoading = false, fare = result.fare, paymentId = result.paymentId, ended = true)
             } catch (e: Exception) {
                 _state.value = _state.value.copy(isLoading = false, error = ApiErrorParser.message(e))
             }

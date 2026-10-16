@@ -14,10 +14,16 @@ export class IoTController {
     return this.iotService.listDevices().then((items) => ({ items }));
   }
 
+  @Post('devices/sync')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  syncDevices() {
+    return this.iotService.syncTrack360();
+  }
+
   @Post('devices')
   @Roles('SuperAdmin', 'Administrator', 'Operations')
-  registerDevice(@Body() body: { deviceId: string; vendorType?: string; vehicleId?: string }) {
-    return this.iotService.registerDevice(body.deviceId, body.vendorType, body.vehicleId);
+  registerDevice(@Body() body: { deviceId: string; vendorType?: string; vehicleId?: string; tenantId?: string }) {
+    return this.iotService.registerDevice(body.deviceId, body.vendorType, body.vehicleId, body.tenantId);
   }
 
   @Put('devices/:deviceId')
@@ -50,7 +56,19 @@ export class IoTInternalController {
   constructor(private iotService: IoTService) {}
 
   @Post('telemetry')
-  telemetry(@Body() body: { deviceId: string; lat: number; lng: number; batteryPercent: number; odometerKm: number }) {
-    return this.iotService.updateTelemetry(body.deviceId, body.lat, body.lng, body.batteryPercent, body.odometerKm);
+  telemetry(
+    @Body()
+    body: {
+      deviceId: string;
+      lat: number;
+      lng: number;
+      batteryPercent?: number;
+      odometerKm?: number;
+      speedKmh?: number;
+      ignition?: string;
+      name?: string;
+    },
+  ) {
+    return this.iotService.ingestLiveTelemetry(body);
   }
 }

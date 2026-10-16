@@ -17,6 +17,14 @@ const variants: Record<string, string> = {
   Inactive: "bg-slate-100 text-slate-600",
   Confirmed: "bg-brand-light text-brand-dark",
   Completed: "bg-slate-100 text-slate-700",
+  Issued: "bg-blue-50 text-blue-700",
+  Signed: "bg-brand-light text-brand-dark",
+  Sent: "bg-brand-light text-brand-dark",
+  Open: "bg-amber-50 text-amber-700",
+  Escalated: "bg-orange-50 text-orange-700",
+  Assigned: "bg-blue-50 text-blue-700",
+  Closed: "bg-slate-100 text-slate-700",
+  Draft: "bg-slate-100 text-slate-600",
 };
 
 export function Badge({ status, className }: { status: string; className?: string }) {

@@ -1,0 +1,328 @@
+openapi: 3.1.0
+info:
+  title: Digi-Switchride India Location API
+  version: 1.0.0
+  description: |
+    Standalone reverse-geocoding service for coordinates inside India.
+    Other Digi-Switchride applications, and external applications, call this API over HTTP.
+    It is hosted separately from the platform API.
+
+    The service looks up the nearest populated place and PIN code in a local database
+    built from GeoNames India data. The India boundary comes from Natural Earth.
+    Give credit to GeoNames (CC-BY-4.0) when showing these names to users.
+
+    Send `X-Api-Key` or `Authorization: Bearer` when the server is configured with
+    `LOCATION_API_KEYS`. Health checks stay open.
+  contact:
+    name: Digi-Switchride Platform Team
+
+servers:
+  - url: http://localhost:4100
+    description: Local
+  - url: https://location.digi-switchride.dev
+    description: Shared location service
+
+tags:
+  - name: Location
+    description: Reverse geocoding for India
+  - name: Ops
+    description: Health and readiness
+
+paths:
+  /health:
+    get:
+      tags: [Ops]
+      summary: Liveness
+      operationId: getHealth
+      responses:
+        '200':
+          description: Process is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    const: ok
+
+  /ready:
+    get:
+      tags: [Ops]
+      summary: Database readiness
+      operationId: getReady
+      responses:
+        '200':
+          description: Location database is loaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ready'
+
+  /v1/locations/reverse:
+    get:
+      tags: [Location]
+      summary: Resolve an Indian location from coordinates
+      operationId: reverseGeocode
+      parameters:
+        - $ref: '#/components/parameters/latitude'
+        - $ref: '#/components/parameters/longitude'
+        - $ref: '#/components/parameters/altitude'
+      responses:
+        '200':
+          description: Nearest locality, district, state, and PIN code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+        '400':
+          $ref: '#/components/responses/Validation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/OutsideIndia'
+    post:
+      tags: [Location]
+      summary: Resolve an Indian location from a JSON body
+      operationId: reverseGeocodePost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReverseRequest'
+      responses:
+        '200':
+          description: Nearest locality, district, state, and PIN code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+        '400':
+          $ref: '#/components/responses/Validation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/OutsideIndia'
+
+components:
+  parameters:
+    latitude:
+      name: latitude
+      in: query
+      required: true
+      schema:
+        type: number
+        minimum: -90
+        maximum: 90
+      description: WGS84 latitude
+    longitude:
+      name: longitude
+      in: query
+      required: true
+      schema:
+        type: number
+        minimum: -180
+        maximum: 180
+      description: WGS84 longitude
+    altitude:
+      name: altitude
+      in: query
+      required: false
+      schema:
+        type: number
+        minimum: -500
+        maximum: 9000
+      description: Optional device altitude in meters above mean sea level
+
+  schemas:
+    ReverseRequest:
+      type: object
+      additionalProperties: false
+      required: [latitude, longitude]
+      properties:
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        altitude:
+          type: number
+          minimum: -500
+          maximum: 9000
+          description: Optional device altitude in meters above mean sea level
+    Location:
+      type: object
+      required:
+        - latitude
+        - longitude
+        - altitude
+        - country
+        - countryCode
+        - state
+        - stateCode
+        - district
+        - locality
+        - postalCode
+        - timezone
+        - elevation
+        - altitudeAboveTerrain
+        - distanceMeters
+        - postalDistanceMeters
+        - matched
+        - osm
+        - attribution
+      properties:
+        latitude:
+          type: number
+        longitude:
+          type: number
+        altitude:
+          type: [number, 'null']
+        country:
+          type: string
+          const: India
+        countryCode:
+          type: string
+          const: IN
+        state:
+          type: [string, 'null']
+        stateCode:
+          type: [string, 'null']
+          description: ISO 3166-2 subdivision code without the IN- prefix
+        district:
+          type: [string, 'null']
+        locality:
+          type: string
+        postalCode:
+          type: [string, 'null']
+        timezone:
+          type: [string, 'null']
+        elevation:
+          type: [integer, 'null']
+          description: Elevation in meters of the matched locality, from GeoNames
+        altitudeAboveTerrain:
+          type: [number, 'null']
+          description: Requested altitude minus the matched locality elevation, in meters
+        distanceMeters:
+          type: integer
+        postalDistanceMeters:
+          type: [integer, 'null']
+        matched:
+          type: object
+          required: [name, latitude, longitude, featureCode, population]
+          properties:
+            name:
+              type: string
+            latitude:
+              type: number
+            longitude:
+              type: number
+            featureCode:
+              type: string
+            population:
+              type: integer
+        attribution:
+          type: string
+        osm:
+          type: object
+          required: [place, road, airport, port, industrialArea]
+          properties:
+            place:
+              $ref: '#/components/schemas/OsmFeature'
+            road:
+              oneOf:
+                - $ref: '#/components/schemas/OsmRoad'
+                - type: 'null'
+            airport:
+              $ref: '#/components/schemas/OsmFeature'
+            port:
+              $ref: '#/components/schemas/OsmFeature'
+            industrialArea:
+              $ref: '#/components/schemas/OsmFeature'
+    OsmFeature:
+      oneOf:
+        - type: 'null'
+        - type: object
+          required: [name, kind, distanceMeters]
+          properties:
+            name:
+              type: string
+            kind:
+              type: string
+            distanceMeters:
+              type: integer
+    OsmRoad:
+      type: object
+      required: [name, ref, highway, distanceMeters]
+      properties:
+        name:
+          type: [string, 'null']
+        ref:
+          type: [string, 'null']
+        highway:
+          type: string
+        distanceMeters:
+          type: integer
+    Ready:
+      type: object
+      required: [status, places, postalCodes]
+      properties:
+        status:
+          type: string
+        places:
+          type: integer
+        postalCodes:
+          type: integer
+        seededAt:
+          type: [string, 'null']
+        cacheEntries:
+          type: integer
+        lookups:
+          type: integer
+        cacheHits:
+          type: integer
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          nullable: true
+
+  responses:
+    Validation:
+      description: Latitude or longitude is missing or out of range
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: API key is missing or not recognized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: The point is inside India but no locality was found within 80 km
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    OutsideIndia:
+      description: The point is outside the India boundary
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

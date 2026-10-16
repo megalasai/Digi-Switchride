@@ -16,9 +16,9 @@ export function StatCard({
 }) {
   const accents = {
     brand: "bg-brand-light text-brand-dark",
-    blue: "bg-blue-50 text-blue-600",
+    blue: "bg-sky-50 text-sky-600",
     amber: "bg-amber-50 text-amber-600",
-    slate: "bg-slate-100 text-slate-600",
+    slate: "bg-[#eef1f6] text-[#5d6478]",
   };
 
   return (

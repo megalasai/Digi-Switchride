@@ -51,7 +51,24 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - run: npx @redocly/cli lint contracts/openapi/platform-v1.yaml
+      - run: npx @redocly/cli lint contracts/openapi/platform-v1.yaml contracts/openapi/location-v1.yaml
+
+  location:
+    name: India location API
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/location
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+        working-directory: .
+      - run: npm test
+      - run: npm run build
 
   android:
     name: Android (Structure)

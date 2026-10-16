@@ -4,7 +4,9 @@ import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: ['error', 'warn', 'log'],
+  });
   const config = app.get(ConfigService);
 
   app.useGlobalPipes(
@@ -16,9 +18,8 @@ async function bootstrap() {
   );
 
   app.setGlobalPrefix('api');
-  const corsOrigin = config.get<string>('CORS_ORIGIN', 'http://localhost:3000');
   app.enableCors({
-    origin: corsOrigin.includes(',') ? corsOrigin.split(',').map((o) => o.trim()) : corsOrigin,
+    origin: true,
     credentials: true,
   });
 

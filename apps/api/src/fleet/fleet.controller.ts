@@ -45,7 +45,7 @@ export class FleetAdminController {
 
   @Post('hubs')
   @Roles('SuperAdmin', 'Administrator', 'Operations')
-  createHub(@Body() body: { name: string; location: { lat: number; lng: number }; address: string; capacity: number; operatingHours?: string; geoFenceRadiusM?: number }) {
+  createHub(@Body() body: { name: string; location: { lat: number; lng: number }; address: string; capacity: number; operatingHours?: string; geoFenceRadiusM?: number; tenantId?: string }) {
     return this.fleetService.createHub(body);
   }
 

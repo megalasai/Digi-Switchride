@@ -7,6 +7,7 @@ import { Customer, CustomerDocument } from '../schemas/customer.schema';
 import { Vehicle, VehicleDocument } from '../schemas/fleet.schema';
 import { calculateGst, calculateRideFare, estimateFare, toGeoLocation } from '../common/helpers';
 import { IoTService } from '../iot/iot.service';
+import { hubAllowed } from '../common/hub-scope';
 
 @Injectable()
 export class BookingsService {
@@ -134,6 +135,11 @@ export class BookingsService {
     const vehicle = await this.vehicleModel.findById(ride.vehicleId);
     if (vehicle) {
       vehicle.status = 'InRide';
+      if (location) {
+        vehicle.lastLat = location.lat;
+        vehicle.lastLng = location.lng;
+        vehicle.lastTelemetryAt = ride.startedAt;
+      }
       await vehicle.save();
       if (vehicle.iotDeviceId) await this.iotService.sendCommand(vehicle.iotDeviceId, 'Unlock');
     }
@@ -197,8 +203,51 @@ export class BookingsService {
   }
 
   async getActiveRidesAdmin() {
-    const rides = await this.rideModel.find({ status: 'InProgress' });
-    return rides.map((r) => this.toRide(r));
+    const rides = await this.rideModel.find({ status: 'InProgress' }).sort({ startedAt: -1 });
+    const vehicleIds = [...new Set(rides.map((r) => r.vehicleId))];
+    const customerIds = [...new Set(rides.map((r) => r.customerId))];
+    const [vehicles, customers] = await Promise.all([
+      this.vehicleModel.find({ _id: { $in: vehicleIds } }),
+      this.customerModel.find({ _id: { $in: customerIds } }),
+    ]);
+    const vehicleMap = Object.fromEntries(vehicles.map((v) => [v._id.toString(), v]));
+    const customerMap = Object.fromEntries(customers.map((c) => [c._id.toString(), c]));
+    return rides
+      .filter((r) => {
+        const vehicle = vehicleMap[r.vehicleId];
+        return hubAllowed(vehicle?.hubId);
+      })
+      .map((r) => {
+      const vehicle = vehicleMap[r.vehicleId];
+      const customer = customerMap[r.customerId];
+      return {
+        ...this.toRide(r),
+        customerId: r.customerId,
+        customerName: customer?.fullName,
+        customerPhone: customer?.phone,
+        vehicleRegistration: vehicle?.registrationNumber,
+        vehicleType: vehicle?.type,
+        wheelClass: vehicle?.wheelClass,
+        batteryPercent: vehicle?.batteryPercent,
+        odometerKm: vehicle?.odometerKm,
+        speedKmh: vehicle?.speedKmh,
+        ignition: vehicle?.ignition,
+        model: vehicle?.model,
+        vehicleStatus: vehicle?.status,
+        lastPlace: vehicle?.lastPlace ?? null,
+        lastPlaceKind: vehicle?.lastPlaceKind ?? null,
+        lastLocation:
+          vehicle?.lastLat != null && vehicle?.lastLng != null
+            ? { lat: vehicle.lastLat, lng: vehicle.lastLng }
+            : this.toRide(r).startLocation,
+        lastTelemetryAt: vehicle?.lastTelemetryAt,
+        locationTrail: (vehicle?.locationTrail ?? []).map((p) => ({
+          lat: p.lat,
+          lng: p.lng,
+          at: p.at,
+        })),
+      };
+    });
   }
 
   private toBooking(b: BookingDocument, rideId?: string) {

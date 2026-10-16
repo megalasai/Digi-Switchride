@@ -14,10 +14,49 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.digiswitchride.customer.ui.theme.*
+
+fun vehicleIcon(type: String?, wheelClass: String?): ImageVector {
+    val cls = wheelClass ?: when (type) {
+        "ERickshaw" -> "ThreeWheeler"
+        "ECar" -> "FourWheeler"
+        else -> "TwoWheeler"
+    }
+    return when (cls) {
+        "ThreeWheeler" -> Icons.Default.ElectricRickshaw
+        "FourWheeler" -> Icons.Default.DirectionsCar
+        else -> Icons.Default.TwoWheeler
+    }
+}
+
+@Composable
+fun TenantLogo(url: String?, modifier: Modifier = Modifier, showLabel: Boolean = true) {
+    if (url.isNullOrBlank()) return
+    Column(modifier) {
+        if (showLabel) {
+            Text(
+                "OPERATOR",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(6.dp))
+        }
+        Surface(shape = RoundedCornerShape(12.dp), color = Color.White, shadowElevation = 1.dp) {
+            AsyncImage(
+                model = url,
+                contentDescription = "Organization logo",
+                modifier = Modifier.height(48.dp).widthIn(max = 180.dp).padding(8.dp),
+                contentScale = ContentScale.Fit,
+            )
+        }
+    }
+}
 
 @Composable
 fun BrandHeader(title: String, subtitle: String) {
@@ -87,7 +126,7 @@ fun HubCard(name: String, distanceKm: Double, available: Int, selected: Boolean,
 }
 
 @Composable
-fun VehicleCard(model: String, registration: String, battery: Int, canBook: Boolean, onBook: () -> Unit) {
+fun VehicleCard(model: String, registration: String, battery: Int, canBook: Boolean, onBook: () -> Unit, type: String? = null, wheelClass: String? = null) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -96,6 +135,8 @@ fun VehicleCard(model: String, registration: String, battery: Int, canBook: Bool
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(vehicleIcon(type, wheelClass), null, Modifier.size(36.dp), tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(model, style = MaterialTheme.typography.titleLarge)
                     Text(registration, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

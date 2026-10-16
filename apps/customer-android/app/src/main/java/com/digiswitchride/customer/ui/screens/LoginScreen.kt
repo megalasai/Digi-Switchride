@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.digiswitchride.customer.ui.components.BrandHeader
 import com.digiswitchride.customer.ui.components.PrimaryButton
+import com.digiswitchride.customer.ui.components.TenantLogo
 import com.digiswitchride.customer.ui.theme.GradientEnd
 import com.digiswitchride.customer.ui.theme.GradientStart
 import com.digiswitchride.customer.ui.viewmodel.AuthViewModel
@@ -28,6 +29,7 @@ fun LoginScreen(onAuthenticated: () -> Unit, viewModel: AuthViewModel = hiltView
     var fullName by remember { mutableStateOf("") }
     val state by viewModel.state.collectAsState()
     val apiHost by viewModel.apiHost.collectAsState()
+    val tenantSlug by viewModel.tenantSlug.collectAsState()
 
     LaunchedEffect(state.isAuthenticated) {
         if (state.isAuthenticated) onAuthenticated()
@@ -42,7 +44,12 @@ fun LoginScreen(onAuthenticated: () -> Unit, viewModel: AuthViewModel = hiltView
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.Center,
         ) {
-            BrandHeader("Digi-Switchride", "Electric rides at your fingertips")
+            <TenantLogo(state.optionalLogoUrl)
+            Spacer(Modifier.height(28.dp))
+            BrandHeader(
+                state.productName.ifBlank { "Digi-Switchride" },
+                "Your vehicle, plan, payments and support",
+            )
             Spacer(Modifier.height(40.dp))
 
             Card(shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(4.dp)) {
@@ -84,6 +91,17 @@ fun LoginScreen(onAuthenticated: () -> Unit, viewModel: AuthViewModel = hiltView
                         )
                     }
                     Spacer(Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = tenantSlug,
+                        onValueChange = { viewModel.updateTenantSlug(it) },
+                        label = { Text("Organization slug") },
+                        placeholder = { Text("digi-switchride") },
+                        supportingText = { Text("Your operator’s organization id") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                    )
+                    Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
                         value = apiHost,
                         onValueChange = { viewModel.updateApiHost(it) },

@@ -33,14 +33,11 @@ DigiSwitchride/
 
 ## Features
 
-- Modern SwiftUI design matching Android (green EV brand, cards, bottom tabs)
-- Username/password login and registration
-- KYC document upload
-- Nearby hub discovery with map placeholder
-- Vehicle booking and ride start/end
-- Ride history empty state
-- Support tickets
-- Profile with KYC shortcuts
+- Home: plan, dues, wallet, vehicle, alerts, breakdown/service status
+- My Vehicle: details, breakdown alert, service requests, appointments
+- Payments & wallet: outstanding, pay methods, history
+- Rental plans: view and change eligible plans
+- Documents, charging stations, profile, feedback, support, refer & earn
 
 ## API
 

@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException, OnModuleInit, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
@@ -11,6 +11,8 @@ import { AdminUser, AdminUserDocument } from '../schemas/admin.schema';
 import { generateOtp, hashOtp, hashPassword } from '../common/helpers';
 import { AdminLoginDto, CreateAdminUserDto } from './dto/admin-auth.dto';
 import { SendOtpDto, VerifyOtpDto, CustomerRegisterDto, CustomerLoginDto } from './dto/auth.dto';
+import { TenantsService } from '../tenants/tenants.service';
+import { currentTenantId, runWithoutTenant, tenantAls } from '../common/tenant-als';
 
 @Injectable()
 export class AuthService implements OnModuleInit {
@@ -22,23 +24,31 @@ export class AuthService implements OnModuleInit {
     private jwtService: JwtService,
     private config: ConfigService,
     private auditService: AuditService,
+    private tenants: TenantsService,
   ) {}
 
   async onModuleInit() {
-    const count = await this.adminModel.countDocuments();
-    if (count > 0) return;
-
-    const email = this.config.get<string>('ADMIN_EMAIL', 'admin@digiswitchride.com');
+    const email = this.config.get<string>('ADMIN_EMAIL', 'admin@digiswitchride.com').toLowerCase();
     const password = this.config.get<string>('ADMIN_PASSWORD', 'Admin@123');
     const salt = this.config.get<string>('PASSWORD_SALT', 'dev-salt');
+    const passwordHash = hashPassword(password, salt);
 
-    await this.adminModel.create({
-      email,
-      passwordHash: hashPassword(password, salt),
-      fullName: 'Super Admin',
-      role: 'SuperAdmin',
-    });
-    console.log(`[DEV] Bootstrap admin created: ${email}`);
+    const existing = await this.adminModel.findOne({ email });
+    if (!existing) {
+      await this.adminModel.create({
+        email,
+        passwordHash,
+        fullName: 'Super Admin',
+        role: 'SuperAdmin',
+        isActive: true,
+      });
+      return;
+    }
+
+    existing.passwordHash = passwordHash;
+    existing.isActive = true;
+    if (!existing.role) existing.role = 'SuperAdmin';
+    await existing.save();
   }
 
   async sendOtp(dto: SendOtpDto) {
@@ -103,31 +113,65 @@ export class AuthService implements OnModuleInit {
 
   async adminLogin(dto: AdminLoginDto) {
     const salt = this.config.get<string>('PASSWORD_SALT', 'dev-salt');
-    const admin = await this.adminModel.findOne({ email: dto.email.toLowerCase(), isActive: true });
-    if (!admin || admin.passwordHash !== hashPassword(dto.password, salt)) {
-      throw new UnauthorizedException('Invalid email or password');
+    const email = dto.email.toLowerCase();
+    const matches = await runWithoutTenant(() => this.adminModel.find({ email, isActive: true }));
+    const superAdmin = matches.find((a) => a.role === 'SuperAdmin');
+    const passwordOk = (admin: AdminUserDocument) => admin.passwordHash === hashPassword(dto.password, salt);
+
+    if (!dto.tenantSlug) {
+      if (superAdmin && passwordOk(superAdmin)) return this.issueAdminTokens(superAdmin);
+      throw new UnauthorizedException('Select an organization to sign in');
+    }
+
+    const tenant = await this.tenants.findBySlug(dto.tenantSlug);
+    if (!tenant) throw new UnauthorizedException('Unknown organization');
+    if (superAdmin && passwordOk(superAdmin)) return this.issueAdminTokens(superAdmin);
+
+    const admin = matches.find((a) => (a as { tenantId?: string }).tenantId === tenant._id.toString());
+    if (!admin || !passwordOk(admin)) {
+      throw new UnauthorizedException('Invalid email, password, or organization');
     }
     return this.issueAdminTokens(admin);
   }
 
-  async createAdminUser(dto: CreateAdminUserDto, actor?: AuditActor | null) {
-    const salt = this.config.get<string>('PASSWORD_SALT', 'dev-salt');
-    const existing = await this.adminModel.findOne({ email: dto.email.toLowerCase() });
-    if (existing) throw new ConflictException('Email already registered');
+  async createAdminUser(
+    dto: CreateAdminUserDto,
+    actor?: AuditActor | null,
+    caller?: { role?: string; tenantId?: string },
+  ) {
+    const callerRole = normalizeAdminRole(caller?.role) ?? caller?.role;
+    if (dto.role === 'SuperAdmin' && callerRole !== 'SuperAdmin') {
+      throw new ForbiddenException('Only a SuperAdmin can create another SuperAdmin');
+    }
+    const tenantId =
+      callerRole === 'SuperAdmin'
+        ? dto.tenantId || currentTenantId() || this.tenants.defaultTenantId()
+        : caller?.tenantId || currentTenantId() || this.tenants.defaultTenantId();
+    if (!tenantId) throw new ForbiddenException('Choose an organization for this user');
 
-    const admin = await this.adminModel.create({
-      email: dto.email.toLowerCase(),
-      passwordHash: hashPassword(dto.password, salt),
-      fullName: dto.fullName,
-      role: dto.role,
-    });
+    const salt = this.config.get<string>('PASSWORD_SALT', 'dev-salt');
+    const existing = await runWithoutTenant(() =>
+      this.adminModel.findOne({ email: dto.email.toLowerCase(), tenantId }),
+    );
+    if (existing) throw new ConflictException('Email already registered for this organization');
+
+    const admin = await tenantAls.run({ tenantId, skip: false }, () =>
+      this.adminModel.create({
+        email: dto.email.toLowerCase(),
+        passwordHash: hashPassword(dto.password, salt),
+        fullName: dto.fullName,
+        role: dto.role,
+        tenantId,
+        hubIds: dto.hubIds ?? [],
+      }),
+    );
     const result = this.toAdminUser(admin);
     await this.auditService.record({
       actor,
       action: 'admin.user.create',
       entityType: 'AdminUser',
       entityId: result.id,
-      after: { email: result.email, role: result.role, fullName: result.fullName },
+      after: { email: result.email, role: result.role, fullName: result.fullName, tenantId, hubIds: result.hubIds },
     });
     return result;
   }
@@ -139,16 +183,25 @@ export class AuthService implements OnModuleInit {
 
   async updateAdminUser(
     id: string,
-    data: { fullName?: string; role?: AdminRole; password?: string; isActive?: boolean },
+    data: { fullName?: string; role?: AdminRole; password?: string; isActive?: boolean; tenantId?: string; hubIds?: string[] },
     actor?: AuditActor | null,
+    caller?: { role?: string },
   ) {
     const admin = await this.adminModel.findById(id);
     if (!admin) throw new NotFoundException('Admin user not found');
+    const callerRole = normalizeAdminRole(caller?.role) ?? caller?.role;
+    if (data.role === 'SuperAdmin' && callerRole !== 'SuperAdmin') {
+      throw new ForbiddenException('Only a SuperAdmin can assign SuperAdmin');
+    }
     const before = this.toAdminUser(admin);
 
     if (data.fullName != null) admin.fullName = data.fullName;
     if (data.role != null) admin.role = data.role;
     if (data.isActive != null) admin.isActive = data.isActive;
+    if (data.hubIds != null) admin.hubIds = data.hubIds;
+    if (data.tenantId != null && callerRole === 'SuperAdmin') {
+      (admin as { tenantId?: string }).tenantId = data.tenantId;
+    }
     if (data.password) {
       const salt = this.config.get<string>('PASSWORD_SALT', 'dev-salt');
       admin.passwordHash = hashPassword(data.password, salt);
@@ -181,11 +234,11 @@ export class AuthService implements OnModuleInit {
   }
 
   async validateCustomer(customerId: string) {
-    return this.customerModel.findById(customerId);
+    return runWithoutTenant(() => this.customerModel.findById(customerId));
   }
 
   async validateAdmin(adminId: string) {
-    return this.adminModel.findOne({ _id: adminId, isActive: true });
+    return runWithoutTenant(() => this.adminModel.findOne({ _id: adminId, isActive: true }));
   }
 
   private async issueCustomerTokens(customer: CustomerDocument, isNewUser: boolean) {
@@ -195,6 +248,7 @@ export class AuthService implements OnModuleInit {
       username: customer.username,
       role: 'Customer',
       type: 'customer',
+      tenantId: (customer as { tenantId?: string }).tenantId,
     };
     const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
     const refreshTokenValue = randomUUID().replace(/-/g, '');
@@ -208,18 +262,22 @@ export class AuthService implements OnModuleInit {
     return { accessToken, refreshToken: refreshTokenValue, expiresIn: 3600, isNewUser };
   }
 
-  private issueAdminTokens(admin: AdminUserDocument) {
+  private async issueAdminTokens(admin: AdminUserDocument) {
+    const tenantId = (admin as { tenantId?: string }).tenantId;
+    const tenant = tenantId ? await this.tenants.peek(tenantId) : null;
     const payload = {
       sub: admin._id.toString(),
       email: admin.email,
       role: (normalizeAdminRole(admin.role) ?? admin.role) as AdminRole,
       type: 'admin',
+      tenantId,
+      hubIds: admin.hubIds ?? [],
     };
     const accessToken = this.jwtService.sign(payload, { expiresIn: '8h' });
     return {
       accessToken,
       expiresIn: 28800,
-      user: this.toAdminUser(admin),
+      user: { ...this.toAdminUser(admin), tenantName: tenant?.name },
     };
   }
 
@@ -230,6 +288,8 @@ export class AuthService implements OnModuleInit {
       fullName: admin.fullName,
       role: normalizeAdminRole(admin.role) ?? admin.role,
       isActive: admin.isActive,
+      tenantId: (admin as { tenantId?: string }).tenantId,
+      hubIds: admin.hubIds ?? [],
       createdAt: (admin as any).createdAt,
     };
   }

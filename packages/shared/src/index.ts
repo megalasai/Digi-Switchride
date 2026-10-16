@@ -1,6 +1,7 @@
 export type KycStatus = 'NotSubmitted' | 'Pending' | 'UnderReview' | 'Approved' | 'Rejected';
 export type AccountStatus = 'Active' | 'Suspended' | 'Deactivated';
-export type VehicleType = 'EScooter' | 'EBike' | 'ERickshaw';
+export type VehicleType = 'EScooter' | 'EBike' | 'ERickshaw' | 'ECar';
+export type WheelClass = 'TwoWheeler' | 'ThreeWheeler' | 'FourWheeler';
 export type VehicleStatus = 'Available' | 'Reserved' | 'InRide' | 'Maintenance' | 'Offline';
 export type BookingType = 'PerMinute' | 'Hourly' | 'Daily' | 'Weekly' | 'Monthly';
 export type BookingStatus = 'Draft' | 'Confirmed' | 'Active' | 'Completed' | 'Cancelled' | 'NoShow';
@@ -15,6 +16,10 @@ export type DeviceCommand = 'Lock' | 'Unlock' | 'IgnitionOn' | 'IgnitionOff' | '
 export type BillingFrequency = 'Weekly' | 'Monthly' | 'Quarterly';
 export type WalletEntryType = 'Credit' | 'Debit';
 export type VehicleEventType = 'StatusChange' | 'Assignment' | 'Unassignment' | 'HubMove' | 'Note';
+export type BreakdownStatus = 'Open' | 'Assigned' | 'InProgress' | 'Escalated' | 'Closed';
+export type ServiceRequestStatus = 'Open' | 'Assigned' | 'InProgress' | 'Completed' | 'Cancelled';
+export type AppointmentStatus = 'Scheduled' | 'Rescheduled' | 'Cancelled' | 'Completed';
+export type KycDocumentType = 'Aadhaar' | 'PAN' | 'DrivingLicence' | 'Selfie';
 
 export const ADMIN_ROLES = [
   'SuperAdmin',
@@ -44,8 +49,28 @@ export function normalizeAdminRole(role: string | undefined | null): AdminRole |
 export const ACCOUNT_STATUSES: AccountStatus[] = ['Active', 'Suspended', 'Deactivated'];
 export const KYC_STATUSES: KycStatus[] = ['NotSubmitted', 'Pending', 'UnderReview', 'Approved', 'Rejected'];
 export const VEHICLE_STATUSES: VehicleStatus[] = ['Available', 'Reserved', 'InRide', 'Maintenance', 'Offline'];
-export const VEHICLE_TYPES: VehicleType[] = ['EScooter', 'EBike', 'ERickshaw'];
+export const VEHICLE_TYPES: VehicleType[] = ['EScooter', 'EBike', 'ERickshaw', 'ECar'];
+export const WHEEL_CLASSES: WheelClass[] = ['TwoWheeler', 'ThreeWheeler', 'FourWheeler'];
+
+export function wheelClassFromType(type?: string | null): WheelClass {
+  if (type === 'ERickshaw') return 'ThreeWheeler';
+  if (type === 'ECar') return 'FourWheeler';
+  return 'TwoWheeler';
+}
+
+export function resolveWheelClass(type?: string | null, wheelClass?: string | null): WheelClass {
+  if (wheelClass && (WHEEL_CLASSES as readonly string[]).includes(wheelClass)) {
+    return wheelClass as WheelClass;
+  }
+  return wheelClassFromType(type);
+}
 export const BILLING_FREQUENCIES: BillingFrequency[] = ['Weekly', 'Monthly', 'Quarterly'];
+export const PAYMENT_STATUSES: PaymentStatus[] = ['Created', 'Paid', 'Failed', 'Refunded'];
+export const KYC_DOCUMENT_TYPES: KycDocumentType[] = ['Aadhaar', 'PAN', 'DrivingLicence', 'Selfie'];
+export const REQUIRED_KYC_DOCUMENTS: KycDocumentType[] = ['Aadhaar', 'PAN', 'DrivingLicence'];
+export const BREAKDOWN_STATUSES: BreakdownStatus[] = ['Open', 'Assigned', 'InProgress', 'Escalated', 'Closed'];
+export const SERVICE_REQUEST_STATUSES: ServiceRequestStatus[] = ['Open', 'Assigned', 'InProgress', 'Completed', 'Cancelled'];
+export const APPOINTMENT_STATUSES: AppointmentStatus[] = ['Scheduled', 'Rescheduled', 'Cancelled', 'Completed'];
 
 export interface GeoPoint {
   lat: number;

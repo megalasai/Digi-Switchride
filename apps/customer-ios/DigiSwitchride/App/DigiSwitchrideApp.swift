@@ -32,13 +32,15 @@ struct MainTabView: View {
     var body: some View {
         TabView {
             HomeView()
-                .tabItem { Label("Explore", systemImage: "map") }
-            RideHistoryView()
-                .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
-            SupportView()
-                .tabItem { Label("Support", systemImage: "headphones") }
-            ProfileView()
-                .tabItem { Label("Profile", systemImage: "person") }
+                .tabItem { Label("Home", systemImage: "house") }
+            VehicleView()
+                .tabItem { Label("Vehicle", systemImage: "scooter") }
+            PayView()
+                .tabItem { Label("Pay", systemImage: "creditcard") }
+            PlanView()
+                .tabItem { Label("Plan", systemImage: "doc.text") }
+            MoreView()
+                .tabItem { Label("More", systemImage: "square.grid.2x2") }
         }
         .tint(AppColors.greenPrimary)
     }

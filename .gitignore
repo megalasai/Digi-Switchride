@@ -39,6 +39,7 @@ yarn-error.log*
 .env.local
 .env.*.local
 *.env
+infra/digitalocean/.env.poc
 
 # Secrets
 appsettings.Development.json
@@ -77,6 +78,10 @@ TestResults/
 
 # Azure
 .azure/
+
+# India location database and downloaded source dumps
+apps/location/data/**
+!apps/location/data/.gitkeep
 
 # Terraform/Bicep
 *.tfstate

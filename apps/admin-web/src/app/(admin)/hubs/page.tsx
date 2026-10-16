@@ -9,10 +9,12 @@ import { FormPanel } from "@/components/ui/Card";
 import { FormModeLabel, RowActions } from "@/components/ui/RowActions";
 import { Input, Select } from "@/components/ui/Input";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { LocationMarkersMap, LocationPicker } from "@/components/ui/LocationMap";
 import { IconMapPin } from "@/components/icons";
 import { api, Hub } from "@/lib/api";
+import { CompanyCell, CompanyField } from "@/lib/companies";
 
-const emptyForm = { name: "", address: "", lat: "21.1458", lng: "79.0882", capacity: "20", status: "Active" };
+const emptyForm = { name: "", address: "", lat: "21.1458", lng: "79.0882", capacity: "20", status: "Active", tenantId: "" };
 
 export default function HubsPage() {
   const [hubs, setHubs] = useState<Hub[]>([]);
@@ -41,6 +43,7 @@ export default function HubsPage() {
       location: { lat: parseFloat(form.lat), lng: parseFloat(form.lng) },
       capacity: parseInt(form.capacity, 10),
       status: form.status,
+      tenantId: form.tenantId || undefined,
     };
     try {
       if (editId) { await api.updateHub(editId, payload); setSuccess("Hub updated"); }
@@ -57,15 +60,26 @@ export default function HubsPage() {
         actions={<Button variant={showForm && !editId ? "secondary" : "primary"} onClick={() => showForm && !editId ? setShowForm(false) : openCreate()}>{showForm && !editId ? "Cancel" : "Add Hub"}</Button>} />
       {success && <div className="mb-4"><Alert variant="success" message={success} /></div>}
       {error && !showForm && <div className="mb-4"><Alert message={error} /></div>}
+      <LocationMarkersMap
+        points={hubs
+          .filter((h) => Number.isFinite(h.location?.lat) && Number.isFinite(h.location?.lng))
+          .map((h) => ({ id: h.id, lat: h.location.lat, lng: h.location.lng, label: `${h.name}<br/>${h.address}` }))}
+      />
 
       {showForm && (
         <FormPanel title={editId ? "Edit hub" : "Create new hub"}>
           <FormModeLabel editing={!!editId} />
           <form onSubmit={handleSubmit} className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <CompanyField value={form.tenantId} onChange={(tenantId) => setForm({ ...form, tenantId })} />
             <Input placeholder="Hub name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
             <Input placeholder="Full address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} required />
-            <Input placeholder="Latitude" type="number" step="any" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} required />
-            <Input placeholder="Longitude" type="number" step="any" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} required />
+            <LocationPicker
+              key={editId ?? "new"}
+              lat={form.lat}
+              lng={form.lng}
+              onChange={(lat, lng) => setForm((current) => ({ ...current, lat, lng }))}
+              onAddress={(address) => setForm((current) => ({ ...current, address: current.address || address }))}
+            />
             <Input placeholder="Capacity" type="number" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} required />
             <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
               <option value="Active">Active</option>
@@ -89,6 +103,7 @@ export default function HubsPage() {
               <RowActions onEdit={() => openEdit(hub)} />
             </div>
             <h3 className="text-lg font-semibold text-text-primary">{hub.name}</h3>
+            <div className="mt-1"><CompanyCell tenantId={hub.tenantId} /></div>
             <p className="mt-1 text-sm text-text-secondary">{hub.address}</p>
             <p className="mt-1 text-xs text-text-muted">{hub.location.lat.toFixed(4)}, {hub.location.lng.toFixed(4)}</p>
             <div className="mt-4 flex items-center justify-between border-t border-border pt-4 text-sm">

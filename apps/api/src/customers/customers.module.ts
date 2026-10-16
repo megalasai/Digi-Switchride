@@ -7,7 +7,7 @@ import { Vehicle, VehicleSchema } from '../schemas/fleet.schema';
 import { Booking, BookingSchema, Payment, PaymentSchema, Ride, RideSchema } from '../schemas/booking.schema';
 import { RentalPlan, RentalPlanSchema, WalletTransaction, WalletTransactionSchema } from '../schemas/rental.schema';
 import { CustomersController } from './customers.controller';
-import { RidersAdminController } from './riders.controller';
+import { PlansAdminController, RidersAdminController, WalletsAdminController } from './riders.controller';
 import { KycService, ProfileService } from './customers.service';
 import { RidersService } from './riders.service';
 
@@ -26,7 +26,7 @@ import { RidersService } from './riders.service';
       { name: WalletTransaction.name, schema: WalletTransactionSchema },
     ]),
   ],
-  controllers: [CustomersController, RidersAdminController],
+  controllers: [CustomersController, RidersAdminController, PlansAdminController, WalletsAdminController],
   providers: [ProfileService, KycService, RidersService],
   exports: [ProfileService, KycService, RidersService],
 })

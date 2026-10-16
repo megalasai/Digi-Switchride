@@ -3,10 +3,10 @@ import { cn } from "@/lib/cn";
 type Variant = "primary" | "secondary" | "danger" | "ghost";
 
 const styles: Record<Variant, string> = {
-  primary: "bg-brand text-white hover:bg-brand-dark shadow-sm",
-  secondary: "bg-white text-text-primary border border-border hover:bg-surface shadow-sm",
-  danger: "bg-danger text-white hover:bg-red-600 shadow-sm",
-  ghost: "text-text-secondary hover:bg-surface hover:text-text-primary",
+  primary: "bg-brand text-white hover:bg-brand-dark shadow-[0_8px_18px_rgba(91,124,250,0.28)]",
+  secondary: "bg-white text-text-primary border border-border hover:bg-brand-light/60 shadow-sm",
+  danger: "bg-danger text-white hover:brightness-95 shadow-sm",
+  ghost: "text-text-secondary hover:bg-brand-light hover:text-brand-dark",
 };
 
 export function Button({

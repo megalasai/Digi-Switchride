@@ -1,18 +1,19 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 import type { AccountStatus, KycStatus } from '@digi-switchride/shared';
+import { tenantPlugin } from '../common/tenant.plugin';
 
 export type CustomerDocument = HydratedDocument<Customer>;
 
 @Schema({ timestamps: true, collection: 'customers' })
 export class Customer {
-  @Prop({ trim: true, lowercase: true, unique: true, sparse: true })
+  @Prop({ trim: true, lowercase: true, sparse: true })
   username?: string;
 
   @Prop()
   passwordHash?: string;
 
-  @Prop({ trim: true, unique: true, sparse: true })
+  @Prop({ trim: true, sparse: true })
   phone?: string;
 
   @Prop({ trim: true, lowercase: true })
@@ -23,6 +24,9 @@ export class Customer {
 
   @Prop({ trim: true })
   emergencyContact?: string;
+
+  @Prop({ trim: true })
+  address?: string;
 
   @Prop({ required: true, enum: ['NotSubmitted', 'Pending', 'UnderReview', 'Approved', 'Rejected'], default: 'NotSubmitted' })
   kycStatus!: KycStatus;
@@ -38,11 +42,18 @@ export class Customer {
 
   @Prop({ default: 0 })
   walletBalance!: number;
+
+  @Prop({ trim: true, unique: true, sparse: true })
+  referralCode?: string;
+
+  @Prop({ type: String })
+  referredBy?: string;
 }
 
 export const CustomerSchema = SchemaFactory.createForClass(Customer);
-CustomerSchema.index({ phone: 1 });
-CustomerSchema.index({ username: 1 });
+CustomerSchema.plugin(tenantPlugin);
+CustomerSchema.index({ tenantId: 1, phone: 1 }, { unique: true, sparse: true });
+CustomerSchema.index({ tenantId: 1, username: 1 }, { unique: true, sparse: true });
 CustomerSchema.index({ accountStatus: 1, kycStatus: 1 });
 CustomerSchema.index({ assignedVehicleId: 1 }, { sparse: true });
 
@@ -76,6 +87,7 @@ export class KycSubmission {
 export type KycSubmissionDocument = HydratedDocument<KycSubmission>;
 export const KycSubmissionSchema = SchemaFactory.createForClass(KycSubmission);
 KycSubmissionSchema.index({ customerId: 1 });
+KycSubmissionSchema.plugin(tenantPlugin);
 
 @Schema({ timestamps: true, collection: 'otp_records' })
 export class OtpRecord {
@@ -95,6 +107,7 @@ export class OtpRecord {
 export type OtpRecordDocument = HydratedDocument<OtpRecord>;
 export const OtpRecordSchema = SchemaFactory.createForClass(OtpRecord);
 OtpRecordSchema.index({ phone: 1, expiresAt: 1 });
+OtpRecordSchema.plugin(tenantPlugin);
 
 @Schema({ timestamps: true, collection: 'refresh_tokens' })
 export class RefreshToken {

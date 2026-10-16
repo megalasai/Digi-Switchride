@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
+import { tenantPlugin } from '../common/tenant.plugin';
 
 export type AuditLogDocument = HydratedDocument<AuditLog>;
 
@@ -34,3 +35,4 @@ export const AuditLogSchema = SchemaFactory.createForClass(AuditLog);
 AuditLogSchema.index({ entityType: 1, entityId: 1, createdAt: -1 });
 AuditLogSchema.index({ actorId: 1, createdAt: -1 });
 AuditLogSchema.index({ createdAt: -1 });
+AuditLogSchema.plugin(tenantPlugin);

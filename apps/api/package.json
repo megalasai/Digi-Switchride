@@ -5,7 +5,7 @@
   "scripts": {
     "prebuild": "node -e \"const fs=require('fs');['dist','tsconfig.build.tsbuildinfo'].forEach(p=>{try{fs.rmSync(p,{recursive:true,force:true})}catch(e){}})\"",
     "build": "nest build",
-    "dev": "npm run build -w @digi-switchride/shared && npm run build && nest start --watch",
+    "dev": "npm run build -w @digi-switchride/shared && npm run build && nest start",
     "start": "node dist/main.js",
     "start:prod": "node dist/main.js",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix"

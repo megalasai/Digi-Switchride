@@ -11,8 +11,15 @@ import { SupportModule } from './support/support.module';
 import { IoTModule } from './iot/iot.module';
 import { AuditAdminModule } from './audit/audit-admin.module';
 import { AuditModule } from './audit/audit.module';
+import { OperationsModule } from './operations/operations.module';
+import { EngagementModule } from './engagement/engagement.module';
+import { RiderModule } from './rider/rider.module';
+import { BrandingModule } from './branding/branding.module';
+import { TenantsModule } from './tenants/tenants.module';
+import { HealthController } from './health.controller';
 
 @Module({
+  controllers: [HealthController],
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     MongooseModule.forRootAsync({
@@ -24,6 +31,7 @@ import { AuditModule } from './audit/audit.module';
         return getMongooseOptions(uri);
       },
     }),
+    TenantsModule,
     AuthModule,
     CustomersModule,
     FleetModule,
@@ -33,6 +41,10 @@ import { AuditModule } from './audit/audit.module';
     IoTModule,
     AuditModule,
     AuditAdminModule,
+    OperationsModule,
+    EngagementModule,
+    RiderModule,
+    BrandingModule,
   ],
 })
 export class AppModule {}

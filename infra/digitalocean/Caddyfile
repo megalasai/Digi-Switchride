@@ -1,0 +1,22 @@
+# Used only with: docker compose --profile tls
+# Set POC_DOMAIN to a DNS name pointing at the droplet (A record).
+
+{$POC_DOMAIN} {
+	encode gzip
+	reverse_proxy admin:3000
+}
+
+api.{$POC_DOMAIN} {
+	encode gzip
+	reverse_proxy api:4000
+}
+
+location.{$POC_DOMAIN} {
+	encode gzip
+	reverse_proxy location:4100
+}
+
+telemetry.{$POC_DOMAIN} {
+	encode gzip
+	reverse_proxy telemetry:4200
+}

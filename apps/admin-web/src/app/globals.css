@@ -1,22 +1,22 @@
 @import "tailwindcss";
 
 :root {
-  --brand-primary: #16a34a;
-  --brand-dark: #15803d;
-  --brand-light: #dcfce7;
-  --brand-muted: #bbf7d0;
-  --surface: #f1f5f9;
+  --brand-primary: #5b7cfa;
+  --brand-dark: #3f62e8;
+  --brand-light: #eef1ff;
+  --brand-muted: #c5cffc;
+  --surface: #f3f5fb;
   --surface-card: #ffffff;
-  --sidebar: #0f172a;
-  --sidebar-hover: #1e293b;
-  --sidebar-border: #334155;
-  --text-primary: #0f172a;
-  --text-secondary: #64748b;
-  --text-muted: #94a3b8;
-  --border: #e2e8f0;
-  --danger: #ef4444;
-  --warning: #f59e0b;
-  --info: #3b82f6;
+  --sidebar: #171a2b;
+  --sidebar-hover: #23273d;
+  --sidebar-border: #2d3248;
+  --text-primary: #16192a;
+  --text-secondary: #667085;
+  --text-muted: #98a2b3;
+  --border: #e4e8f2;
+  --danger: #f04438;
+  --warning: #f79009;
+  --info: #2e90fa;
 }
 
 @theme inline {
@@ -48,5 +48,15 @@ body {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-color: #cdd3e3 transparent;
+}
+
+.leaflet-container {
+  z-index: 0;
+  font-family: inherit;
+}
+
+.vehicle-map-icon {
+  background: none !important;
+  border: none !important;
 }

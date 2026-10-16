@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
-import type { HubStatus, VehicleStatus, VehicleType } from '@digi-switchride/shared';
+import type { HubStatus, VehicleStatus, VehicleType, WheelClass } from '@digi-switchride/shared';
+import { tenantPlugin } from '../common/tenant.plugin';
 
 export type RentalHubDocument = HydratedDocument<RentalHub>;
 
@@ -12,6 +13,20 @@ export class GeoLocation {
   @Prop({ type: [Number], required: true })
   coordinates!: [number, number]; // [lng, lat]
 }
+
+@Schema({ _id: false })
+export class LocationPing {
+  @Prop({ required: true })
+  lat!: number;
+
+  @Prop({ required: true })
+  lng!: number;
+
+  @Prop({ required: true })
+  at!: Date;
+}
+
+export const LocationPingSchema = SchemaFactory.createForClass(LocationPing);
 
 @Schema({ timestamps: true, collection: 'rental_hubs' })
 export class RentalHub {
@@ -39,16 +54,20 @@ export class RentalHub {
 
 export const RentalHubSchema = SchemaFactory.createForClass(RentalHub);
 RentalHubSchema.index({ location: '2dsphere' });
+RentalHubSchema.plugin(tenantPlugin);
 
 export type VehicleDocument = HydratedDocument<Vehicle>;
 
 @Schema({ timestamps: true, collection: 'vehicles' })
 export class Vehicle {
-  @Prop({ required: true, unique: true, trim: true })
+  @Prop({ required: true, trim: true })
   registrationNumber!: string;
 
-  @Prop({ required: true, enum: ['EScooter', 'EBike', 'ERickshaw'] })
+  @Prop({ required: true, enum: ['EScooter', 'EBike', 'ERickshaw', 'ECar'] })
   type!: VehicleType;
+
+  @Prop({ enum: ['TwoWheeler', 'ThreeWheeler', 'FourWheeler'] })
+  wheelClass?: WheelClass;
 
   @Prop({ required: true, trim: true })
   model!: string;
@@ -78,6 +97,18 @@ export class Vehicle {
   lastTelemetryAt?: Date;
 
   @Prop()
+  lastPlace?: string;
+
+  @Prop({ enum: ['Hub', 'Location'] })
+  lastPlaceKind?: string;
+
+  @Prop({ type: String })
+  lastHubId?: string;
+
+  @Prop({ type: [LocationPingSchema], default: [] })
+  locationTrail?: LocationPing[];
+
+  @Prop()
   pricingTier?: string;
 
   @Prop({ type: String })
@@ -88,13 +119,20 @@ export class Vehicle {
 
   @Prop()
   statusChangedAt?: Date;
+
+  @Prop()
+  speedKmh?: number;
+
+  @Prop()
+  ignition?: string;
 }
 
 export const VehicleSchema = SchemaFactory.createForClass(Vehicle);
+VehicleSchema.plugin(tenantPlugin);
 VehicleSchema.index({ hubId: 1, status: 1 });
 VehicleSchema.index({ iotDeviceId: 1 }, { sparse: true, unique: true });
 VehicleSchema.index({ assignedRiderId: 1 }, { sparse: true });
-VehicleSchema.index({ registrationNumber: 1 });
+VehicleSchema.index({ tenantId: 1, registrationNumber: 1 }, { unique: true });
 
 export type VehicleEventDocument = HydratedDocument<VehicleEvent>;
 
@@ -124,6 +162,7 @@ export class VehicleEvent {
 
 export const VehicleEventSchema = SchemaFactory.createForClass(VehicleEvent);
 VehicleEventSchema.index({ vehicleId: 1, createdAt: -1 });
+VehicleEventSchema.plugin(tenantPlugin);
 
 export type IoTDeviceDocument = HydratedDocument<IoTDevice>;
 
@@ -155,7 +194,29 @@ export class IoTDevice {
 
   @Prop()
   odometerKm?: number;
+
+  @Prop()
+  imei?: string;
+
+  @Prop()
+  displayName?: string;
+
+  @Prop()
+  externalId?: string;
+
+  @Prop()
+  speedKmh?: number;
+
+  @Prop()
+  ignition?: string;
+
+  @Prop()
+  vendorStatus?: string;
+
+  @Prop()
+  vehicleStatus?: string;
 }
 
 export const IoTDeviceSchema = SchemaFactory.createForClass(IoTDevice);
-IoTDeviceSchema.index({ vehicleId: 1 }, { sparse: true, unique: true });
+IoTDeviceSchema.index({ vehicleId: 1 }, { sparse: true });
+IoTDeviceSchema.plugin(tenantPlugin);

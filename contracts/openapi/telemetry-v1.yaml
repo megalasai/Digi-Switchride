@@ -1,0 +1,92 @@
+openapi: 3.1.0
+info:
+  title: Digi-Switchride GPS Telemetry API
+  version: 1.0.0
+  description: |
+    Standalone GPS ingest service. Other Digi-Switchride applications, and external
+    applications, call this API over HTTP. It is hosted separately from the platform API
+    and from the India location API. Configuration and last-known positions are stored
+    in SQLite in this application.
+  contact:
+    name: Digi-Switchride Platform Team
+
+servers:
+  - url: http://localhost:4200
+    description: Local
+
+tags:
+  - name: Ingest
+  - name: Positions
+  - name: Sources
+  - name: Ops
+
+paths:
+  /health:
+    get:
+      tags: [Ops]
+      summary: Liveness
+      responses:
+        '200':
+          description: Process is up
+  /v1/gps:
+    post:
+      tags: [Ingest]
+      summary: Push a GPS ping
+      parameters:
+        - in: header
+          name: X-Api-Key
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lat, lng]
+              properties:
+                deviceId: { type: string }
+                vehicleId: { type: string }
+                registrationNumber: { type: string }
+                lat: { type: number }
+                lng: { type: number }
+                batteryPercent: { type: number }
+                odometerKm: { type: number }
+      responses:
+        '200':
+          description: Stored (hub name or location-API place name)
+  /v1/positions:
+    get:
+      tags: [Positions]
+      summary: Latest GPS points
+      parameters:
+        - in: header
+          name: X-Api-Key
+          schema: { type: string }
+      responses:
+        '200':
+          description: Current positions
+  /v1/sources:
+    get:
+      tags: [Sources]
+      summary: Configured pull, HTTP, TCP and MQTT feeds
+      responses:
+        '200':
+          description: Source list
+    post:
+      tags: [Sources]
+      summary: Add a feed
+      responses:
+        '200':
+          description: Created
+  /v1/sources/{id}/pull:
+    post:
+      tags: [Sources]
+      summary: Pull a vendor API once
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Records ingested

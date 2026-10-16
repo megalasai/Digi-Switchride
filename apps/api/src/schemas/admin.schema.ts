@@ -1,12 +1,13 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 import type { AdminRole } from '@digi-switchride/shared';
+import { tenantPlugin } from '../common/tenant.plugin';
 
 export type AdminUserDocument = HydratedDocument<AdminUser>;
 
 @Schema({ timestamps: true, collection: 'admin_users' })
 export class AdminUser {
-  @Prop({ required: true, unique: true, trim: true, lowercase: true })
+  @Prop({ required: true, trim: true, lowercase: true })
   email!: string;
 
   @Prop({ required: true })
@@ -36,6 +37,11 @@ export class AdminUser {
 
   @Prop({ default: true })
   isActive!: boolean;
+
+  @Prop({ type: [String], default: [] })
+  hubIds!: string[];
 }
 
 export const AdminUserSchema = SchemaFactory.createForClass(AdminUser);
+AdminUserSchema.plugin(tenantPlugin);
+AdminUserSchema.index({ tenantId: 1, email: 1 }, { unique: true });

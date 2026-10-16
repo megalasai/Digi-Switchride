@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post, Put, Query, Req, UseGuards } from '
 import { AuthGuard } from '@nestjs/passport';
 import { AdminGuard, RolesGuard } from '../auth/admin.guard';
 import { Roles } from '../auth/roles.decorator';
-import { AssignRiderPlanDto, CreateCustomerDto, UpdateCustomerDto } from '../auth/dto/admin-auth.dto';
+import { AssignRiderPlanDto, CreateCustomerDto, CreateRentalPlanDto, UpdateCustomerDto, UpdateRentalPlanDto, WalletAdjustDto } from '../auth/dto/admin-auth.dto';
 import { actorFromRequest } from '../common/actor';
 import { RidersService } from './riders.service';
 
@@ -35,6 +35,16 @@ export class RidersAdminController {
     return this.ridersService.listPlans();
   }
 
+  @Post(':id/wallet')
+  @Roles('SuperAdmin', 'Administrator', 'Finance')
+  adjustWallet(
+    @Req() req: Parameters<typeof actorFromRequest>[0],
+    @Param('id') id: string,
+    @Body() body: WalletAdjustDto,
+  ) {
+    return this.ridersService.adjustWallet(id, body, actorFromRequest(req));
+  }
+
   @Get(':id')
   @Roles('SuperAdmin', 'Administrator', 'CommandCenter', 'Operations', 'KycTeam', 'Finance')
   profile(@Param('id') id: string) {
@@ -55,5 +65,41 @@ export class RidersAdminController {
     @Body() body: AssignRiderPlanDto,
   ) {
     return this.ridersService.assignPlan(id, body.rentalPlanId, actorFromRequest(req));
+  }
+}
+
+@Controller('v1/admin/plans')
+@UseGuards(AuthGuard('jwt'), AdminGuard, RolesGuard)
+export class PlansAdminController {
+  constructor(private ridersService: RidersService) {}
+
+  @Get()
+  @Roles('SuperAdmin', 'Administrator', 'CommandCenter', 'Operations', 'Finance')
+  list() {
+    return this.ridersService.listPlans(true);
+  }
+
+  @Post()
+  @Roles('SuperAdmin', 'Administrator')
+  create(@Req() req: Parameters<typeof actorFromRequest>[0], @Body() body: CreateRentalPlanDto) {
+    return this.ridersService.createPlan(body, actorFromRequest(req));
+  }
+
+  @Put(':id')
+  @Roles('SuperAdmin', 'Administrator')
+  update(@Req() req: Parameters<typeof actorFromRequest>[0], @Param('id') id: string, @Body() body: UpdateRentalPlanDto) {
+    return this.ridersService.updatePlan(id, body, actorFromRequest(req));
+  }
+}
+
+@Controller('v1/admin/wallets')
+@UseGuards(AuthGuard('jwt'), AdminGuard, RolesGuard)
+export class WalletsAdminController {
+  constructor(private ridersService: RidersService) {}
+
+  @Get()
+  @Roles('SuperAdmin', 'Administrator', 'Finance')
+  list(@Query('search') search?: string) {
+    return this.ridersService.listWallets(search);
   }
 }

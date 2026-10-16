@@ -11,7 +11,15 @@
     "dev": "npm run build -w @digi-switchride/shared && concurrently \"npm run dev -w @digi-switchride/api\" \"npm run dev -w admin-web\"",
     "dev:api": "npm run dev -w @digi-switchride/api",
     "dev:admin": "npm run dev -w admin-web",
-    "build": "npm run build -w @digi-switchride/shared && npm run build -w @digi-switchride/api && npm run build -w admin-web",
+    "dev:location": "npm run dev -w @digi-switchride/location",
+    "dev:telemetry": "npm run dev -w @digi-switchride/telemetry",
+    "seed:location": "npm run seed -w @digi-switchride/location",
+    "import:osm": "npm run import-osm -w @digi-switchride/location",
+    "test:location": "npm test -w @digi-switchride/location",
+    "build": "npm run build -w @digi-switchride/shared && npm run build -w @digi-switchride/api && npm run build -w admin-web && npm run build -w @digi-switchride/location && npm run build -w @digi-switchride/telemetry",
+    "poc:up": "docker compose -f infra/digitalocean/docker-compose.poc.yml --env-file infra/digitalocean/.env.poc up -d --build",
+    "poc:down": "docker compose -f infra/digitalocean/docker-compose.poc.yml --env-file infra/digitalocean/.env.poc down",
+    "poc:logs": "docker compose -f infra/digitalocean/docker-compose.poc.yml logs -f --tail=100",
     "lint": "npm run lint -w @digi-switchride/api && npm run lint -w admin-web"
   },
   "devDependencies": {
@@ -19,5 +27,8 @@
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "pptxgenjs": "^4.0.1"
   }
 }

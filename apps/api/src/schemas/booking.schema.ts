@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 import type { BookingStatus, BookingType, PaymentStatus, RideStatus } from '@digi-switchride/shared';
+import { tenantPlugin } from '../common/tenant.plugin';
 import { GeoLocation } from './fleet.schema';
 
 export type BookingDocument = HydratedDocument<Booking>;
@@ -40,6 +41,7 @@ export class Booking {
 
 export const BookingSchema = SchemaFactory.createForClass(Booking);
 BookingSchema.index({ customerId: 1, status: 1 });
+BookingSchema.plugin(tenantPlugin);
 
 export type RideDocument = HydratedDocument<Ride>;
 
@@ -87,6 +89,7 @@ export class Ride {
 
 export const RideSchema = SchemaFactory.createForClass(Ride);
 RideSchema.index({ customerId: 1, status: 1 });
+RideSchema.plugin(tenantPlugin);
 
 export type PaymentDocument = HydratedDocument<Payment>;
 
@@ -127,10 +130,22 @@ export class Payment {
 
   @Prop()
   reconciledAt?: Date;
+
+  @Prop()
+  reference?: string;
+
+  @Prop()
+  refundReason?: string;
+
+  @Prop()
+  refundedAt?: Date;
 }
 
 export const PaymentSchema = SchemaFactory.createForClass(Payment);
+PaymentSchema.plugin(tenantPlugin);
 PaymentSchema.index({ razorpayOrderId: 1 });
+PaymentSchema.index({ status: 1, createdAt: -1 });
+PaymentSchema.index({ customerId: 1 });
 
 export type PromotionDocument = HydratedDocument<Promotion>;
 
@@ -165,6 +180,7 @@ export class Promotion {
 }
 
 export const PromotionSchema = SchemaFactory.createForClass(Promotion);
+PromotionSchema.plugin(tenantPlugin);
 
 export type SupportTicketDocument = HydratedDocument<SupportTicket>;
 
@@ -193,6 +209,10 @@ export class SupportTicket {
 
   @Prop()
   resolvedAt?: Date;
+
+  @Prop({ type: [{ at: Date, actorEmail: String, note: String }], default: [] })
+  notes!: { at: Date; actorEmail?: string; note: string }[];
 }
 
 export const SupportTicketSchema = SchemaFactory.createForClass(SupportTicket);
+SupportTicketSchema.plugin(tenantPlugin);

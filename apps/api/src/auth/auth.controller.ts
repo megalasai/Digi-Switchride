@@ -48,20 +48,20 @@ export class AdminUsersController {
   constructor(private authService: AuthService) {}
 
   @Get()
-  @Roles('SuperAdmin')
+  @Roles('SuperAdmin', 'Administrator')
   listUsers() {
     return this.authService.listAdminUsers().then((items) => ({ items }));
   }
 
   @Post()
-  @Roles('SuperAdmin')
-  createUser(@Req() req: Parameters<typeof actorFromRequest>[0], @Body() dto: CreateAdminUserDto) {
-    return this.authService.createAdminUser(dto, actorFromRequest(req));
+  @Roles('SuperAdmin', 'Administrator')
+  createUser(@Req() req: Parameters<typeof actorFromRequest>[0] & { user?: { role?: string; tenantId?: string } }, @Body() dto: CreateAdminUserDto) {
+    return this.authService.createAdminUser(dto, actorFromRequest(req), req.user);
   }
 
   @Put(':id')
-  @Roles('SuperAdmin')
-  updateUser(@Req() req: Parameters<typeof actorFromRequest>[0], @Param('id') id: string, @Body() dto: UpdateAdminUserDto) {
-    return this.authService.updateAdminUser(id, dto, actorFromRequest(req));
+  @Roles('SuperAdmin', 'Administrator')
+  updateUser(@Req() req: Parameters<typeof actorFromRequest>[0] & { user?: { role?: string } }, @Param('id') id: string, @Body() dto: UpdateAdminUserDto) {
+    return this.authService.updateAdminUser(id, dto, actorFromRequest(req), req.user);
   }
 }

@@ -1,0 +1,512 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import type { Map as LeafletMap, Marker as LeafletMarker, Polyline as LeafletPolyline } from "leaflet";
+import { Button } from "@/components/ui/Button";
+import { Field, Input } from "@/components/ui/Input";
+import { resolveWheelClass, vehicleMarkerSvg, type WheelClass } from "@/lib/vehicleIcons";
+import "leaflet/dist/leaflet.css";
+
+const INDIA = { lat: 21.1458, lng: 79.0882 };
+const TILES = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+
+type SearchHit = { display_name: string; lat: string; lon: string };
+
+function parseCoord(value: string) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+async function loadLeaflet() {
+  const L = (await import("leaflet")).default;
+  const proto = L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown };
+  delete proto._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+    iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+    shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  });
+  return L;
+}
+
+export function LocationPicker({
+  lat,
+  lng,
+  onChange,
+  onAddress,
+  optional = false,
+}: {
+  lat: string;
+  lng: string;
+  onChange: (lat: string, lng: string) => void;
+  onAddress?: (address: string) => void;
+  optional?: boolean;
+}) {
+  const mapEl = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<LeafletMap | null>(null);
+  const markerRef = useRef<LeafletMarker | null>(null);
+  const onChangeRef = useRef(onChange);
+  const onAddressRef = useRef(onAddress);
+  const [query, setQuery] = useState("");
+  const [hits, setHits] = useState<SearchHit[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
+
+  onChangeRef.current = onChange;
+  onAddressRef.current = onAddress;
+
+  useEffect(() => {
+    if (!mapEl.current || mapRef.current) return;
+    let cancelled = false;
+    const parsedLat = parseCoord(lat) ?? INDIA.lat;
+    const parsedLng = parseCoord(lng) ?? INDIA.lng;
+    const hasPoint = parseCoord(lat) != null && parseCoord(lng) != null;
+
+    void (async () => {
+      const L = await loadLeaflet();
+      if (cancelled || !mapEl.current) return;
+      const map = L.map(mapEl.current, { scrollWheelZoom: true }).setView([parsedLat, parsedLng], hasPoint ? 15 : 12);
+      L.tileLayer(TILES, { attribution: ATTRIBUTION, maxZoom: 19 }).addTo(map);
+      if (hasPoint) {
+        markerRef.current = L.marker([parsedLat, parsedLng], { draggable: true }).addTo(map);
+        markerRef.current.on("dragend", () => {
+          const pos = markerRef.current?.getLatLng();
+          if (!pos) return;
+          onChangeRef.current(pos.lat.toFixed(6), pos.lng.toFixed(6));
+          void reverseGeocode(pos.lat, pos.lng, onAddressRef.current);
+        });
+      }
+      map.on("click", (e) => {
+        const { lat: nextLat, lng: nextLng } = e.latlng;
+        if (!markerRef.current) {
+          markerRef.current = L.marker([nextLat, nextLng], { draggable: true }).addTo(map);
+          markerRef.current.on("dragend", () => {
+            const pos = markerRef.current?.getLatLng();
+            if (!pos) return;
+            onChangeRef.current(pos.lat.toFixed(6), pos.lng.toFixed(6));
+            void reverseGeocode(pos.lat, pos.lng, onAddressRef.current);
+          });
+        } else {
+          markerRef.current.setLatLng([nextLat, nextLng]);
+        }
+        onChangeRef.current(nextLat.toFixed(6), nextLng.toFixed(6));
+        void reverseGeocode(nextLat, nextLng, onAddressRef.current);
+      });
+      mapRef.current = map;
+      setTimeout(() => map.invalidateSize(), 80);
+    })();
+
+    return () => {
+      cancelled = true;
+      mapRef.current?.remove();
+      mapRef.current = null;
+      markerRef.current = null;
+    };
+    // Map instance is created once; coordinate updates are handled below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const nextLat = parseCoord(lat);
+    const nextLng = parseCoord(lng);
+    const map = mapRef.current;
+    if (!map || nextLat == null || nextLng == null) return;
+    const current = markerRef.current?.getLatLng();
+    if (current && Math.abs(current.lat - nextLat) < 0.000001 && Math.abs(current.lng - nextLng) < 0.000001) return;
+    void (async () => {
+      const L = await loadLeaflet();
+      if (!markerRef.current) {
+        markerRef.current = L.marker([nextLat, nextLng], { draggable: true }).addTo(map);
+        markerRef.current.on("dragend", () => {
+          const pos = markerRef.current?.getLatLng();
+          if (!pos) return;
+          onChangeRef.current(pos.lat.toFixed(6), pos.lng.toFixed(6));
+          void reverseGeocode(pos.lat, pos.lng, onAddressRef.current);
+        });
+      } else {
+        markerRef.current.setLatLng([nextLat, nextLng]);
+      }
+      map.setView([nextLat, nextLng], Math.max(map.getZoom(), 14));
+    })();
+  }, [lat, lng]);
+
+  const search = async () => {
+    if (query.trim().length < 3) return;
+    setSearching(true);
+    setSearchError("");
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=in&q=${encodeURIComponent(query.trim())}`;
+      const res = await fetch(url, { headers: { Accept: "application/json" } });
+      if (!res.ok) throw new Error("Search failed");
+      const data = (await res.json()) as SearchHit[];
+      setHits(data);
+      if (!data.length) setSearchError("No matching places. Try a fuller address.");
+    } catch {
+      setSearchError("Could not search OpenStreetMap right now.");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const applyHit = (hit: SearchHit) => {
+    onChange(Number(hit.lat).toFixed(6), Number(hit.lon).toFixed(6));
+    onAddress?.(hit.display_name);
+    setHits([]);
+    setQuery(hit.display_name);
+  };
+
+  return (
+    <div className="md:col-span-2 space-y-3">
+      <Field label="Find on OpenStreetMap" hint="Search a place, click the map, or type coordinates. Tiles: OpenStreetMap.">
+        <div className="flex gap-2">
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search area, landmark or address"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void search();
+              }
+            }}
+          />
+          <Button type="button" variant="secondary" onClick={() => void search()} disabled={searching || query.trim().length < 3}>
+            {searching ? "Searching…" : "Search"}
+          </Button>
+        </div>
+      </Field>
+      {searchError && <p className="text-xs text-danger">{searchError}</p>}
+      {hits.length > 0 && (
+        <ul className="max-h-40 overflow-auto rounded-xl border border-border bg-white text-sm">
+          {hits.map((hit) => (
+            <li key={`${hit.lat}-${hit.lon}-${hit.display_name}`}>
+              <button type="button" className="w-full px-3 py-2 text-left hover:bg-brand-light" onClick={() => applyHit(hit)}>
+                {hit.display_name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div ref={mapEl} className="z-0 h-72 w-full overflow-hidden rounded-xl border border-border" />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field label="Latitude" hint={optional ? "Optional" : undefined}>
+          <Input type="number" step="any" required={!optional} value={lat} onChange={(e) => onChange(e.target.value, lng)} />
+        </Field>
+        <Field label="Longitude" hint={optional ? "Optional" : undefined}>
+          <Input type="number" step="any" required={!optional} value={lng} onChange={(e) => onChange(lat, e.target.value)} />
+        </Field>
+      </div>
+    </div>
+  );
+}
+
+export function LocationPreview({
+  lat,
+  lng,
+  label,
+  trail,
+  place,
+  wheelClass,
+  vehicleType,
+  alignToRoads = true,
+}: {
+  lat?: number | null;
+  lng?: number | null;
+  label?: string;
+  trail?: { lat: number; lng: number }[];
+  place?: string | null;
+  wheelClass?: string | null;
+  vehicleType?: string | null;
+  alignToRoads?: boolean;
+}) {
+  const mapEl = useRef<HTMLDivElement>(null);
+
+  const trailKey = (trail ?? []).map((p) => `${p.lat},${p.lng}`).join("|");
+
+  useEffect(() => {
+    if (lat == null || lng == null || !mapEl.current) return;
+    let map: LeafletMap | null = null;
+    let cancelled = false;
+    void (async () => {
+      const L = await loadLeaflet();
+      if (cancelled || !mapEl.current) return;
+      map = L.map(mapEl.current, { scrollWheelZoom: false }).setView([lat, lng], 16);
+      L.tileLayer(TILES, { attribution: ATTRIBUTION, maxZoom: 19 }).addTo(map);
+      const raw = (trail ?? []).filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+      const path = alignToRoads ? await snapToRoads(raw) : raw;
+      if (cancelled) return;
+      if (path.length > 1) {
+        L.polyline(
+          path.map((p) => [p.lat, p.lng] as [number, number]),
+          { color: "#0f6e56", weight: 5, opacity: 0.9 },
+        ).addTo(map);
+      }
+      const heading = headingFromPath([...path, { lat, lng }]);
+      const icon = vehicleLeafletIcon(L, resolveWheelClass(vehicleType, wheelClass), heading);
+      L.marker([lat, lng], { icon }).addTo(map).bindPopup(label ?? `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+      setTimeout(() => map?.invalidateSize(), 80);
+    })();
+    return () => {
+      cancelled = true;
+      map?.remove();
+    };
+  }, [lat, lng, label, trailKey, wheelClass, vehicleType, alignToRoads]);
+
+  if (lat == null || lng == null) {
+    return <p className="text-xs text-text-muted">No coordinates to show on the map.</p>;
+  }
+
+  return (
+    <div>
+      <div ref={mapEl} className="z-0 h-56 w-full overflow-hidden rounded-xl border border-border" />
+      <p className="mt-1 text-xs text-text-muted">
+        {place ? `${place} · ` : ""}
+        {lat.toFixed(5)}, {lng.toFixed(5)}
+        {trail && trail.length > 1 ? ` · last ${trail.length} pings (~1 min)` : ""}
+      </p>
+    </div>
+  );
+}
+
+export function LocationMarkersMap({
+  points,
+}: {
+  points: { id: string; lat: number; lng: number; label: string }[];
+}) {
+  const mapEl = useRef<HTMLDivElement>(null);
+
+  const signature = points.map((p) => `${p.id}:${p.lat}:${p.lng}:${p.label}`).join("|");
+
+  useEffect(() => {
+    if (!mapEl.current) return;
+    let map: LeafletMap | null = null;
+    let cancelled = false;
+    void (async () => {
+      const L = await loadLeaflet();
+      if (cancelled || !mapEl.current) return;
+      map = L.map(mapEl.current, { scrollWheelZoom: true });
+      L.tileLayer(TILES, { attribution: ATTRIBUTION, maxZoom: 19 }).addTo(map);
+      if (points.length === 0) {
+        map.setView([INDIA.lat, INDIA.lng], 5);
+      } else {
+        const bounds = L.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number]));
+        points.forEach((p) => L.marker([p.lat, p.lng]).addTo(map!).bindPopup(p.label));
+        map.fitBounds(bounds.pad(0.2));
+      }
+      setTimeout(() => map?.invalidateSize(), 80);
+    })();
+    return () => {
+      cancelled = true;
+      map?.remove();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature]);
+
+  return <div ref={mapEl} className="z-0 mb-6 h-72 w-full overflow-hidden rounded-2xl border border-border" />;
+}
+
+export function LiveVehicleMap({
+  vehicles,
+  onSelect,
+  className,
+  showTrail = true,
+  alignToRoads = true,
+}: {
+  vehicles: {
+    id: string;
+    lat: number;
+    lng: number;
+    label: string;
+    trail?: { lat: number; lng: number }[];
+    wheelClass?: string | null;
+    vehicleType?: string | null;
+    status?: string | null;
+  }[];
+  onSelect?: (id: string) => void;
+  className?: string;
+  showTrail?: boolean;
+  alignToRoads?: boolean;
+}) {
+  const mapEl = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<LeafletMap | null>(null);
+  const markersRef = useRef<Map<string, LeafletMarker>>(new Map());
+  const trailsRef = useRef<Map<string, LeafletPolyline>>(new Map());
+  const fittedRef = useRef(false);
+  const vehiclesRef = useRef(vehicles);
+  const showTrailRef = useRef(showTrail);
+  const alignToRoadsRef = useRef(alignToRoads);
+  const onSelectRef = useRef(onSelect);
+  vehiclesRef.current = vehicles;
+  showTrailRef.current = showTrail;
+  alignToRoadsRef.current = alignToRoads;
+  onSelectRef.current = onSelect;
+
+  const signature = vehicles
+    .map((v) => `${v.id}:${v.lat.toFixed(5)}:${v.lng.toFixed(5)}:${(v.trail ?? []).length}:${v.wheelClass}:${v.vehicleType}:${showTrail}`)
+    .join("|");
+
+  useEffect(() => {
+    if (!mapEl.current || mapRef.current) return;
+    let cancelled = false;
+    void (async () => {
+      const L = await loadLeaflet();
+      if (cancelled || !mapEl.current) return;
+      const map = L.map(mapEl.current, { scrollWheelZoom: true }).setView([INDIA.lat, INDIA.lng], 5);
+      L.tileLayer(TILES, { attribution: ATTRIBUTION, maxZoom: 19 }).addTo(map);
+      mapRef.current = map;
+      setTimeout(() => map.invalidateSize(), 80);
+      await syncLiveMarkers(L);
+    })();
+    return () => {
+      cancelled = true;
+      mapRef.current?.remove();
+      mapRef.current = null;
+      markersRef.current.clear();
+      trailsRef.current.clear();
+      fittedRef.current = false;
+    };
+    // Map instance is created once per page load so polling does not reset zoom.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      const L = await loadLeaflet();
+      await syncLiveMarkers(L);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature]);
+
+  async function syncLiveMarkers(L: Awaited<ReturnType<typeof loadLeaflet>>) {
+    const map = mapRef.current;
+    if (!map) return;
+    const current = vehiclesRef.current;
+    const show = showTrailRef.current;
+    const align = alignToRoadsRef.current;
+    const seen = new Set<string>();
+
+    for (const v of current) {
+      seen.add(v.id);
+      const raw = show ? (v.trail ?? []).filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng)) : [];
+      const path = show && align ? await snapToRoads(raw) : raw;
+      const heading = headingFromPath([...path, { lat: v.lat, lng: v.lng }]);
+      const icon = vehicleLeafletIcon(L, resolveWheelClass(v.vehicleType, v.wheelClass), heading, statusColor(v.status));
+      let marker = markersRef.current.get(v.id);
+      if (!marker) {
+        marker = L.marker([v.lat, v.lng], { icon }).addTo(map);
+        const vehicleId = v.id;
+        marker.on("click", () => onSelectRef.current?.(vehicleId));
+        markersRef.current.set(v.id, marker);
+      } else {
+        marker.setLatLng([v.lat, v.lng]);
+        marker.setIcon(icon);
+      }
+      marker.bindPopup(v.label);
+
+      const previousTrail = trailsRef.current.get(v.id);
+      if (previousTrail) {
+        map.removeLayer(previousTrail);
+        trailsRef.current.delete(v.id);
+      }
+      if (path.length > 1) {
+        const line = L.polyline(
+          path.map((p) => [p.lat, p.lng] as [number, number]),
+          { color: "#0f6e56", weight: 5, opacity: 0.88 },
+        ).addTo(map);
+        trailsRef.current.set(v.id, line);
+      }
+    }
+
+    for (const [id, marker] of [...markersRef.current.entries()]) {
+      if (seen.has(id)) continue;
+      map.removeLayer(marker);
+      markersRef.current.delete(id);
+      const line = trailsRef.current.get(id);
+      if (line) {
+        map.removeLayer(line);
+        trailsRef.current.delete(id);
+      }
+    }
+
+    if (!fittedRef.current && current.length > 0) {
+      const bounds = L.latLngBounds(current.map((v) => [v.lat, v.lng] as [number, number]));
+      map.fitBounds(bounds.pad(0.25));
+      fittedRef.current = true;
+    }
+  }
+
+  return <div ref={mapEl} className={className ?? "z-0 mb-6 h-80 w-full overflow-hidden rounded-2xl border border-border"} />;
+}
+
+function statusColor(status?: string | null) {
+  if (status === "InRide") return "#0f6e56";
+  if (status === "Available") return "#2e90fa";
+  if (status === "Reserved") return "#b45309";
+  if (status === "Maintenance" || status === "Offline") return "#b42318";
+  return "#5b7cfa";
+}
+
+function headingFromPath(path: { lat: number; lng: number }[]) {
+  if (path.length < 2) return 0;
+  const a = path[path.length - 2];
+  const b = path[path.length - 1];
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
+function downsample(points: { lat: number; lng: number }[], max = 24) {
+  if (points.length <= max) return points;
+  const out: { lat: number; lng: number }[] = [];
+  const step = (points.length - 1) / (max - 1);
+  for (let i = 0; i < max; i += 1) out.push(points[Math.round(i * step)]);
+  return out;
+}
+
+async function snapToRoads(path: { lat: number; lng: number }[]) {
+  if (path.length < 2) return path;
+  const pts = downsample(path);
+  const coords = pts.map((p) => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`).join(";");
+  try {
+    const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
+    if (!res.ok) return path;
+    const data = (await res.json()) as { routes?: { geometry?: { coordinates?: [number, number][] } }[] };
+    const line = data.routes?.[0]?.geometry?.coordinates;
+    if (!line?.length) return path;
+    return line.map(([lng, lat]) => ({ lat, lng }));
+  } catch {
+    return path;
+  }
+}
+
+function vehicleLeafletIcon(
+  L: Awaited<ReturnType<typeof loadLeaflet>>,
+  wheelClass: WheelClass,
+  heading: number,
+  color = "#0f6e56",
+) {
+  return L.divIcon({
+    className: "vehicle-map-icon",
+    html: `<div style="width:36px;height:36px;transform:rotate(${heading}deg);transform-origin:center;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))">${vehicleMarkerSvg(wheelClass, color)}</div>`,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+    popupAnchor: [0, -16],
+  });
+}
+
+async function reverseGeocode(lat: number, lng: number, onAddress?: (address: string) => void) {
+  if (!onAddress) return;
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) return;
+    const data = (await res.json()) as { display_name?: string };
+    if (data.display_name) onAddress(data.display_name);
+  } catch {
+    /* nominatim is best-effort */
+  }
+}

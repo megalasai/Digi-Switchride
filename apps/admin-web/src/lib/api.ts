@@ -1,4 +1,6 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
+export const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL?.trim() ||
+  (typeof window === "undefined" ? "http://127.0.0.1:4000/api/v1" : "/api-proxy/v1");
 
 async function parseError(res: Response) {
   const data = await res.json().catch(() => ({}));
@@ -6,27 +8,85 @@ async function parseError(res: Response) {
   return message ?? `API error: ${res.status}`;
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+function handleUnauthorized() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem("adminToken");
+  localStorage.removeItem("adminUser");
+  if (!window.location.pathname.startsWith("/login")) window.location.replace("/login");
+}
+
+async function request<T>(path: string, options: RequestInit = {}, opts?: { public?: boolean }): Promise<T> {
   const token = typeof window !== "undefined" ? localStorage.getItem("adminToken") : null;
+  const tenantId = typeof window !== "undefined" ? localStorage.getItem("adminTenantId") : null;
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(token && !opts?.public ? { Authorization: `Bearer ${token}` } : {}),
+      ...(!opts?.public && tenantId ? { "X-Tenant-Id": tenantId } : {}),
       ...options.headers,
     },
   });
+  if (res.status === 401 && !opts?.public) {
+    handleUnauthorized();
+    throw new Error("Session expired. Please sign in again.");
+  }
   if (!res.ok) throw new Error(await parseError(res));
   if (res.status === 204) return undefined as T;
   return res.json();
 }
 
 export const api = {
+  tenants: () => request<{ items: TenantOrg[] }>("/admin/tenants"),
+  publicTenants: () => request<{ items: TenantOrg[] }>("/tenants/current", {}, { public: true }),
+  createTenant: (data: { name: string; slug: string; contactEmail?: string; notes?: string }) =>
+    request<TenantOrg>("/admin/tenants", { method: "POST", body: JSON.stringify(data) }),
+  updateTenant: (id: string, data: { name?: string; contactEmail?: string; status?: string; notes?: string }) =>
+    request<TenantOrg>(`/admin/tenants/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   adminUsers: () => request<{ items: AdminUser[] }>("/admin/users"),
   createAdminUser: (data: CreateAdminUser) =>
     request<AdminUser>("/admin/users", { method: "POST", body: JSON.stringify(data) }),
   updateAdminUser: (id: string, data: UpdateAdminUser) =>
     request<AdminUser>(`/admin/users/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  dashboard: () => request<DashboardSnapshot>("/admin/dashboard"),
+  publicBranding: (tenantSlug?: string) =>
+    request<Branding>(
+      "/branding",
+      { headers: tenantSlug ? { "X-Tenant-Slug": tenantSlug } : {} },
+      { public: true },
+    ),
+  getBranding: (tenantId?: string) =>
+    request<Branding>("/admin/branding", { headers: tenantId ? { "X-Tenant-Id": tenantId } : {} }),
+  updateBranding: (data: { productName?: string; optionalLogoDataUrl?: string | null; clearOptionalLogo?: boolean }, tenantId?: string) =>
+    request<Branding>("/admin/branding", {
+      method: "PUT",
+      body: JSON.stringify(data),
+      headers: tenantId ? { "X-Tenant-Id": tenantId } : {},
+    }),
+  riders: (params?: { search?: string; kycStatus?: string; accountStatus?: string; page?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.search) q.set("search", params.search);
+    if (params?.kycStatus) q.set("kycStatus", params.kycStatus);
+    if (params?.accountStatus) q.set("accountStatus", params.accountStatus);
+    if (params?.page) q.set("page", String(params.page));
+    return request<{ items: Rider[]; totalCount: number }>(`/admin/riders?${q}`);
+  },
+  riderProfile: (id: string) => request<RiderProfile>(`/admin/riders/${id}`),
+  createRider: (data: CreateCustomer) =>
+    request<Rider>("/admin/riders", { method: "POST", body: JSON.stringify(data) }),
+  updateRider: (id: string, data: UpdateCustomer) =>
+    request<Rider>(`/admin/riders/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  assignRiderPlan: (id: string, rentalPlanId: string) =>
+    request<RiderProfile>(`/admin/riders/${id}/plan`, { method: "POST", body: JSON.stringify({ rentalPlanId }) }),
+  rentalPlans: () => request<{ items: RentalPlan[] }>("/admin/riders/plans"),
+  auditLogs: (params?: { entityType?: string; from?: string; to?: string; page?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.entityType) q.set("entityType", params.entityType);
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
+    if (params?.page) q.set("page", String(params.page));
+    return request<{ items: AuditLog[]; totalCount: number }>(`/admin/audit?${q}`);
+  },
   customers: (params?: { search?: string; kycStatus?: string; page?: number }) => {
     const q = new URLSearchParams();
     if (params?.search) q.set("search", params.search);
@@ -48,13 +108,26 @@ export const api = {
     request<Hub>("/admin/hubs", { method: "POST", body: JSON.stringify(data) }),
   updateHub: (id: string, data: UpdateHub) =>
     request<Hub>(`/admin/hubs/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-  vehicles: () => request<{ items: Vehicle[] }>("/admin/vehicles"),
+  vehicles: (params?: { status?: string; hubId?: string; search?: string; availability?: string; page?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.hubId) q.set("hubId", params.hubId);
+    if (params?.search) q.set("search", params.search);
+    if (params?.availability) q.set("availability", params.availability);
+    if (params?.page) q.set("page", String(params.page));
+    return request<{ items: Vehicle[]; totalCount: number }>(`/admin/vehicles?${q}`);
+  },
+  vehicleDetail: (id: string) => request<VehicleDetail>(`/admin/vehicles/${id}`),
   createVehicle: (data: CreateVehicle) =>
     request<Vehicle>("/admin/vehicles", { method: "POST", body: JSON.stringify(data) }),
   updateVehicle: (id: string, data: UpdateVehicle) =>
     request<Vehicle>(`/admin/vehicles/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-  updateVehicleStatus: (vehicleId: string, status: string) =>
-    request<Vehicle>(`/admin/vehicles/${vehicleId}/status`, { method: "POST", body: JSON.stringify({ status }) }),
+  updateVehicleStatus: (vehicleId: string, status: string, reason?: string) =>
+    request<Vehicle>(`/admin/vehicles/${vehicleId}/status`, { method: "POST", body: JSON.stringify({ status, reason }) }),
+  assignVehicle: (vehicleId: string, data: { riderId: string; override?: boolean; reason?: string }) =>
+    request<VehicleDetail>(`/admin/vehicles/${vehicleId}/assign`, { method: "POST", body: JSON.stringify(data) }),
+  unassignVehicle: (vehicleId: string, reason?: string) =>
+    request<VehicleDetail>(`/admin/vehicles/${vehicleId}/unassign`, { method: "POST", body: JSON.stringify({ reason }) }),
   bookings: (status?: string) =>
     request<{ items: Booking[]; totalCount: number }>(`/admin/bookings${status ? `?status=${status}` : ""}`),
   activeRides: () => request<{ items: Ride[] }>("/admin/rides/active"),
@@ -68,6 +141,7 @@ export const api = {
   reconciliation: (from: string, to: string) =>
     request<FinanceReconciliation>(`/admin/finance/reconciliation?from=${from}&to=${to}`),
   iotDevices: () => request<{ items: IoTDevice[] }>("/admin/iot/devices"),
+  syncIotDevices: () => request<{ synced: number; linked: number; created?: number; message: string }>("/admin/iot/devices/sync", { method: "POST" }),
   createIoTDevice: (data: CreateIoTDevice) =>
     request("/admin/iot/devices", { method: "POST", body: JSON.stringify(data) }),
   updateIoTDevice: (deviceId: string, data: UpdateIoTDevice) =>
@@ -84,7 +158,102 @@ export const api = {
     }),
   unlinkIoTDevice: (deviceId: string) =>
     request(`/admin/iot/devices/${deviceId}/link`, { method: "DELETE" }),
+  payments: (params?: { status?: string; search?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.search) q.set("search", params.search);
+    return request<{ items: AdminPayment[] }>(`/admin/payments?${q}`);
+  },
+  refundPayment: (id: string, reason: string) =>
+    request(`/admin/payments/${id}/refund`, { method: "POST", body: JSON.stringify({ reason }) }),
+  wallets: (search?: string) =>
+    request<{ items: Rider[] }>(`/admin/wallets${search ? `?search=${encodeURIComponent(search)}` : ""}`),
+  adjustWallet: (riderId: string, data: { type: "Credit" | "Debit"; amount: number; note: string; reference?: string }) =>
+    request(`/admin/riders/${riderId}/wallet`, { method: "POST", body: JSON.stringify(data) }),
+  plans: () => request<{ items: RentalPlan[] }>("/admin/plans"),
+  createPlan: (data: CreateRentalPlan) =>
+    request<RentalPlan>("/admin/plans", { method: "POST", body: JSON.stringify(data) }),
+  updatePlan: (id: string, data: Partial<CreateRentalPlan> & { isActive?: boolean }) =>
+    request<RentalPlan>(`/admin/plans/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  kycSubmissions: (status?: string) =>
+    request<{ items: KycDocument[] }>(`/admin/kyc/submissions${status ? `?status=${status}` : ""}`),
+  reviewKycDocument: (id: string, action: "Approve" | "Reject", reason?: string) =>
+    request(`/admin/kyc/submissions/${id}/review`, { method: "POST", body: JSON.stringify({ action, reason }) }),
+  breakdowns: (status?: string) =>
+    request<{ items: Breakdown[] }>(`/admin/breakdowns${status ? `?status=${status}` : ""}`),
+  breakdown: (id: string) => request<Breakdown>(`/admin/breakdowns/${id}`),
+  createBreakdown: (data: CreateBreakdown) =>
+    request<Breakdown>("/admin/breakdowns", { method: "POST", body: JSON.stringify(data) }),
+  breakdownAction: (id: string, action: "assign" | "progress" | "escalate" | "close", data: { note: string; assignedTo?: string; escalatedTo?: string }) =>
+    request<Breakdown>(`/admin/breakdowns/${id}/${action}`, { method: "POST", body: JSON.stringify(data) }),
+  serviceCentres: () => request<{ items: ServiceCentre[] }>("/admin/service-centres"),
+  createServiceCentre: (data: CreateServiceCentre) =>
+    request<ServiceCentre>("/admin/service-centres", { method: "POST", body: JSON.stringify(data) }),
+  updateServiceCentre: (id: string, data: Partial<CreateServiceCentre> & { isActive?: boolean }) =>
+    request<ServiceCentre>(`/admin/service-centres/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  serviceSlots: (params?: { centreId?: string; date?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.centreId) q.set("centreId", params.centreId);
+    if (params?.date) q.set("date", params.date);
+    return request<{ items: ServiceSlot[] }>(`/admin/service-slots?${q}`);
+  },
+  createServiceSlot: (data: CreateServiceSlot) =>
+    request<ServiceSlot>("/admin/service-slots", { method: "POST", body: JSON.stringify(data) }),
+  serviceRequests: (status?: string) =>
+    request<{ items: ServiceRequestItem[] }>(`/admin/service-requests${status ? `?status=${status}` : ""}`),
+  createServiceRequest: (data: CreateServiceRequest) =>
+    request<ServiceRequestItem>("/admin/service-requests", { method: "POST", body: JSON.stringify(data) }),
+  updateServiceRequest: (id: string, data: { status?: string; assignedTo?: string; progressNote?: string; completionNote?: string }) =>
+    request<ServiceRequestItem>(`/admin/service-requests/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  appointments: (status?: string) =>
+    request<{ items: Appointment[] }>(`/admin/appointments${status ? `?status=${status}` : ""}`),
+  createAppointment: (data: CreateAppointment) =>
+    request<Appointment>("/admin/appointments", { method: "POST", body: JSON.stringify(data) }),
+  rescheduleAppointment: (id: string, slotId: string, notes?: string) =>
+    request<Appointment>(`/admin/appointments/${id}/reschedule`, { method: "POST", body: JSON.stringify({ slotId, notes }) }),
+  cancelAppointment: (id: string, reason: string) =>
+    request<Appointment>(`/admin/appointments/${id}/cancel`, { method: "POST", body: JSON.stringify({ reason }) }),
+  completeAppointment: (id: string) =>
+    request<Appointment>(`/admin/appointments/${id}/complete`, { method: "POST" }),
+  chargingStations: () => request<{ items: ChargingStation[] }>("/admin/charging-stations"),
+  createChargingStation: (data: CreateChargingStation) =>
+    request<ChargingStation>("/admin/charging-stations", { method: "POST", body: JSON.stringify(data) }),
+  updateChargingStation: (id: string, data: Partial<CreateChargingStation> & { status?: string }) =>
+    request<ChargingStation>(`/admin/charging-stations/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  notifications: () => request<{ items: AppNotice[] }>("/admin/notifications"),
+  sendNotification: (data: { title: string; body: string; audience: string }) =>
+    request("/admin/notifications", { method: "POST", body: JSON.stringify(data) }),
+  feedback: () => request<{ items: FeedbackItem[] }>("/admin/feedback"),
+  createFeedback: (data: { riderId: string; rating: number; comment: string; category?: string }) =>
+    request("/admin/feedback", { method: "POST", body: JSON.stringify(data) }),
+  agreements: (riderId?: string) =>
+    request<{ items: AgreementItem[] }>(`/admin/agreements${riderId ? `?riderId=${riderId}` : ""}`),
+  issueAgreement: (data: { riderId: string; type: string; content: string; documentUrl?: string }) =>
+    request("/admin/agreements", { method: "POST", body: JSON.stringify(data) }),
+  signAgreement: (id: string) =>
+    request(`/admin/agreements/${id}/sign`, { method: "POST" }),
+  referrals: () => request<{ items: ReferralItem[] }>("/admin/referrals"),
+  applyReferral: (riderId: string, code: string) =>
+    request("/admin/referrals/apply", { method: "POST", body: JSON.stringify({ riderId, code }) }),
+  supportTickets: (status?: string) =>
+    request<{ items: SupportTicket[] }>(`/admin/support/tickets${status ? `?status=${status}` : ""}`),
+  createSupportTicket: (data: { riderId: string; category: string; subject: string; description: string }) =>
+    request("/admin/support/tickets", { method: "POST", body: JSON.stringify(data) }),
+  updateSupportTicket: (id: string, data: { status?: string; assignedTo?: string; note?: string }) =>
+    request(`/admin/support/tickets/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  reportExport: (from: string, to: string) =>
+    request<{ csv: string; fileName: string }>(`/admin/reports/export?from=${from}&to=${to}`),
 };
+
+export interface TenantOrg {
+  id: string;
+  slug: string;
+  name: string;
+  contactEmail?: string;
+  status: string;
+  isDefault?: boolean;
+  notes?: string;
+}
 
 export interface AdminUser {
   id: string;
@@ -92,6 +261,9 @@ export interface AdminUser {
   fullName: string;
   role: string;
   isActive?: boolean;
+  tenantId?: string;
+  hubIds?: string[];
+  tenantName?: string;
   createdAt?: string;
 }
 
@@ -100,6 +272,8 @@ export interface CreateAdminUser {
   password: string;
   fullName: string;
   role: string;
+  tenantId?: string;
+  hubIds?: string[];
 }
 
 export interface UpdateAdminUser {
@@ -107,6 +281,8 @@ export interface UpdateAdminUser {
   role?: string;
   password?: string;
   isActive?: boolean;
+  tenantId?: string;
+  hubIds?: string[];
 }
 
 export interface UpdateCustomer {
@@ -114,6 +290,7 @@ export interface UpdateCustomer {
   fullName?: string;
   email?: string;
   accountStatus?: string;
+  forceUnassign?: boolean;
 }
 
 export interface UpdateHub {
@@ -129,10 +306,12 @@ export interface UpdateHub {
 export interface UpdateVehicle {
   registrationNumber?: string;
   type?: string;
+  wheelClass?: string;
   hubId?: string;
   model?: string;
   iotDeviceId?: string | null;
   status?: string;
+  notes?: string;
 }
 
 export interface UpdateIoTDevice {
@@ -154,6 +333,7 @@ export interface CreateCustomer {
   phone: string;
   fullName: string;
   email?: string;
+  tenantId?: string;
 }
 
 export interface Customer {
@@ -166,6 +346,135 @@ export interface Customer {
   createdAt: string;
 }
 
+export interface Rider extends Customer {
+  assignedVehicleId?: string;
+  rentalPlanId?: string;
+  walletBalance: number;
+  referralCode?: string;
+  referredBy?: string;
+  tenantId?: string;
+}
+
+export interface RentalPlan {
+  id: string;
+  name: string;
+  charges: number;
+  durationDays: number;
+  billingFrequency: string;
+  eligibility?: string;
+  terms?: string;
+  isActive: boolean;
+  tenantId?: string;
+}
+
+export interface RiderProfile {
+  rider: Rider;
+  assignedVehicle: {
+    id: string;
+    registrationNumber: string;
+    model: string;
+    type: string;
+    status: string;
+    batteryPercent: number;
+    hubId: string;
+  } | null;
+  rentalPlan: RentalPlan | null;
+  wallet: {
+    balance: number;
+    transactions: { id: string; type: string; amount: number; reference?: string; note?: string; balanceAfter: number; createdAt?: string }[];
+  };
+  payments: { id: string; bookingId: string; amount: number; currency: string; status: string; method?: string; createdAt?: string }[];
+  rentalActivity: {
+    bookings: { id: string; vehicleId: string; bookingType: string; status: string; estimatedAmount: number; createdAt?: string }[];
+    rides: { id: string; vehicleId: string; status: string; startedAt?: string; endedAt?: string; durationMinutes?: number }[];
+  };
+  kyc: {
+    status: string;
+    submissions: { id: string; documentType: string; status: string; documentNumberMasked?: string; rejectionReason?: string; submittedAt?: string; reviewedAt?: string }[];
+  };
+}
+
+export interface DashboardSnapshot {
+  riders: { total: number; active: number; inactive: number; suspended: number; deactivated: number };
+  vehicles: { total: number; byStatus: Record<string, number> };
+  outstandingPayments: { count: number; amount: number };
+  kyc: Record<string, number>;
+  upcomingModules: {
+    serviceRequests: { count: number; operational: boolean };
+    breakdownAlerts: { count: number; operational: boolean };
+    chargingStations: { count: number; operational: boolean };
+  };
+  last30Days: { totalRides: number; totalRevenue: number };
+  recentRiders: { id: string; fullName?: string; phone?: string; accountStatus: string; kycStatus: string; createdAt?: string }[];
+  vehiclesNeedingAttention: { id: string; registrationNumber: string; status: string; batteryPercent: number; assignedRiderId?: string }[];
+  activeRideVehicles: ActiveRideVehicle[];
+  locatedVehicles: LocatedVehicle[];
+}
+
+export interface Branding {
+  productName: string;
+  companyName?: string | null;
+  companyId?: string | null;
+  hasOptionalLogo: boolean;
+  optionalLogoCleared?: boolean;
+  optionalLogoUrl: string | null;
+  optionalLogoDataUrl?: string | null;
+}
+
+export interface LocationPing {
+  lat: number;
+  lng: number;
+  at?: string;
+}
+
+export interface LocatedVehicle {
+  id: string;
+  rideId?: string;
+  registrationNumber: string;
+  type?: string;
+  wheelClass?: string;
+  status?: string;
+  lastPlace?: string | null;
+  lastPlaceKind?: string;
+  lastLocation?: { lat: number; lng: number } | null;
+  lastTelemetryAt?: string;
+}
+
+export interface ActiveRideVehicle {
+  id: string;
+  rideId?: string;
+  registrationNumber: string;
+  type?: string;
+  wheelClass?: string;
+  batteryPercent?: number;
+  riderName?: string;
+  riderPhone?: string;
+  lastPlace?: string | null;
+  lastPlaceKind?: string;
+  lastLocation?: { lat: number; lng: number } | null;
+  lastTelemetryAt?: string;
+  locationTrail?: LocationPing[];
+}
+
+export interface AuditLog {
+  id: string;
+  actorId?: string;
+  actorEmail?: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface VehicleDetail {
+  vehicle: Vehicle;
+  assignedRider: { id: string; fullName?: string; phone?: string; accountStatus: string; kycStatus: string } | null;
+  hub: { id: string; name: string; address: string; status: string } | null;
+  events: { id: string; type: string; summary: string; reason?: string; actorEmail?: string; createdAt?: string }[];
+}
+
 export interface Hub {
   id: string;
   name: string;
@@ -174,6 +483,7 @@ export interface Hub {
   capacity: number;
   availableVehicles: number;
   status: string;
+  tenantId?: string;
 }
 
 export interface CreateHub {
@@ -183,12 +493,14 @@ export interface CreateHub {
   capacity: number;
   operatingHours?: string;
   geoFenceRadiusM?: number;
+  tenantId?: string;
 }
 
 export interface Vehicle {
   id: string;
   registrationNumber: string;
   type: string;
+  wheelClass?: string;
   status: string;
   batteryPercent: number;
   model: string;
@@ -198,20 +510,33 @@ export interface Vehicle {
   lastLat?: number;
   lastLng?: number;
   lastTelemetryAt?: string;
+  lastPlace?: string;
+  lastPlaceKind?: string;
+  lastHubId?: string;
+  locationTrail?: LocationPing[];
+  assignedRiderId?: string;
+  assignedRiderName?: string;
+  assignedRiderPhone?: string;
+  notes?: string;
+  tenantId?: string;
 }
 
 export interface CreateVehicle {
   registrationNumber: string;
   type: string;
+  wheelClass?: string;
   hubId: string;
   model: string;
   iotDeviceId?: string;
+  notes?: string;
+  tenantId?: string;
 }
 
 export interface CreateIoTDevice {
   deviceId: string;
   vendorType?: string;
   vehicleId?: string;
+  tenantId?: string;
 }
 
 export interface Booking {
@@ -228,8 +553,25 @@ export interface Ride {
   id: string;
   bookingId: string;
   vehicleId: string;
+  customerId?: string;
   status: string;
   startedAt?: string;
+  customerName?: string;
+  customerPhone?: string;
+  vehicleRegistration?: string;
+  vehicleType?: string;
+  wheelClass?: string;
+  batteryPercent?: number;
+  odometerKm?: number;
+  speedKmh?: number;
+  ignition?: string;
+  model?: string;
+  vehicleStatus?: string;
+  lastPlace?: string | null;
+  lastPlaceKind?: string;
+  lastLocation?: { lat: number; lng: number } | null;
+  lastTelemetryAt?: string;
+  locationTrail?: LocationPing[];
 }
 
 export interface Promotion {
@@ -285,4 +627,244 @@ export interface IoTDevice {
   batteryPercent?: number;
   odometerKm?: number;
   lastLocation?: { lat: number; lng: number };
+  lastPlace?: string;
+  displayName?: string;
+  imei?: string;
+  externalId?: string;
+  speedKmh?: number;
+  ignition?: string;
+  vendorStatus?: string;
+  vehicleStatus?: string;
+  tenantId?: string;
+}
+
+export interface AdminPayment {
+  id: string;
+  customerId: string;
+  riderName?: string;
+  riderPhone?: string;
+  bookingId: string;
+  amount: number;
+  currency: string;
+  status: string;
+  method?: string;
+  reference?: string;
+  refundReason?: string;
+  createdAt?: string;
+}
+
+export interface CreateRentalPlan {
+  name: string;
+  charges: number;
+  durationDays: number;
+  billingFrequency: string;
+  eligibility?: string;
+  terms?: string;
+  tenantId?: string;
+}
+
+export interface KycDocument {
+  id: string;
+  riderId: string;
+  riderName?: string;
+  riderPhone?: string;
+  riderKycStatus?: string;
+  documentType: string;
+  documentNumberMasked?: string;
+  blobUrl?: string;
+  status: string;
+  rejectionReason?: string;
+  submittedAt?: string;
+}
+
+export interface Breakdown {
+  id: string;
+  riderId: string;
+  riderName?: string;
+  riderPhone?: string;
+  vehicleId: string;
+  vehicleRegistration?: string;
+  issueType: string;
+  description: string;
+  lat?: number;
+  lng?: number;
+  status: string;
+  assignedTo?: string;
+  escalatedTo?: string;
+  actions: { at: string; actorEmail?: string; note: string }[];
+  closeNote?: string;
+  createdAt?: string;
+  tenantId?: string;
+}
+
+export interface CreateBreakdown {
+  riderId: string;
+  vehicleId: string;
+  issueType: string;
+  description: string;
+  lat?: number;
+  lng?: number;
+  tenantId?: string;
+}
+
+export interface ServiceCentre {
+  id: string;
+  name: string;
+  address: string;
+  contactName: string;
+  contactPhone: string;
+  lat?: number;
+  lng?: number;
+  isActive: boolean;
+}
+
+export interface CreateServiceCentre {
+  name: string;
+  address: string;
+  contactName: string;
+  contactPhone: string;
+  lat?: number;
+  lng?: number;
+}
+
+export interface ServiceSlot {
+  id: string;
+  centreId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  capacity: number;
+  bookedCount: number;
+  remaining: number;
+}
+
+export interface CreateServiceSlot {
+  centreId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  capacity: number;
+}
+
+export interface ServiceRequestItem {
+  id: string;
+  riderId: string;
+  riderName?: string;
+  riderPhone?: string;
+  vehicleId?: string;
+  category: string;
+  description: string;
+  status: string;
+  assignedTo?: string;
+  progressNote?: string;
+  completionNote?: string;
+  createdAt?: string;
+}
+
+export interface CreateServiceRequest {
+  riderId: string;
+  vehicleId?: string;
+  category: string;
+  description: string;
+}
+
+export interface Appointment {
+  id: string;
+  riderId: string;
+  riderName?: string;
+  centreId: string;
+  centreName?: string;
+  slotId: string;
+  slot: ServiceSlot | null;
+  status: string;
+  notes?: string;
+  cancelledReason?: string;
+}
+
+export interface CreateAppointment {
+  riderId: string;
+  centreId: string;
+  slotId: string;
+  vehicleId?: string;
+  serviceRequestId?: string;
+  notes?: string;
+}
+
+export interface ChargingStation {
+  id: string;
+  name: string;
+  address: string;
+  chargerCount: number;
+  lat?: number;
+  lng?: number;
+  operatingHours?: string;
+  status: string;
+  hubId?: string;
+  tenantId?: string;
+}
+
+export interface CreateChargingStation {
+  name: string;
+  address: string;
+  chargerCount: number;
+  lat?: number;
+  lng?: number;
+  operatingHours?: string;
+  hubId?: string;
+  tenantId?: string;
+}
+
+export interface AppNotice {
+  id: string;
+  title: string;
+  body: string;
+  audience: string;
+  channel: string;
+  status: string;
+  sentAt?: string;
+  createdBy?: string;
+}
+
+export interface FeedbackItem {
+  id: string;
+  riderId: string;
+  riderName?: string;
+  riderPhone?: string;
+  rating: number;
+  comment: string;
+  category: string;
+  createdAt?: string;
+}
+
+export interface AgreementItem {
+  id: string;
+  riderId: string;
+  riderName?: string;
+  type: string;
+  content: string;
+  documentUrl?: string;
+  status: string;
+  signedAt?: string;
+}
+
+export interface ReferralItem {
+  id: string;
+  fullName?: string;
+  phone?: string;
+  referralCode?: string;
+  referredCount: number;
+}
+
+export interface SupportTicket {
+  id: string;
+  customerId: string;
+  riderName?: string;
+  riderPhone?: string;
+  category: string;
+  subject: string;
+  description: string;
+  status: string;
+  assignedTo?: string;
+  notes: { at: string; actorEmail?: string; note: string }[];
+  createdAt?: string;
 }

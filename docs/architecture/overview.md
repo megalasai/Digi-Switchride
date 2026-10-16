@@ -18,6 +18,7 @@ Digi-Switchride is an electric vehicle rental platform targeting the Indian mark
 | Redis | Azure Cache (optional) | Sessions, availability cache |
 | Azure Blob Storage | Azure | KYC documents, exports |
 | Azure IoT Hub | Azure | Device connectivity |
+| India Location API | Node.js 22 + SQLite | Reverse geocoding for India. Separate host, shared by other applications |
 
 ## Module Boundaries (Backend)
 
@@ -42,6 +43,10 @@ Schemas are centralized in `apps/api/src/schemas/` (DigiTrack pattern).
 4. Customer starts ride → API validates → IoT unlock command
 5. Telemetry streams GPS/battery during ride
 6. Customer ends ride → IoT lock → fare calculated → payment captured
+
+## India location lookup
+
+`apps/location` is a separate process from the platform API. Callers send latitude, longitude, and optional altitude. The service reads a SQLite database of GeoNames places and PIN codes and returns the locality inside India. See [ADR-005](../adr/005-india-location-service.md).
 
 ## Deployment
 

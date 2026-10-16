@@ -16,7 +16,7 @@ export class CustomersController {
   }
 
   @Put('me')
-  updateProfile(@Req() req: { user: { customerId: string } }, @Body() body: { email?: string; fullName?: string; emergencyContact?: string }) {
+  updateProfile(@Req() req: { user: { customerId: string } }, @Body() body: { email?: string; fullName?: string; emergencyContact?: string; address?: string }) {
     return this.profileService.updateProfile(req.user.customerId, body);
   }
 

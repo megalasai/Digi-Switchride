@@ -1,14 +1,14 @@
 import SwiftUI
 
 enum AppColors {
-    static let greenPrimary = Color(red: 0.09, green: 0.64, blue: 0.29)
-    static let greenDark = Color(red: 0.08, green: 0.50, blue: 0.24)
-    static let greenLight = Color(red: 0.86, green: 0.99, blue: 0.91)
-    static let background = Color(red: 0.95, green: 0.96, blue: 0.98)
-    static let textSecondary = Color(red: 0.39, green: 0.45, blue: 0.55)
-    static let batteryHigh = Color(red: 0.13, green: 0.77, blue: 0.37)
-    static let batteryMid = Color(red: 0.96, green: 0.62, blue: 0.04)
-    static let batteryLow = Color(red: 0.94, green: 0.27, blue: 0.27)
+    static let greenPrimary = Color(red: 0.357, green: 0.486, blue: 0.980)
+    static let greenDark = Color(red: 0.247, green: 0.384, blue: 0.910)
+    static let greenLight = Color(red: 0.933, green: 0.945, blue: 1.0)
+    static let background = Color(red: 0.953, green: 0.961, blue: 0.984)
+    static let textSecondary = Color(red: 0.400, green: 0.439, blue: 0.522)
+    static let batteryHigh = Color(red: 0.071, green: 0.718, blue: 0.416)
+    static let batteryMid = Color(red: 0.969, green: 0.565, blue: 0.035)
+    static let batteryLow = Color(red: 0.941, green: 0.267, blue: 0.220)
 }
 
 extension Color {
@@ -27,8 +27,7 @@ struct PrimaryButtonStyle: ButtonStyle {
             if loading {
                 ProgressView().tint(.white)
             } else {
-                configuration.label
-                    .font(.headline)
+                configuration.label.font(.headline)
             }
         }
         .frame(maxWidth: .infinity, minHeight: 52)

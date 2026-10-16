@@ -5,13 +5,19 @@ import { Customer, CustomerSchema } from '../schemas/customer.schema';
 import { Vehicle, VehicleSchema } from '../schemas/fleet.schema';
 import { CustomersModule } from '../customers/customers.module';
 import { AuthModule } from '../auth/auth.module';
+import { AuditModule } from '../audit/audit.module';
+import { OperationsModule } from '../operations/operations.module';
+import { EngagementModule } from '../engagement/engagement.module';
 import { PaymentsController, AdminController } from './payments.controller';
-import { PaymentsService, PromotionsService, ReportsService } from './payments.service';
+import { DashboardService, PaymentsService, PromotionsService, ReportsService } from './payments.service';
 
 @Module({
   imports: [
     AuthModule,
+    AuditModule,
     CustomersModule,
+    OperationsModule,
+    EngagementModule,
     MongooseModule.forFeature([
       { name: Payment.name, schema: PaymentSchema },
       { name: Booking.name, schema: BookingSchema },

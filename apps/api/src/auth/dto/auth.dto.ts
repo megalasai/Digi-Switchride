@@ -27,6 +27,10 @@ export class CustomerRegisterDto {
   @IsOptional()
   @IsString()
   fullName?: string;
+
+  @IsOptional()
+  @IsString()
+  tenantSlug?: string;
 }
 
 export class CustomerLoginDto {
@@ -35,6 +39,10 @@ export class CustomerLoginDto {
 
   @IsString()
   password!: string;
+
+  @IsOptional()
+  @IsString()
+  tenantSlug?: string;
 }
 
 export class RefreshTokenDto {

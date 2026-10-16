@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { randomUUID } from 'crypto';
@@ -6,12 +6,16 @@ import { Booking, BookingDocument, Payment, PaymentDocument, Promotion, Promotio
 import { Customer, CustomerDocument } from '../schemas/customer.schema';
 import { Vehicle, VehicleDocument } from '../schemas/fleet.schema';
 import { calculateGst } from '../common/helpers';
+import { OperationsService } from '../operations/operations.service';
+import { EngagementService } from '../engagement/engagement.service';
+import { applyHubScope } from '../common/hub-scope';
 
 @Injectable()
 export class PaymentsService {
   constructor(
     @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
     @InjectModel(Booking.name) private bookingModel: Model<BookingDocument>,
+    @InjectModel(Customer.name) private customerModel: Model<CustomerDocument>,
   ) {}
 
   async createOrder(customerId: string, bookingId: string, amount: number, currency = 'INR') {
@@ -44,6 +48,93 @@ export class PaymentsService {
     return { received: true };
   }
 
+  async listAdmin(params: { status?: string; search?: string; page?: number; pageSize?: number }) {
+    const filter: Record<string, unknown> = {};
+    if (params.status) filter.status = params.status;
+    const page = params.page ?? 1;
+    const pageSize = Math.min(params.pageSize ?? 50, 100);
+    const items = await this.paymentModel.find(filter).sort({ createdAt: -1 }).skip((page - 1) * pageSize).limit(pageSize);
+    const totalCount = await this.paymentModel.countDocuments(filter);
+    const riderIds = [...new Set(items.map((p) => p.customerId))];
+    const riders = riderIds.length ? await this.customerModel.find({ _id: { $in: riderIds } }) : [];
+    const riderMap = Object.fromEntries(riders.map((r) => [r._id.toString(), r]));
+    const mapped = items.map((p) => {
+      const rider = riderMap[p.customerId];
+      return {
+        id: p._id.toString(),
+        customerId: p.customerId,
+        riderName: rider?.fullName,
+        riderPhone: rider?.phone,
+        bookingId: p.bookingId,
+        amount: p.amount,
+        currency: p.currency,
+        status: p.status,
+        method: p.method,
+        reference: p.reference ?? p.razorpayOrderId ?? p.razorpayPaymentId,
+        razorpayOrderId: p.razorpayOrderId,
+        razorpayPaymentId: p.razorpayPaymentId,
+        gstAmount: p.gstAmount,
+        refundReason: p.refundReason,
+        createdAt: (p as { createdAt?: Date }).createdAt,
+        paidAt: p.paidAt,
+        refundedAt: p.refundedAt,
+      };
+    });
+    const filtered = params.search
+      ? mapped.filter((row) => {
+          const q = params.search!.toLowerCase();
+          return [row.riderName, row.riderPhone, row.reference, row.id].some((v) => v?.toLowerCase().includes(q));
+        })
+      : mapped;
+    return {
+      items: filtered,
+      page,
+      pageSize,
+      totalCount,
+    };
+  }
+
+  async refund(paymentId: string, reason: string, actorId?: string) {
+    const payment = await this.paymentModel.findById(paymentId);
+    if (!payment) throw new NotFoundException('Payment not found');
+    if (payment.status !== 'Paid') throw new BadRequestException('Only paid transactions can be refunded');
+    payment.status = 'Refunded';
+    payment.refundReason = reason.trim();
+    payment.refundedAt = new Date();
+    await payment.save();
+    return {
+      id: payment._id.toString(),
+      status: payment.status,
+      refundReason: payment.refundReason,
+      refundedAt: payment.refundedAt,
+      actorId,
+    };
+  }
+
+  async payOutstanding(customerId: string, method: string) {
+    const allowed = ['Wallet', 'UPI', 'QR', 'NetBanking', 'DebitCard', 'CreditCard'];
+    if (!allowed.includes(method)) throw new BadRequestException('Unsupported payment method');
+    const due = await this.paymentModel.find({ customerId, status: { $in: ['Created', 'Failed'] } });
+    if (!due.length) throw new BadRequestException('No outstanding payments');
+    const total = due.reduce((s, p) => s + p.amount, 0);
+    if (method === 'Wallet') {
+      const customer = await this.customerModel.findById(customerId);
+      if (!customer) throw new NotFoundException('Rider not found');
+      if ((customer.walletBalance ?? 0) < total) throw new BadRequestException('Wallet balance is insufficient');
+      customer.walletBalance = (customer.walletBalance ?? 0) - total;
+      await customer.save();
+    }
+    const reference = `pay_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
+    for (const payment of due) {
+      payment.status = 'Paid';
+      payment.method = method;
+      payment.paidAt = new Date();
+      payment.reference = reference;
+      await payment.save();
+    }
+    return { paid: due.length, amount: total, method, reference, status: 'Paid' };
+  }
+
   async getHistory(customerId: string, page = 1, pageSize = 20) {
     const total = await this.paymentModel.countDocuments({ customerId });
     const items = await this.paymentModel.find({ customerId }).sort({ createdAt: -1 }).skip((page - 1) * pageSize).limit(pageSize);
@@ -55,7 +146,8 @@ export class PaymentsService {
         currency: p.currency,
         status: p.status,
         method: p.method,
-        createdAt: (p as any).createdAt,
+        reference: p.reference ?? p.razorpayOrderId ?? p.razorpayPaymentId,
+        createdAt: (p as { createdAt?: Date }).createdAt,
         invoiceUrl: p.invoiceUrl,
       })),
       page,
@@ -169,6 +261,28 @@ export class ReportsService {
       averageRideDurationMinutes: avgDuration,
     };
   }
+
+  async exportCsv(from: Date, to: Date) {
+    const summary = await this.getSummary(from, to);
+    const payments = await this.paymentModel.find({ createdAt: { $gte: from, $lte: to } }).sort({ createdAt: -1 }).limit(500);
+    const header = ['section', 'key', 'value'];
+    const rows = [
+      ['summary', 'from', from.toISOString()],
+      ['summary', 'to', to.toISOString()],
+      ['summary', 'totalRides', String(summary.totalRides)],
+      ['summary', 'totalRevenue', String(summary.totalRevenue)],
+      ['summary', 'totalFleet', String(summary.totalFleet)],
+      ['summary', 'availableVehicles', String(summary.availableVehicles)],
+      ['summary', 'inRideVehicles', String(summary.inRideVehicles)],
+      ['summary', 'iotLinkedVehicles', String(summary.iotLinkedVehicles)],
+      ['summary', 'fleetUtilizationPercent', String(summary.fleetUtilizationPercent)],
+      ['summary', 'newCustomers', String(summary.newCustomers)],
+      ['summary', 'averageRideDurationMinutes', String(summary.averageRideDurationMinutes)],
+      ...payments.map((p) => ['payment', p.status, `${p._id.toString()}|${p.customerId}|${p.amount}|${p.currency}`]),
+    ];
+    const csv = [header.join(','), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))].join('\n');
+    return { csv, fileName: `switchride-report-${from.toISOString().slice(0, 10)}-${to.toISOString().slice(0, 10)}.csv` };
+  }
 }
 
 @Injectable()
@@ -178,6 +292,8 @@ export class DashboardService {
     @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
     @InjectModel(Vehicle.name) private vehicleModel: Model<VehicleDocument>,
     @InjectModel(Customer.name) private customerModel: Model<CustomerDocument>,
+    private operationsService: OperationsService,
+    private engagementService: EngagementService,
   ) {}
 
   async getSnapshot() {
@@ -196,12 +312,20 @@ export class DashboardService {
       attentionVehicles,
       paidPayments,
       endedRides,
+      opsCounts,
+      stationCount,
+      inRideVehicles,
+      activeRides,
+      locatedVehicles,
     ] = await Promise.all([
       this.customerModel.countDocuments(),
       this.customerModel.countDocuments({ accountStatus: 'Active' }),
       this.customerModel.countDocuments({ accountStatus: 'Suspended' }),
       this.customerModel.countDocuments({ accountStatus: 'Deactivated' }),
-      this.vehicleModel.aggregate<{ _id: string; count: number }>([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+      this.vehicleModel.aggregate<{ _id: string; count: number }>([
+        ...(Object.keys(applyHubScope({})).length ? [{ $match: applyHubScope({}) }] : []),
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
       this.paymentModel.aggregate<{ count: number; amount: number }>([
         { $match: { status: { $in: ['Created', 'Failed'] } } },
         { $group: { _id: null, count: { $sum: 1 }, amount: { $sum: '$amount' } } },
@@ -209,13 +333,30 @@ export class DashboardService {
       this.customerModel.aggregate<{ _id: string; count: number }>([{ $group: { _id: '$kycStatus', count: { $sum: 1 } } }]),
       this.customerModel.find().sort({ createdAt: -1 }).limit(5),
       this.vehicleModel
-        .find({
-          $or: [{ status: { $in: ['Maintenance', 'Offline'] } }, { batteryPercent: { $lte: 20 } }],
-        })
+        .find(
+          applyHubScope({
+            $or: [{ status: { $in: ['Maintenance', 'Offline'] } }, { batteryPercent: { $lte: 20 } }],
+          }),
+        )
         .sort({ batteryPercent: 1 })
         .limit(8),
       this.paymentModel.find({ status: 'Paid', paidAt: { $gte: from, $lte: to } }),
       this.rideModel.find({ status: 'Ended', endedAt: { $gte: from, $lte: to } }),
+      this.operationsService.counts(),
+      this.engagementService.stationCount(),
+      this.vehicleModel.find(applyHubScope({ status: 'InRide' })).sort({ lastTelemetryAt: -1 }).limit(40),
+      this.rideModel.find({ status: 'InProgress' }),
+      this.vehicleModel
+        .find(
+          applyHubScope({
+            $or: [
+              { lastLat: { $ne: null }, lastLng: { $ne: null } },
+              { iotDeviceId: { $exists: true, $nin: [null, ''] } },
+            ],
+          }),
+        )
+        .sort({ lastTelemetryAt: -1 })
+        .limit(500),
     ]);
 
     const statusCounts: Record<string, number> = {};
@@ -255,9 +396,9 @@ export class DashboardService {
         Rejected: kycCounts.Rejected ?? 0,
       },
       upcomingModules: {
-        serviceRequests: { count: 0, operational: false },
-        breakdownAlerts: { count: 0, operational: false },
-        chargingStations: { count: 0, operational: false },
+        serviceRequests: { count: opsCounts.serviceRequests, operational: true },
+        breakdownAlerts: { count: opsCounts.breakdowns, operational: true },
+        chargingStations: { count: stationCount, operational: true },
       },
       last30Days: {
         totalRides: endedRides.length,
@@ -278,6 +419,58 @@ export class DashboardService {
         batteryPercent: v.batteryPercent,
         assignedRiderId: v.assignedRiderId,
       })),
+      activeRideVehicles: await this.toActiveRideVehicles(inRideVehicles, activeRides),
+      locatedVehicles: this.toLocatedVehicles(locatedVehicles, activeRides),
     };
+  }
+
+  private async toActiveRideVehicles(
+    vehicles: VehicleDocument[],
+    rides: RideDocument[],
+  ) {
+    const rideByVehicle = Object.fromEntries(rides.map((r) => [r.vehicleId, r]));
+    const riderIds = [
+      ...vehicles.map((v) => v.assignedRiderId).filter((id): id is string => Boolean(id)),
+      ...rides.map((r) => r.customerId),
+    ];
+    const riders = riderIds.length ? await this.customerModel.find({ _id: { $in: riderIds } }) : [];
+    const riderMap = Object.fromEntries(riders.map((c) => [c._id.toString(), c]));
+    return vehicles.map((v) => {
+      const ride = rideByVehicle[v._id.toString()];
+      const rider =
+        (v.assignedRiderId ? riderMap[v.assignedRiderId] : undefined) ??
+        (ride ? riderMap[ride.customerId] : undefined);
+      return {
+        id: v._id.toString(),
+        rideId: ride?._id.toString(),
+        registrationNumber: v.registrationNumber,
+        type: v.type,
+        wheelClass: v.wheelClass,
+        batteryPercent: v.batteryPercent,
+        riderName: rider?.fullName,
+        riderPhone: rider?.phone,
+        lastPlace: v.lastPlace ?? null,
+        lastPlaceKind: v.lastPlaceKind,
+        lastLocation: v.lastLat != null && v.lastLng != null ? { lat: v.lastLat, lng: v.lastLng } : null,
+        lastTelemetryAt: v.lastTelemetryAt,
+        locationTrail: (v.locationTrail ?? []).map((p) => ({ lat: p.lat, lng: p.lng, at: p.at })),
+      };
+    });
+  }
+
+  private toLocatedVehicles(vehicles: VehicleDocument[], rides: RideDocument[]) {
+    const rideByVehicle = Object.fromEntries(rides.map((r) => [r.vehicleId, r]));
+    return vehicles.map((v) => ({
+      id: v._id.toString(),
+      rideId: rideByVehicle[v._id.toString()]?._id.toString(),
+      registrationNumber: v.registrationNumber,
+      type: v.type,
+      wheelClass: v.wheelClass,
+      status: v.status,
+      lastPlace: v.lastPlace ?? null,
+      lastPlaceKind: v.lastPlaceKind,
+      lastLocation: v.lastLat != null && v.lastLng != null ? { lat: v.lastLat, lng: v.lastLng } : null,
+      lastTelemetryAt: v.lastTelemetryAt,
+    }));
   }
 }

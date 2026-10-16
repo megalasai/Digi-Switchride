@@ -16,6 +16,7 @@ private val Context.apiSettingsStore by preferencesDataStore("api_settings")
 @Singleton
 class ApiSettings @Inject constructor(@ApplicationContext private val context: Context) {
     private val baseUrlKey = stringPreferencesKey("base_url")
+    private val tenantSlugKey = stringPreferencesKey("tenant_slug")
 
     suspend fun getBaseUrl(): String {
         val override = context.apiSettingsStore.data.map { it[baseUrlKey] }.first()
@@ -25,6 +26,15 @@ class ApiSettings @Inject constructor(@ApplicationContext private val context: C
     suspend fun setBaseUrl(input: String) {
         val normalized = normalizeBaseUrl(input)
         context.apiSettingsStore.edit { it[baseUrlKey] = normalized }
+    }
+
+    suspend fun getTenantSlug(): String {
+        return context.apiSettingsStore.data.map { it[tenantSlugKey] }.first() ?: "digi-switchride"
+    }
+
+    suspend fun setTenantSlug(slug: String) {
+        val value = slug.trim().lowercase().ifBlank { "digi-switchride" }
+        context.apiSettingsStore.edit { it[tenantSlugKey] = value }
     }
 
     suspend fun getDisplayHost(): String {

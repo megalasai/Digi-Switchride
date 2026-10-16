@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 import type { BillingFrequency, WalletEntryType } from '@digi-switchride/shared';
+import { tenantPlugin } from '../common/tenant.plugin';
 
 export type RentalPlanDocument = HydratedDocument<RentalPlan>;
 
@@ -29,6 +30,7 @@ export class RentalPlan {
 }
 
 export const RentalPlanSchema = SchemaFactory.createForClass(RentalPlan);
+RentalPlanSchema.plugin(tenantPlugin);
 
 export type WalletTransactionDocument = HydratedDocument<WalletTransaction>;
 
@@ -58,3 +60,4 @@ export class WalletTransaction {
 
 export const WalletTransactionSchema = SchemaFactory.createForClass(WalletTransaction);
 WalletTransactionSchema.index({ riderId: 1, createdAt: -1 });
+WalletTransactionSchema.plugin(tenantPlugin);

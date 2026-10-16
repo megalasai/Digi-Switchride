@@ -6,6 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import { Customer, CustomerSchema, OtpRecord, OtpRecordSchema, RefreshToken, RefreshTokenSchema } from '../schemas/customer.schema';
 import { AdminUser, AdminUserSchema } from '../schemas/admin.schema';
 import { AuditModule } from '../audit/audit.module';
+import { TenantsModule } from '../tenants/tenants.module';
 import { AuthService } from './auth.service';
 import { AuthController, AdminUsersController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
@@ -20,6 +21,7 @@ import { AdminGuard, RolesGuard } from './admin.guard';
       { name: AdminUser.name, schema: AdminUserSchema },
     ]),
     AuditModule,
+    TenantsModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       inject: [ConfigService],

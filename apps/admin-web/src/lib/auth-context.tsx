@@ -2,18 +2,22 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { API_BASE } from "@/lib/api";
 
 export interface AdminUser {
   id: string;
   email: string;
   fullName: string;
   role: string;
+  tenantId?: string;
+  hubIds?: string[];
+  tenantName?: string;
 }
 
 interface AuthContextValue {
   user: AdminUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, tenantSlug?: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -37,24 +41,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(false);
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1"}/auth/admin/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+  const login = async (email: string, password: string, tenantSlug?: string) => {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/auth/admin/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password, tenantSlug: tenantSlug || undefined }),
+      });
+    } catch {
+      throw new Error("Cannot reach the API. Start it with npm run dev:api (port 4000), then refresh this page.");
+    }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       throw new Error(Array.isArray(data.message) ? data.message.join(", ") : data.message ?? "Login failed");
     }
+    if (!data.accessToken || !data.user) {
+      throw new Error("Login succeeded but the API did not return a session. Restart the API and try again.");
+    }
     localStorage.setItem("adminToken", data.accessToken);
     localStorage.setItem("adminUser", JSON.stringify(data.user));
+    if (data.user?.tenantId && data.user.role !== "SuperAdmin") {
+      localStorage.setItem("adminTenantId", data.user.tenantId);
+    }
     setUser(data.user);
   };
 
   const logout = () => {
     localStorage.removeItem("adminToken");
     localStorage.removeItem("adminUser");
+    localStorage.removeItem("adminTenantId");
     setUser(null);
   };
 

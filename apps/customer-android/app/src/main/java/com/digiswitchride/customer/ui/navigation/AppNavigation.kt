@@ -15,7 +15,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.digiswitchride.customer.ui.screens.*
+import com.digiswitchride.customer.ui.screens.ActiveRideScreen
+import com.digiswitchride.customer.ui.screens.KycScreen
+import com.digiswitchride.customer.ui.screens.LoginScreen
+import com.digiswitchride.customer.ui.screens.MainScreen
 import com.digiswitchride.customer.ui.viewmodel.AuthViewModel
 
 @Composable
@@ -25,9 +28,7 @@ fun AppNavigation(authViewModel: AuthViewModel = hiltViewModel()) {
     val hasSession by authViewModel.hasSession.collectAsState()
 
     if (!sessionChecked) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
 
@@ -48,16 +49,12 @@ fun AppNavigation(authViewModel: AuthViewModel = hiltViewModel()) {
                 },
                 onLogout = {
                     authViewModel.logout {
-                        navController.navigate("login") {
-                            popUpTo("main") { inclusive = true }
-                        }
+                        navController.navigate("login") { popUpTo("main") { inclusive = true } }
                     }
                 },
             )
         }
-        composable("kyc") {
-            KycScreen(onBack = { navController.popBackStack() })
-        }
+        composable("kyc") { KycScreen(onBack = { navController.popBackStack() }) }
         composable(
             route = "active_ride/{rideId}",
             arguments = listOf(navArgument("rideId") { type = NavType.StringType }),

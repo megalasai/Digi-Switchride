@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -8,12 +8,14 @@ import { Card } from "@/components/ui/Card";
 import { FormPanel } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FormModeLabel, RowActions } from "@/components/ui/RowActions";
+import { DataTable, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/DataTable";
 import { Input, Select } from "@/components/ui/Input";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { IconRadio } from "@/components/icons";
 import { api, IoTDevice, Vehicle } from "@/lib/api";
+import { CompanyCell, CompanyField } from "@/lib/companies";
 
-const emptyForm = { deviceId: "", vendorType: "Simulator", vehicleId: "" };
+const emptyForm = { deviceId: "", vendorType: "Track360", vehicleId: "", tenantId: "" };
 
 export default function IoTPage() {
   const [devices, setDevices] = useState<IoTDevice[]>([]);
@@ -22,6 +24,8 @@ export default function IoTPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [search, setSearch] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [linkVehicleId, setLinkVehicleId] = useState<Record<string, string>>({});
 
@@ -29,13 +33,40 @@ export default function IoTPage() {
     api.iotDevices().then((r) => setDevices(r.items)).catch((e) => setError(e.message));
     api.vehicles().then((r) => setVehicles(r.items)).catch(() => {});
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 15000);
+    return () => clearInterval(t);
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return devices;
+    return devices.filter((d) =>
+      [d.id, d.imei, d.displayName, d.vehicleRegistration, d.vendorType, d.vendorStatus, d.vehicleStatus]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q)),
+    );
+  }, [devices, search]);
 
   const openCreate = () => { setEditId(null); setForm(emptyForm); setShowForm(true); setError(""); };
   const openEdit = (d: IoTDevice) => {
     setEditId(d.id);
     setForm({ deviceId: d.id, vendorType: d.vendorType, vehicleId: d.vehicleId ?? "" });
     setShowForm(true); setError("");
+  };
+
+  const syncTrack360 = async () => {
+    setError(""); setSuccess(""); setSyncing(true);
+    try {
+      const result = await api.syncIotDevices();
+      setSuccess(result.message ?? `Synced ${result.synced} devices`);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Track360 sync failed");
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -49,7 +80,7 @@ export default function IoTPage() {
         });
         setSuccess("Device updated");
       } else {
-        await api.createIoTDevice({ deviceId: form.deviceId, vendorType: form.vendorType, vehicleId: form.vehicleId || undefined });
+        await api.createIoTDevice({ deviceId: form.deviceId, vendorType: form.vendorType, vehicleId: form.vehicleId || undefined, tenantId: form.tenantId || undefined });
         setSuccess("Device registered");
       }
       setShowForm(false); setEditId(null); load();
@@ -84,17 +115,42 @@ export default function IoTPage() {
 
   return (
     <div>
-      <PageHeader title="IoT Devices" description="Register, edit, unlink and re-link devices to vehicles"
-        actions={<Button variant={showForm && !editId ? "secondary" : "primary"} onClick={() => showForm && !editId ? setShowForm(false) : openCreate()}>{showForm && !editId ? "Cancel" : "Add Device"}</Button>} />
+      <PageHeader
+        title="IoT Devices"
+        description="Track360 telematics devices plus any locally registered GPS units. Sync pulls the live fleet from Track360."
+        actions={
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => void syncTrack360()} disabled={syncing}>
+              {syncing ? "Syncing…" : "Sync Track360"}
+            </Button>
+            <Button variant={showForm && !editId ? "secondary" : "primary"} onClick={() => showForm && !editId ? setShowForm(false) : openCreate()}>
+              {showForm && !editId ? "Cancel" : "Add Device"}
+            </Button>
+          </div>
+        }
+      />
       {success && <div className="mb-4"><Alert variant="success" message={success} /></div>}
       {error && !showForm && <div className="mb-4"><Alert message={error} /></div>}
+
+      <Card className="mb-6 p-4">
+        <p className="text-sm text-text-secondary">
+          {devices.length} device{devices.length === 1 ? "" : "s"} in the application
+          {devices.filter((d) => d.vendorType === "Track360").length ? ` · ${devices.filter((d) => d.vendorType === "Track360").length} from Track360` : ""}
+          {devices.filter((d) => d.connectionStatus === "Connected").length ? ` · ${devices.filter((d) => d.connectionStatus === "Connected").length} online` : ""}
+        </p>
+        <div className="mt-3">
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search IMEI, registration, status…" />
+        </div>
+      </Card>
 
       {showForm && (
         <FormPanel title={editId ? "Edit IoT device" : "Register IoT device"}>
           <FormModeLabel editing={!!editId} />
           <form onSubmit={handleSubmit} className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
-            {!editId && <Input placeholder="Device ID" value={form.deviceId} onChange={(e) => setForm({ ...form, deviceId: e.target.value })} required />}
+            <CompanyField value={form.tenantId} onChange={(tenantId) => setForm({ ...form, tenantId })} />
+            {!editId && <Input placeholder="Device ID / IMEI" value={form.deviceId} onChange={(e) => setForm({ ...form, deviceId: e.target.value })} required />}
             <Select value={form.vendorType} onChange={(e) => setForm({ ...form, vendorType: e.target.value })}>
+              <option value="Track360">Track360</option>
               <option value="Simulator">Simulator</option>
               <option value="AzureIoTHub">Azure IoT Hub</option>
               <option value="GenericMQTT">Generic MQTT</option>
@@ -112,45 +168,66 @@ export default function IoTPage() {
         </FormPanel>
       )}
 
-      {devices.length === 0 ? (
-        <EmptyState icon={<IconRadio className="h-7 w-7" />} title="No devices registered" description="Add a device or register one when creating a vehicle." />
+      {filtered.length === 0 ? (
+        <EmptyState
+          icon={<IconRadio className="h-7 w-7" />}
+          title={devices.length === 0 ? "No devices yet" : "No matching devices"}
+          description={devices.length === 0 ? "Click Sync Track360 to import the live telematics fleet." : "Try a different search."}
+        />
       ) : (
-        <div className="space-y-4">
-          {devices.map((d) => (
-            <Card key={d.id} className="p-5">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold text-text-primary">{d.id}</p>
-                    <RowActions onEdit={() => openEdit(d)} />
-                  </div>
-                  <p className="text-sm text-text-secondary">Vendor: {d.vendorType}</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <Badge status={d.connectionStatus === "Connected" ? "Connected" : "Offline"} />
+        <DataTable>
+          <Table>
+            <TableHead>
+              <TableHeaderCell>Device</TableHeaderCell>
+              <TableHeaderCell>Company</TableHeaderCell>
+              <TableHeaderCell>Vehicle</TableHeaderCell>
+              <TableHeaderCell>Status</TableHeaderCell>
+              <TableHeaderCell>Location</TableHeaderCell>
+              <TableHeaderCell>Last seen</TableHeaderCell>
+              <TableHeaderCell />
+            </TableHead>
+            <TableBody>
+              {filtered.map((d) => (
+                <TableRow key={d.id}>
+                  <TableCell>
+                    <p className="font-semibold">{d.displayName || d.id}</p>
+                    <p className="text-xs text-text-muted">IMEI {d.imei ?? d.id}</p>
+                    <p className="text-xs text-text-muted">{d.vendorType}</p>
+                  </TableCell>
+                  <TableCell><CompanyCell tenantId={d.tenantId} /></TableCell>
+                  <TableCell>
                     {d.vehicleRegistration ? (
-                      <span className="rounded-full bg-brand-light px-2.5 py-0.5 text-xs font-semibold text-brand-dark">→ {d.vehicleRegistration}</span>
+                      <span className="text-sm font-medium text-brand">{d.vehicleRegistration}</span>
                     ) : (
-                      <span className="text-xs text-warning">Not linked to a vehicle</span>
+                      <div className="flex min-w-[200px] gap-2">
+                        <Select className="flex-1" value={linkVehicleId[d.id] ?? ""} onChange={(e) => setLinkVehicleId((s) => ({ ...s, [d.id]: e.target.value }))}>
+                          <option value="">Link…</option>
+                          {vehicles.map((v) => <option key={v.id} value={v.id}>{v.registrationNumber}</option>)}
+                        </Select>
+                        <Button variant="secondary" className="shrink-0" onClick={() => void quickLink(d.id)}>Link</Button>
+                      </div>
                     )}
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2 lg:min-w-[280px]">
-                  {!d.vehicleId ? (
-                    <div className="flex gap-2">
-                      <Select className="flex-1" value={linkVehicleId[d.id] ?? ""} onChange={(e) => setLinkVehicleId((s) => ({ ...s, [d.id]: e.target.value }))}>
-                        <option value="">Link to vehicle…</option>
-                        {vehicles.map((v) => <option key={v.id} value={v.id}>{v.registrationNumber}</option>)}
-                      </Select>
-                      <Button variant="secondary" className="shrink-0" onClick={() => quickLink(d.id)}>Link</Button>
-                    </div>
-                  ) : (
-                    <Button variant="ghost" className="text-xs text-danger" onClick={() => handleUnlink(d.id)}>Unlink vehicle</Button>
-                  )}
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge status={d.connectionStatus === "Connected" ? "Connected" : "Offline"} />
+                    <p className="mt-1 text-xs text-text-muted">{d.vehicleStatus ?? d.vendorStatus ?? "—"}</p>
+                    {d.speedKmh != null && <p className="text-xs text-text-muted">{Math.round(d.speedKmh)} km/h · ign {d.ignition ?? "—"}</p>}
+                  </TableCell>
+                  <TableCell>
+                    {d.lastPlace ?? (d.lastLocation ? `${d.lastLocation.lat.toFixed(5)}, ${d.lastLocation.lng.toFixed(5)}` : "—")}
+                  </TableCell>
+                  <TableCell>{d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : "—"}</TableCell>
+                  <TableCell>
+                    <RowActions onEdit={() => openEdit(d)} />
+                    {d.vehicleId && (
+                      <Button variant="ghost" className="text-xs text-danger" onClick={() => void handleUnlink(d.id)}>Unlink</Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </DataTable>
       )}
     </div>
   );

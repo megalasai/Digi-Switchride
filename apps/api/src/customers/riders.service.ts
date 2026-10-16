@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import type { AccountStatus } from '@digi-switchride/shared';
 import type { AuditActor } from '../audit/audit.service';
 import { AuditService } from '../audit/audit.service';
+import { runInWriteTenant } from '../common/tenant-write';
 import { Customer, CustomerDocument, KycSubmission, KycSubmissionDocument } from '../schemas/customer.schema';
 import { Vehicle, VehicleDocument } from '../schemas/fleet.schema';
 import { Booking, BookingDocument, Payment, PaymentDocument, Ride, RideDocument } from '../schemas/booking.schema';
@@ -28,27 +29,33 @@ export class RidersService implements OnModuleInit {
 
   async onModuleInit() {
     const count = await this.planModel.countDocuments();
-    if (count > 0) return;
-    await this.planModel.insertMany([
-      {
-        name: 'Weekly Flex',
-        charges: 1050,
-        durationDays: 7,
-        billingFrequency: 'Weekly',
-        eligibility: 'KYC approved riders',
-        terms: 'Weekly rental billed every 7 days. Vehicle must remain in serviceable condition.',
-        isActive: true,
-      },
-      {
-        name: 'Monthly Standard',
-        charges: 4000,
-        durationDays: 30,
-        billingFrequency: 'Monthly',
-        eligibility: 'KYC approved riders',
-        terms: 'Monthly rental billed every 30 days. Early termination may attract remaining dues.',
-        isActive: true,
-      },
-    ]);
+    if (count === 0) {
+      await this.planModel.insertMany([
+        {
+          name: 'Weekly Flex',
+          charges: 1050,
+          durationDays: 7,
+          billingFrequency: 'Weekly',
+          eligibility: 'KYC approved riders',
+          terms: 'Weekly rental billed every 7 days. Vehicle must remain in serviceable condition.',
+          isActive: true,
+        },
+        {
+          name: 'Monthly Standard',
+          charges: 4000,
+          durationDays: 30,
+          billingFrequency: 'Monthly',
+          eligibility: 'KYC approved riders',
+          terms: 'Monthly rental billed every 30 days. Early termination may attract remaining dues.',
+          isActive: true,
+        },
+      ]);
+    }
+    const missing = await this.customerModel.find({ $or: [{ referralCode: { $exists: false } }, { referralCode: null }, { referralCode: '' }] }).limit(200);
+    for (const rider of missing) {
+      rider.referralCode = await this.nextReferralCode(rider.phone ?? '0000');
+      await rider.save();
+    }
   }
 
   async list(params: {
@@ -85,7 +92,8 @@ export class RidersService implements OnModuleInit {
     };
   }
 
-  async create(data: { phone: string; fullName: string; email?: string }, actor?: AuditActor | null) {
+  async create(data: { phone: string; fullName: string; email?: string; tenantId?: string }, actor?: AuditActor | null) {
+    return runInWriteTenant(data.tenantId, async () => {
     const phone = normalizeIndiaPhone(data.phone);
     const existing = await this.customerModel.findOne({ phone });
     if (existing) throw new ConflictException('Rider with this phone already exists');
@@ -96,6 +104,7 @@ export class RidersService implements OnModuleInit {
       kycStatus: 'NotSubmitted',
       accountStatus: 'Active',
       walletBalance: 0,
+      referralCode: await this.nextReferralCode(phone),
     });
     const result = this.toRiderSummary(customer);
     await this.auditService.record({
@@ -106,6 +115,7 @@ export class RidersService implements OnModuleInit {
       after: { phone: result.phone, fullName: result.fullName, email: result.email },
     });
     return result;
+    });
   }
 
   async update(
@@ -173,6 +183,7 @@ export class RidersService implements OnModuleInit {
             registrationNumber: vehicle.registrationNumber,
             model: vehicle.model,
             type: vehicle.type,
+            wheelClass: vehicle.wheelClass,
             status: vehicle.status,
             batteryPercent: vehicle.batteryPercent,
             hubId: vehicle.hubId,
@@ -233,9 +244,123 @@ export class RidersService implements OnModuleInit {
     };
   }
 
-  async listPlans() {
-    const plans = await this.planModel.find({ isActive: true }).sort({ name: 1 });
+  async listPlans(includeInactive = false) {
+    const filter = includeInactive ? {} : { isActive: true };
+    const plans = await this.planModel.find(filter).sort({ name: 1 });
     return { items: plans.map((p) => this.toPlan(p)) };
+  }
+
+  async createPlan(
+    data: { name: string; charges: number; durationDays: number; billingFrequency: string; eligibility?: string; terms?: string; tenantId?: string },
+    actor?: AuditActor | null,
+  ) {
+    return runInWriteTenant(data.tenantId, async () => {
+    const existing = await this.planModel.findOne({ name: data.name.trim() });
+    if (existing) throw new ConflictException('A plan with this name already exists');
+    const plan = await this.planModel.create({
+      name: data.name.trim(),
+      charges: data.charges,
+      durationDays: data.durationDays,
+      billingFrequency: data.billingFrequency,
+      eligibility: data.eligibility?.trim(),
+      terms: data.terms?.trim(),
+      isActive: true,
+    });
+    const result = this.toPlan(plan);
+    await this.auditService.record({
+      actor,
+      action: 'plan.create',
+      entityType: 'RentalPlan',
+      entityId: result.id,
+      after: result as unknown as Record<string, unknown>,
+    });
+    return result;
+    });
+  }
+
+  async updatePlan(
+    id: string,
+    data: Partial<{ name: string; charges: number; durationDays: number; billingFrequency: string; eligibility: string; terms: string; isActive: boolean }>,
+    actor?: AuditActor | null,
+  ) {
+    const plan = await this.planModel.findById(id);
+    if (!plan) throw new NotFoundException('Rental plan not found');
+    const before = this.toPlan(plan);
+    if (data.name != null) plan.name = data.name.trim();
+    if (data.charges != null) plan.charges = data.charges;
+    if (data.durationDays != null) plan.durationDays = data.durationDays;
+    if (data.billingFrequency != null) plan.billingFrequency = data.billingFrequency as typeof plan.billingFrequency;
+    if (data.eligibility != null) plan.eligibility = data.eligibility;
+    if (data.terms != null) plan.terms = data.terms;
+    if (data.isActive != null) plan.isActive = data.isActive;
+    await plan.save();
+    const after = this.toPlan(plan);
+    await this.auditService.record({
+      actor,
+      action: 'plan.update',
+      entityType: 'RentalPlan',
+      entityId: id,
+      before: before as unknown as Record<string, unknown>,
+      after: after as unknown as Record<string, unknown>,
+    });
+    return after;
+  }
+
+  async adjustWallet(
+    riderId: string,
+    data: { type: 'Credit' | 'Debit'; amount: number; note: string; reference?: string },
+    actor?: AuditActor | null,
+  ) {
+    const rider = await this.customerModel.findById(riderId);
+    if (!rider) throw new NotFoundException('Rider not found');
+    const amount = Math.round(data.amount * 100) / 100;
+    if (amount <= 0) throw new BadRequestException('Amount must be greater than zero');
+    const current = rider.walletBalance ?? 0;
+    if (data.type === 'Debit' && amount > current) {
+      throw new BadRequestException('Debit cannot exceed wallet balance');
+    }
+    const balanceAfter = data.type === 'Credit' ? current + amount : current - amount;
+    rider.walletBalance = balanceAfter;
+    await rider.save();
+    const tx = await this.walletModel.create({
+      riderId,
+      type: data.type,
+      amount,
+      note: data.note.trim(),
+      reference: data.reference?.trim(),
+      actorId: actor?.actorId,
+      balanceAfter,
+    });
+    await this.auditService.record({
+      actor,
+      action: 'wallet.adjust',
+      entityType: 'Wallet',
+      entityId: riderId,
+      before: { balance: current },
+      after: { type: data.type, amount, balanceAfter, note: data.note },
+    });
+    return {
+      riderId,
+      balance: balanceAfter,
+      transaction: {
+        id: tx._id.toString(),
+        type: tx.type,
+        amount: tx.amount,
+        note: tx.note,
+        reference: tx.reference,
+        balanceAfter,
+        createdAt: (tx as { createdAt?: Date }).createdAt,
+      },
+    };
+  }
+
+  async listWallets(search?: string) {
+    const filter: Record<string, unknown> = {};
+    if (search) {
+      filter.$or = [{ phone: { $regex: search, $options: 'i' } }, { fullName: { $regex: search, $options: 'i' } }];
+    }
+    const riders = await this.customerModel.find(filter).sort({ walletBalance: -1 }).limit(100);
+    return { items: riders.map((c) => this.toRiderSummary(c)) };
   }
 
   async assignPlan(riderId: string, rentalPlanId: string, actor?: AuditActor | null) {
@@ -278,7 +403,20 @@ export class RidersService implements OnModuleInit {
       assignedVehicleId: c.assignedVehicleId,
       rentalPlanId: c.rentalPlanId,
       walletBalance: c.walletBalance ?? 0,
+      referralCode: c.referralCode,
+      referredBy: c.referredBy,
+      tenantId: (c as { tenantId?: string }).tenantId,
     };
+  }
+
+  private async nextReferralCode(phone: string) {
+    const digits = phone.replace(/\D/g, '').slice(-4) || '0000';
+    for (let i = 0; i < 8; i++) {
+      const code = `SR${digits}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+      const taken = await this.customerModel.findOne({ referralCode: code });
+      if (!taken) return code;
+    }
+    return `SR${Date.now().toString(36).toUpperCase().slice(-8)}`;
   }
 
   private toPlan(p: RentalPlanDocument) {
@@ -291,6 +429,7 @@ export class RidersService implements OnModuleInit {
       eligibility: p.eligibility,
       terms: p.terms,
       isActive: p.isActive,
+      tenantId: (p as { tenantId?: string }).tenantId,
     };
   }
 }

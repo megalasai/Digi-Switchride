@@ -1,39 +1,69 @@
-# Digi-Switchride Android App
+# Digi-Switchride Rider Android App
 
-Native Kotlin + Jetpack Compose customer application.
+Rider mobile app: home dashboard, vehicle, payments, rental plan, KYC, support, and on-demand hub booking.
 
 ## Requirements
 
-- Android Studio Ladybug or later
+- Android Studio Ladybug or newer
 - JDK 17
 - Android SDK 35
 
-## Setup
+## Sync / dependency fixes
+
+This project uses **AGP 8.7.3** and **Gradle 8.10.2** (stable with Android Studio). If sync fails:
+
+1. **File → Invalidate Caches → Restart**
+2. **File → Sync Project with Gradle Files**
+3. Ensure **JDK 17** is set: *Settings → Build → Gradle → Gradle JDK*
+
+Google Maps was removed from dependencies (not required for current UI) to avoid Play Services sync issues.
+
+## API URL
+
+| Environment | API server field |
+|-------------|------------------|
+| Emulator | `10.0.2.2:4000` |
+| Physical phone | Your PC IP from `ipconfig`, e.g. `192.168.0.50:4000` |
+
+Backend base path: `/api/v1`
+
+Start API from repo root:
+
+```cmd
+npm run dev
+```
+
+## Run on emulator
 
 1. Open `apps/customer-android` in Android Studio
-2. Set `MAPS_API_KEY` in `gradle.properties`
-3. Sync Gradle and run on emulator or device
+2. Sync Gradle
+3. Run **app** on an API 26+ emulator
+4. Register / sign in
+5. Use bottom tabs: **Home**, **Vehicle**, **Pay**, **Plan**, **More**
 
-## Features
+## Feature map (spec → app)
 
-- Modern Material 3 UI with bottom navigation (Explore, History, Support, Profile)
-- Username/password authentication with secure token storage (DataStore)
-- KYC document upload flow
-- Nearby hub map placeholder and vehicle listing
-- Book → Start Ride → End Ride flow
-- Ride history and support tickets
+| Spec area | Where in app |
+|-----------|----------------|
+| Home (plan, wallet, dues, alerts) | **Home** tab |
+| My Vehicle / breakdown / service | **Vehicle** tab |
+| Payments & wallet | **Pay** tab |
+| Rental plan | **Plan** tab |
+| Profile, KYC, agreements, stations, support, feedback, refer | **More** menu |
+| On-demand hub book / start / end ride | **More → Book a ride** |
 
-## API Configuration
+## Admin setup for testing
 
-Default API URL for emulator: `http://10.0.2.2:4000/api/v1`
+1. Login admin web as SuperAdmin
+2. Create **hub** (Nagpur coords default), **vehicles** (Available, assigned to hub)
+3. Create **rental plans**, assign rider vehicle/plan if using rental home data
+4. Approve rider **KYC** after mobile submit
 
-**Physical phone:** `10.0.2.2` does not work. On the login screen set **API server** to your PC's LAN IP, e.g. `192.168.0.50:4000` (find it with `ipconfig` on Windows). Phone and PC must be on the same Wi‑Fi. Start the API with `npm run dev` from the repo root.
+## Unit test (optional)
 
-Change in `app/build.gradle.kts` → `buildConfigField("API_BASE_URL", ...)`
+```cmd
+cd apps\customer-android
+gradlew testDebugUnitTest
+```
 
-## Architecture
-
-- **MVVM** with ViewModels and StateFlow
-- **Hilt** for dependency injection
-- **Retrofit** for API calls
-- **Navigation Compose** for screen routing
+Tests `ApiSettings` URL normalization without a device.
