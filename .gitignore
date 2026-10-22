@@ -64,6 +64,9 @@ DerivedData/
 *.dSYM.zip
 Pods/
 
+# Mongo JSON dumps (keep scripts; dumps stay local)
+backups/mongodb/
+
 # Docker
 docker-data/
 

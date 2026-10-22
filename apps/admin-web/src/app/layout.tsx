@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "Digi-Switchride Admin",
-  description: "Administration portal for Digi-Switchride platform",
+  description: "Fleetel operations portal for the Digi-Switchride product",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

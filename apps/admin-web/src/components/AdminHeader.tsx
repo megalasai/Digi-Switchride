@@ -52,7 +52,7 @@ export function AdminHeader() {
       <div className="flex min-w-0 items-center gap-4">
         <div className="hidden min-w-0 sm:block">
           <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
-            {user?.role === "SuperAdmin" ? "Digi-Switchride" : user?.tenantName || "Company portal"}
+            {user?.role === "SuperAdmin" ? "Fleetel" : user?.tenantName || "Company portal"}
           </p>
           <h2 className="truncate text-lg font-semibold text-text-primary">{title}</h2>
         </div>
@@ -73,8 +73,8 @@ export function AdminHeader() {
               window.location.reload();
             }}
           >
-            <option value="">All companies</option>
-            {tenants.map((t) => (
+            <option value="">All tenants</option>
+            {tenants.filter((t) => t.kind !== "Parent").map((t) => (
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
           </select>
@@ -84,7 +84,7 @@ export function AdminHeader() {
           <>
             <div className="hidden text-right md:block">
               <p className="text-sm font-medium text-text-primary">{user.fullName}</p>
-              <p className="text-xs text-text-secondary">{user.role}{user.tenantName ? ` · ${user.tenantName}` : ""}</p>
+              <p className="text-xs text-text-secondary">{user.role}{user.role === "SuperAdmin" ? " · Fleetel" : user.tenantName ? ` · ${user.tenantName}` : ""}</p>
             </div>
             <Button variant="ghost" className="text-xs" onClick={() => { logout(); router.replace("/login"); }}>
               Logout

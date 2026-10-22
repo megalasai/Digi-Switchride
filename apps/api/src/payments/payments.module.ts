@@ -10,6 +10,9 @@ import { OperationsModule } from '../operations/operations.module';
 import { EngagementModule } from '../engagement/engagement.module';
 import { PaymentsController, AdminController } from './payments.controller';
 import { DashboardService, PaymentsService, PromotionsService, ReportsService } from './payments.service';
+import { PaymentGatewayService } from './gateway.service';
+import { PaymentGateway, PaymentGatewaySchema } from '../schemas/payment-gateway.schema';
+import { TenantsModule } from '../tenants/tenants.module';
 
 @Module({
   imports: [
@@ -18,6 +21,7 @@ import { DashboardService, PaymentsService, PromotionsService, ReportsService } 
     CustomersModule,
     OperationsModule,
     EngagementModule,
+    TenantsModule,
     MongooseModule.forFeature([
       { name: Payment.name, schema: PaymentSchema },
       { name: Booking.name, schema: BookingSchema },
@@ -25,10 +29,11 @@ import { DashboardService, PaymentsService, PromotionsService, ReportsService } 
       { name: Ride.name, schema: RideSchema },
       { name: Vehicle.name, schema: VehicleSchema },
       { name: Customer.name, schema: CustomerSchema },
+      { name: PaymentGateway.name, schema: PaymentGatewaySchema },
     ]),
   ],
   controllers: [PaymentsController, AdminController],
-  providers: [PaymentsService, PromotionsService, ReportsService, DashboardService],
-  exports: [PaymentsService, PromotionsService, ReportsService, DashboardService],
+  providers: [PaymentsService, PromotionsService, ReportsService, DashboardService, PaymentGatewayService],
+  exports: [PaymentsService, PromotionsService, ReportsService, DashboardService, PaymentGatewayService],
 })
 export class PaymentsModule {}

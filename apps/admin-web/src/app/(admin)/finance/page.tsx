@@ -13,7 +13,8 @@ import { StatCard } from "@/components/ui/StatCard";
 import { IconWallet } from "@/components/icons";
 import { ACCESS, canAccess } from "@/lib/access";
 import { api, AdminPayment, FinanceReconciliation, Rider } from "@/lib/api";
-import { ProvisionPanel, DisabledField, DisabledSelect, DisabledAction } from "@/components/ui/Provision";
+import { ProvisionPanel, DisabledField, DisabledAction } from "@/components/ui/Provision";
+import { PaymentGatewayForm } from "@/components/PaymentGatewayForm";
 import { useAuth } from "@/lib/auth-context";
 
 type Tab = "Payments" | "Wallets" | "Reconciliation" | "Gateway";
@@ -217,25 +218,18 @@ export default function FinancePage() {
 
       {tab === "Gateway" && (
         <>
-          <ProvisionPanel
-            title="Live Razorpay settlement"
-            description="Gateway capture, UPI auto-reconciliation and payout files will appear here after Razorpay is connected."
-          >
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <DisabledField label="Settlement date" type="date" />
-              <DisabledSelect label="Status" options={["Settled", "Pending", "Failed"]} />
-              <DisabledAction label="Fetch settlements" />
-            </div>
-          </ProvisionPanel>
-          <ProvisionPanel
-            title="GST e-invoice"
-            description="IRN generation and PDF invoices for paid rentals."
-          >
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <DisabledField label="GSTIN" placeholder="22AAAAA0000A1Z5" />
-              <DisabledAction label="Generate invoices" />
-            </div>
-          </ProvisionPanel>
+          <PaymentGatewayForm />
+          <div className="mt-6">
+            <ProvisionPanel
+              title="GST e-invoice"
+              description="IRN generation and PDF invoices for paid rentals."
+            >
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <DisabledField label="GSTIN" placeholder="22AAAAA0000A1Z5" />
+                <DisabledAction label="Generate invoices" />
+              </div>
+            </ProvisionPanel>
+          </div>
         </>
       )}
     </div>

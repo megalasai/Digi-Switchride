@@ -166,6 +166,16 @@ export const api = {
   },
   refundPayment: (id: string, reason: string) =>
     request(`/admin/payments/${id}/refund`, { method: "POST", body: JSON.stringify({ reason }) }),
+  paymentGateway: (tenantId?: string) =>
+    request<{ tenantId: string; tenantName?: string; tenantSlug?: string; providers: string[]; config: PaymentGatewayConfig }>(
+      `/admin/payments/gateway${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ""}`,
+    ),
+  paymentGateways: () =>
+    request<{ items: { tenantId: string; tenantName: string; tenantSlug: string; provider: string | null; mode: string | null; enabled: boolean; methods: string[] }[] }>(
+      "/admin/payments/gateways",
+    ),
+  savePaymentGateway: (data: Partial<PaymentGatewayConfig> & { provider: string; tenantId?: string; keySecret?: string; webhookSecret?: string }) =>
+    request<PaymentGatewayConfig>("/admin/payments/gateway", { method: "PUT", body: JSON.stringify(data) }),
   wallets: (search?: string) =>
     request<{ items: Rider[] }>(`/admin/wallets${search ? `?search=${encodeURIComponent(search)}` : ""}`),
   adjustWallet: (riderId: string, data: { type: "Credit" | "Debit"; amount: number; note: string; reference?: string }) =>
@@ -252,6 +262,24 @@ export interface TenantOrg {
   contactEmail?: string;
   status: string;
   isDefault?: boolean;
+  kind?: "Parent" | "Tenant";
+  notes?: string;
+}
+
+export interface PaymentGatewayConfig {
+  tenantId: string;
+  provider: string;
+  mode: "Test" | "Live";
+  enabled: boolean;
+  displayName?: string;
+  merchantId?: string;
+  keyId?: string;
+  keySecretSet?: boolean;
+  keySecretMasked?: string;
+  webhookSecretSet?: boolean;
+  webhookSecretMasked?: string;
+  methods: string[];
+  checkoutUrl?: string;
   notes?: string;
 }
 

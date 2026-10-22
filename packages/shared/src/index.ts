@@ -66,6 +66,21 @@ export function resolveWheelClass(type?: string | null, wheelClass?: string | nu
 }
 export const BILLING_FREQUENCIES: BillingFrequency[] = ['Weekly', 'Monthly', 'Quarterly'];
 export const PAYMENT_STATUSES: PaymentStatus[] = ['Created', 'Paid', 'Failed', 'Refunded'];
+export const PAYMENT_GATEWAY_PROVIDERS = [
+  'Razorpay',
+  'PayU',
+  'Cashfree',
+  'PhonePe',
+  'Paytm',
+  'Stripe',
+  'Custom',
+] as const;
+export type PaymentGatewayProvider = (typeof PAYMENT_GATEWAY_PROVIDERS)[number];
+export const PAYMENT_GATEWAY_MODES = ['Test', 'Live'] as const;
+export type PaymentGatewayMode = (typeof PAYMENT_GATEWAY_MODES)[number];
+export const PARENT_COMPANY_SLUG = 'fleetel';
+export const PARENT_COMPANY_NAME = 'Fleetel';
+export const PRODUCT_NAME = 'Digi-Switchride';
 export const KYC_DOCUMENT_TYPES: KycDocumentType[] = ['Aadhaar', 'PAN', 'DrivingLicence', 'Selfie'];
 export const REQUIRED_KYC_DOCUMENTS: KycDocumentType[] = ['Aadhaar', 'PAN', 'DrivingLicence'];
 export const BREAKDOWN_STATUSES: BreakdownStatus[] = ['Open', 'Assigned', 'InProgress', 'Escalated', 'Closed'];

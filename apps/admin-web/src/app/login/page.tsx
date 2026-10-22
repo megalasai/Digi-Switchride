@@ -76,7 +76,7 @@ export default function LoginPage() {
           <p className="mt-4 max-w-md text-sm leading-6 text-[#c5cffc]">Riders, vehicles, payments and workshops in one operations desk.</p>
         </div>
         <div className="relative">
-          <p className="text-xs text-[#9aa3bc]">Digi-Switchride · India</p>
+          <p className="text-xs text-[#9aa3bc]">Digi-Switchride · Fleetel</p>
         </div>
       </div>
       <div className="flex items-center justify-center bg-surface p-6">
@@ -98,7 +98,7 @@ export default function LoginPage() {
           </div>
           <Field label="Organization">
             <Select value={tenantSlug} onChange={(e) => setTenantSlug(e.target.value)}>
-              <option value="">SuperAdmin — no company</option>
+              <option value="">Fleetel SuperAdmin — parent company</option>
               {orgs.map((org) => (
                 <option key={org.id} value={org.slug}>{org.name}</option>
               ))}
@@ -114,7 +114,7 @@ export default function LoginPage() {
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Signing in…" : "Sign in"}
           </Button>
-          <p className="text-center text-xs text-text-muted">Company users must pick their company. SuperAdmin leaves Organization empty.</p>
+          <p className="text-center text-xs text-text-muted">Tenant users pick their company. Fleetel SuperAdmin leaves Organization on the parent option.</p>
         </form>
       </div>
     </div>

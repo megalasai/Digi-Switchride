@@ -4,6 +4,7 @@ import { AdminGuard, RolesGuard } from '../auth/admin.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CreateCustomerDto, RefundPaymentDto, ReviewKycDocumentDto, UpdateCustomerDto } from '../auth/dto/admin-auth.dto';
 import { PaymentsService, PromotionsService, ReportsService, DashboardService } from './payments.service';
+import { PaymentGatewayService } from './gateway.service';
 import { KycService, ProfileService } from '../customers/customers.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -13,7 +14,10 @@ import { AuditService } from '../audit/audit.service';
 
 @Controller('v1/payments')
 export class PaymentsController {
-  constructor(private paymentsService: PaymentsService) {}
+  constructor(
+    private paymentsService: PaymentsService,
+    private gateways: PaymentGatewayService,
+  ) {}
 
   @Post('orders')
   @UseGuards(AuthGuard('jwt'))
@@ -21,9 +25,44 @@ export class PaymentsController {
     return this.paymentsService.createOrder(req.user.customerId, body.bookingId, body.amount, body.currency);
   }
 
+  @Get('gateway')
+  @UseGuards(AuthGuard('jwt'))
+  riderGateway(@Req() req: { user: { customerId?: string; tenantId?: string } }) {
+    return this.gateways.publicForTenant(req.user.tenantId);
+  }
+
   @Post('webhooks/razorpay')
-  webhook(@Body() body: string, @Headers('x-razorpay-signature') signature: string) {
-    return this.paymentsService.handleRazorpayWebhook(JSON.stringify(body), signature);
+  webhook(@Body() body: unknown, @Headers('x-razorpay-signature') signature: string) {
+    return this.completeWebhook('razorpay', undefined, body, signature);
+  }
+
+  @Post('webhooks/:provider/:slug')
+  tenantWebhook(
+    @Param('provider') provider: string,
+    @Param('slug') slug: string,
+    @Body() body: unknown,
+    @Headers('x-razorpay-signature') rzp: string,
+    @Headers('x-webhook-signature') generic: string,
+  ) {
+    return this.completeWebhook(provider, slug, body, rzp || generic);
+  }
+
+  private async completeWebhook(provider: string, slug: string | undefined, body: unknown, signature?: string) {
+    const payload = typeof body === 'string' ? body : JSON.stringify(body ?? {});
+    if (slug) {
+      const meta = await this.gateways.handleWebhook(provider, slug, payload, signature);
+      try {
+        const json = JSON.parse(payload) as Record<string, any>;
+        const entity = json.payload?.payment?.entity ?? json.data ?? json;
+        const orderId = entity?.order_id || json.order_id || json.orderId;
+        const paymentId = entity?.id || json.payment_id || json.paymentId;
+        if (orderId && paymentId) await this.paymentsService.applyGatewayPaid(String(orderId), String(paymentId));
+      } catch {
+        /* payload shape varies by provider */
+      }
+      return meta;
+    }
+    return this.paymentsService.handleRazorpayWebhook(payload, signature || '');
   }
 
   @Get('history')
@@ -45,7 +84,42 @@ export class AdminController {
     private paymentsService: PaymentsService,
     private dashboardService: DashboardService,
     private auditService: AuditService,
+    private gateways: PaymentGatewayService,
   ) {}
+
+  @Get('payments/gateways')
+  @Roles('SuperAdmin', 'Administrator', 'Finance')
+  listGateways() {
+    return this.gateways.listForSuperAdmin();
+  }
+
+  @Get('payments/gateway')
+  @Roles('SuperAdmin', 'Administrator', 'Finance')
+  getGateway(@Query('tenantId') tenantId?: string) {
+    return this.gateways.getAdmin(tenantId);
+  }
+
+  @Put('payments/gateway')
+  @Roles('SuperAdmin', 'Administrator', 'Finance')
+  saveGateway(
+    @Body()
+    body: {
+      tenantId?: string;
+      provider: string;
+      mode?: 'Test' | 'Live';
+      enabled?: boolean;
+      displayName?: string;
+      merchantId?: string;
+      keyId?: string;
+      keySecret?: string;
+      webhookSecret?: string;
+      methods?: string[];
+      checkoutUrl?: string;
+      notes?: string;
+    },
+  ) {
+    return this.gateways.upsert(body);
+  }
 
   @Get('customers')
   async listCustomers(@Query('search') search?: string, @Query('kycStatus') kycStatus?: string, @Query('page') page = '1', @Query('pageSize') pageSize = '20') {

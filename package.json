@@ -20,6 +20,8 @@
     "poc:up": "docker compose -f infra/digitalocean/docker-compose.poc.yml --env-file infra/digitalocean/.env.poc up -d --build",
     "poc:down": "docker compose -f infra/digitalocean/docker-compose.poc.yml --env-file infra/digitalocean/.env.poc down",
     "poc:logs": "docker compose -f infra/digitalocean/docker-compose.poc.yml logs -f --tail=100",
+    "mongo:backup": "node scripts/mongo-backup.mjs backups/mongodb/switchride-latest",
+    "mongo:restore": "node scripts/mongo-restore.mjs backups/mongodb/switchride-latest",
     "lint": "npm run lint -w @digi-switchride/api && npm run lint -w admin-web"
   },
   "devDependencies": {

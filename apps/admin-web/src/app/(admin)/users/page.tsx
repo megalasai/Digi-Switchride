@@ -150,7 +150,7 @@ export default function UsersPage() {
               <Field label="Organization">
                 <Select value={form.tenantId} onChange={(e) => setForm({ ...form, tenantId: e.target.value })}>
                   <option value="">Select organization</option>
-                  {orgs.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
+                  {orgs.filter((org) => org.kind !== "Parent").map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
                 </Select>
               </Field>
             )}

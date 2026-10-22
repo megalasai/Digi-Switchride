@@ -37,8 +37,16 @@ export class PublicTenantsController {
 
   @Get('current')
   async current() {
-    const items = await this.tenants.list();
+    const items = await this.tenants.listCustomers();
     const active = items.filter((t) => t.status === 'Active');
-    return { items: active.map((t) => ({ id: t.id, slug: t.slug, name: t.name, isDefault: t.isDefault })) };
+    return {
+      items: active.map((t) => ({
+        id: t.id,
+        slug: t.slug,
+        name: t.name,
+        isDefault: t.isDefault,
+        kind: t.kind,
+      })),
+    };
   }
 }

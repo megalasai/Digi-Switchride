@@ -8,6 +8,7 @@ import { RentalPlan, RentalPlanDocument, WalletTransaction, WalletTransactionDoc
 import { OperationsService } from '../operations/operations.service';
 import { EngagementService } from '../engagement/engagement.service';
 import { PaymentsService } from '../payments/payments.service';
+import { PaymentGatewayService } from '../payments/gateway.service';
 import { KycService, ProfileService } from '../customers/customers.service';
 import { RidersService } from '../customers/riders.service';
 import { SupportService } from '../support/support.service';
@@ -23,6 +24,7 @@ export class RiderAppService {
     private operations: OperationsService,
     private engagement: EngagementService,
     private paymentsSvc: PaymentsService,
+    private gateways: PaymentGatewayService,
     private profileSvc: ProfileService,
     private kycSvc: KycService,
     private riders: RidersService,
@@ -31,13 +33,15 @@ export class RiderAppService {
 
   async home(riderId: string) {
     const rider = await this.requireRider(riderId);
-    const [vehicle, plan, outstanding, breakdowns, requests, notices] = await Promise.all([
+    const tenantId = (rider as { tenantId?: string }).tenantId;
+    const [vehicle, plan, outstanding, breakdowns, requests, notices, paymentGateway] = await Promise.all([
       rider.assignedVehicleId ? this.vehicleModel.findById(rider.assignedVehicleId) : null,
       rider.rentalPlanId ? this.planModel.findById(rider.rentalPlanId) : null,
       this.paymentModel.find({ customerId: riderId, status: { $in: ['Created', 'Failed'] } }),
       this.operations.listBreakdowns(undefined, riderId),
       this.operations.listRequests(undefined, riderId),
       this.engagement.listNotifications(),
+      this.gateways.publicForTenant(tenantId),
     ]);
     const openBreakdown = breakdowns.items.find((b) => b.status !== 'Closed');
     const openService = requests.items.find((r) => !['Completed', 'Cancelled'].includes(r.status));
@@ -53,6 +57,7 @@ export class RiderAppService {
       alerts: notices.items.slice(0, 5),
       breakdown: openBreakdown ?? null,
       service: openService ?? null,
+      paymentGateway,
     };
   }
 

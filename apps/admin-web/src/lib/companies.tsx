@@ -21,11 +21,12 @@ export function useCompanies() {
   const workingId =
     (typeof window !== "undefined" ? localStorage.getItem("adminTenantId") : null) || user?.tenantId || "";
   const nameOf = (id?: string | null) => companies.find((c) => c.id === id)?.name ?? "";
+  const customers = companies.filter((c) => c.kind !== "Parent");
   const workingName = isSuper
     ? nameOf(workingId) || (workingId ? "" : "All companies")
     : user?.tenantName || nameOf(user?.tenantId) || nameOf(workingId);
 
-  return { companies, isSuper, workingId, workingName, nameOf };
+  return { companies: customers, allCompanies: companies, isSuper, workingId, workingName, nameOf };
 }
 
 export function CompanyField({
@@ -45,7 +46,7 @@ export function CompanyField({
     <Field label="Company">
       <Select value={value} onChange={(e) => onChange(e.target.value)} required>
         <option value="">Select company</option>
-        {companies.map((c) => (
+        {companies.filter((c) => c.kind !== "Parent").map((c) => (
           <option key={c.id} value={c.id}>{c.name}</option>
         ))}
       </Select>

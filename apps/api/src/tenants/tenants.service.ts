@@ -4,8 +4,10 @@ import { Connection, Model } from 'mongoose';
 import { Tenant, TenantDocument } from '../schemas/tenant.schema';
 import { AdminUser, AdminUserDocument } from '../schemas/admin.schema';
 import { runWithoutTenant } from '../common/tenant-als';
+import { PARENT_COMPANY_NAME, PARENT_COMPANY_SLUG } from '@digi-switchride/shared';
 
 export const DEFAULT_TENANT_SLUG = 'digi-switchride';
+export { PARENT_COMPANY_SLUG };
 
 const TENANT_COLLECTIONS = [
   'vehicles',
@@ -47,9 +49,31 @@ export class TenantsService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    await this.ensureParentCompany();
     const tenant = await this.ensureDefaultTenant();
     this.defaultId = tenant._id.toString();
     await this.backfill(this.defaultId);
+  }
+
+  async ensureParentCompany() {
+    let parent = await this.tenantModel.findOne({ slug: PARENT_COMPANY_SLUG });
+    if (!parent) {
+      parent = await this.tenantModel.create({
+        slug: PARENT_COMPANY_SLUG,
+        name: PARENT_COMPANY_NAME,
+        status: 'Active',
+        isDefault: false,
+        kind: 'Parent',
+        contactEmail: 'hello@fleetel.com',
+        notes: 'Platform operator. Customer companies are tenants of Fleetel.',
+      });
+    } else if (parent.kind !== 'Parent') {
+      parent.kind = 'Parent';
+      parent.name = PARENT_COMPANY_NAME;
+      await parent.save();
+    }
+    await this.tenantModel.updateMany({ slug: { $ne: PARENT_COMPANY_SLUG }, $or: [{ kind: { $exists: false } }, { kind: null }] }, { $set: { kind: 'Tenant' } });
+    return parent;
   }
 
   async ensureDefaultTenant() {
@@ -60,8 +84,13 @@ export class TenantsService implements OnModuleInit {
         name: 'Digi-Switchride',
         status: 'Active',
         isDefault: true,
+        kind: 'Tenant',
         contactEmail: 'admin@digiswitchride.com',
+        notes: 'Sample tenant on the Digi-Switchride product, operated by Fleetel.',
       });
+    } else if (!tenant.kind) {
+      tenant.kind = 'Tenant';
+      await tenant.save();
     }
     return tenant;
   }
@@ -95,12 +124,22 @@ export class TenantsService implements OnModuleInit {
   }
 
   async list() {
-    const items = await this.tenantModel.find().sort({ isDefault: -1, name: 1 });
+    const items = await this.tenantModel.find().sort({ kind: 1, isDefault: -1, name: 1 });
     return items.map((t) => this.toTenant(t));
+  }
+
+  async listCustomers() {
+    const items = await this.tenantModel.find({ kind: { $ne: 'Parent' } }).sort({ isDefault: -1, name: 1 });
+    return items.map((t) => this.toTenant(t));
+  }
+
+  isParent(tenant: { kind?: string; slug?: string }) {
+    return tenant.kind === 'Parent' || tenant.slug === PARENT_COMPANY_SLUG;
   }
 
   async create(data: { name: string; slug: string; contactEmail?: string; notes?: string }) {
     const slug = this.normalizeSlug(data.slug);
+    if (slug === PARENT_COMPANY_SLUG) throw new BadRequestException('Fleetel is the parent company and cannot be created as a tenant');
     const existing = await this.tenantModel.findOne({ slug });
     if (existing) throw new ConflictException('Tenant slug already exists');
     const tenant = await this.tenantModel.create({
@@ -110,6 +149,7 @@ export class TenantsService implements OnModuleInit {
       notes: data.notes?.trim(),
       status: 'Active',
       isDefault: false,
+      kind: 'Tenant',
     });
     return this.toTenant(tenant);
   }
@@ -127,8 +167,10 @@ export class TenantsService implements OnModuleInit {
     if (data.contactEmail != null) tenant.contactEmail = data.contactEmail.trim().toLowerCase();
     if (data.notes != null) tenant.notes = data.notes.trim();
     if (data.status != null) {
-      if (tenant.isDefault && data.status === 'Suspended') {
-        throw new BadRequestException('The default tenant cannot be suspended');
+      if (this.isParent(tenant) || tenant.isDefault) {
+        if (data.status === 'Suspended') {
+          throw new BadRequestException('Fleetel (parent) and the default tenant cannot be suspended');
+        }
       }
       tenant.status = data.status;
     }
@@ -144,6 +186,7 @@ export class TenantsService implements OnModuleInit {
       contactEmail: tenant.contactEmail,
       status: tenant.status,
       isDefault: tenant.isDefault,
+      kind: tenant.kind === 'Parent' ? 'Parent' : 'Tenant',
       notes: tenant.notes,
       createdAt: (tenant as { createdAt?: Date }).createdAt,
     };

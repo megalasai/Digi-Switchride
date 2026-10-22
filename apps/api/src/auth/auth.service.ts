@@ -148,6 +148,10 @@ export class AuthService implements OnModuleInit {
         ? dto.tenantId || currentTenantId() || this.tenants.defaultTenantId()
         : caller?.tenantId || currentTenantId() || this.tenants.defaultTenantId();
     if (!tenantId) throw new ForbiddenException('Choose an organization for this user');
+    const org = await this.tenants.peek(tenantId);
+    if (org && this.tenants.isParent(org) && dto.role !== 'SuperAdmin') {
+      throw new ForbiddenException('Assign company users to a tenant. Fleetel is the parent company.');
+    }
 
     const salt = this.config.get<string>('PASSWORD_SALT', 'dev-salt');
     const existing = await runWithoutTenant(() =>
@@ -277,7 +281,10 @@ export class AuthService implements OnModuleInit {
     return {
       accessToken,
       expiresIn: 28800,
-      user: { ...this.toAdminUser(admin), tenantName: tenant?.name },
+      user: {
+        ...this.toAdminUser(admin),
+        tenantName: tenant?.name ?? (normalizeAdminRole(admin.role) === 'SuperAdmin' ? 'Fleetel' : undefined),
+      },
     };
   }
 

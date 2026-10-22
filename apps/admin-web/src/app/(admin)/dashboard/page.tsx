@@ -237,7 +237,7 @@ export default function DashboardPage() {
           <h3 className="text-sm font-semibold text-text-primary">Planned integrations</h3>
           <ComingSoonBadge />
         </div>
-        <p className="mb-3 text-sm text-text-secondary">Razorpay live, SMS, push, document vault, KYC vendor and maps are provisioned in the UI.</p>
+        <p className="mb-3 text-sm text-text-secondary">Each tenant connects its own payment gateway. SMS, push, document vault, KYC vendor and maps are provisioned in the UI.</p>
         <Link className="text-sm font-semibold text-brand" href="/integrations">Open integrations</Link>
       </Card>
     </div>

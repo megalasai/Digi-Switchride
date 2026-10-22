@@ -55,6 +55,12 @@ data class ServiceItem(
     val description: String,
     val status: String,
 )
+data class PaymentGatewayInfo(
+    val enabled: Boolean = false,
+    val provider: String? = null,
+    val displayName: String? = null,
+    val methods: List<String> = listOf("Wallet"),
+)
 data class HomeResponse(
     val rider: CustomerProfile,
     val plan: RiderPlan? = null,
@@ -64,6 +70,7 @@ data class HomeResponse(
     val alerts: List<RiderAlert> = emptyList(),
     val breakdown: BreakdownItem? = null,
     val service: ServiceItem? = null,
+    val paymentGateway: PaymentGatewayInfo? = null,
 )
 data class VehicleResponse(
     val vehicle: RiderVehicle? = null,

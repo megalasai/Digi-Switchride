@@ -9,6 +9,8 @@ import { calculateGst } from '../common/helpers';
 import { OperationsService } from '../operations/operations.service';
 import { EngagementService } from '../engagement/engagement.service';
 import { applyHubScope } from '../common/hub-scope';
+import { currentTenantId } from '../common/tenant-als';
+import { PaymentGatewayService } from './gateway.service';
 
 @Injectable()
 export class PaymentsService {
@@ -16,28 +18,45 @@ export class PaymentsService {
     @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
     @InjectModel(Booking.name) private bookingModel: Model<BookingDocument>,
     @InjectModel(Customer.name) private customerModel: Model<CustomerDocument>,
+    private gateways: PaymentGatewayService,
   ) {}
+
+  private async tenantIdForRider(customerId: string) {
+    const fromAls = currentTenantId();
+    if (fromAls) return fromAls;
+    const customer = await this.customerModel.findById(customerId);
+    return (customer as { tenantId?: string } | null)?.tenantId || '';
+  }
 
   async createOrder(customerId: string, bookingId: string, amount: number, currency = 'INR') {
     const booking = await this.bookingModel.findById(bookingId);
     if (!booking) throw new NotFoundException('Booking not found');
 
     const gst = calculateGst(amount);
-    const razorpayOrderId = `order_${randomUUID().replace(/-/g, '')}`;
+    const total = amount + gst;
+    const tenantId = await this.tenantIdForRider(customerId);
+    const checkout = tenantId
+      ? await this.gateways.createCheckout(tenantId, { amount: total, currency, receipt: `bk_${bookingId}` })
+      : { provider: 'None', orderId: `order_${randomUUID().replace(/-/g, '')}`, amount: total, currency };
 
     const payment = await this.paymentModel.create({
       customerId,
       bookingId,
-      amount: amount + gst,
+      amount: total,
       gstAmount: gst,
       currency,
-      razorpayOrderId,
+      razorpayOrderId: checkout.orderId,
+      gatewayOrderId: checkout.orderId,
+      gatewayProvider: checkout.provider,
       status: 'Created',
     });
 
     return {
       id: payment._id.toString(),
-      razorpayOrderId,
+      razorpayOrderId: checkout.orderId,
+      gatewayOrderId: checkout.orderId,
+      gatewayProvider: checkout.provider,
+      checkout,
       amount: payment.amount,
       currency,
       status: 'Created',
@@ -46,6 +65,20 @@ export class PaymentsService {
 
   async handleRazorpayWebhook(_payload: string, _signature: string) {
     return { received: true };
+  }
+
+  async applyGatewayPaid(orderId: string, gatewayPaymentId: string, method?: string) {
+    const payment = await this.paymentModel.findOne({
+      $or: [{ gatewayOrderId: orderId }, { razorpayOrderId: orderId }],
+    });
+    if (!payment) throw new NotFoundException('Payment not found for gateway order');
+    payment.status = 'Paid';
+    payment.paidAt = new Date();
+    payment.gatewayPaymentId = gatewayPaymentId;
+    payment.razorpayPaymentId = gatewayPaymentId;
+    if (method) payment.method = method;
+    await payment.save();
+    return { id: payment._id.toString(), status: 'Paid' };
   }
 
   async listAdmin(params: { status?: string; search?: string; page?: number; pageSize?: number }) {
@@ -123,16 +156,41 @@ export class PaymentsService {
       if ((customer.walletBalance ?? 0) < total) throw new BadRequestException('Wallet balance is insufficient');
       customer.walletBalance = (customer.walletBalance ?? 0) - total;
       await customer.save();
+      const reference = `pay_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
+      for (const payment of due) {
+        payment.status = 'Paid';
+        payment.method = method;
+        payment.paidAt = new Date();
+        payment.reference = reference;
+        payment.gatewayProvider = 'Wallet';
+        await payment.save();
+      }
+      return { paid: due.length, amount: total, method, reference, status: 'Paid' };
     }
-    const reference = `pay_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
+    const tenantId = await this.tenantIdForRider(customerId);
+    if (!tenantId) throw new BadRequestException('Rider is not linked to a tenant company');
+    const checkout = await this.gateways.createCheckout(tenantId, {
+      amount: total,
+      currency: due[0]?.currency || 'INR',
+      receipt: `out_${customerId.slice(-8)}`,
+      method,
+    });
     for (const payment of due) {
-      payment.status = 'Paid';
       payment.method = method;
-      payment.paidAt = new Date();
-      payment.reference = reference;
+      payment.gatewayProvider = checkout.provider;
+      payment.gatewayOrderId = checkout.orderId;
+      payment.razorpayOrderId = checkout.orderId;
+      payment.status = 'Created';
       await payment.save();
     }
-    return { paid: due.length, amount: total, method, reference, status: 'Paid' };
+    return {
+      paid: 0,
+      amount: total,
+      method,
+      status: 'Created',
+      gatewayProvider: checkout.provider,
+      checkout,
+    };
   }
 
   async getHistory(customerId: string, page = 1, pageSize = 20) {

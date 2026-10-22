@@ -117,6 +117,15 @@ export class Payment {
   razorpayPaymentId?: string;
 
   @Prop()
+  gatewayProvider?: string;
+
+  @Prop()
+  gatewayOrderId?: string;
+
+  @Prop()
+  gatewayPaymentId?: string;
+
+  @Prop()
   method?: string;
 
   @Prop({ default: 0 })

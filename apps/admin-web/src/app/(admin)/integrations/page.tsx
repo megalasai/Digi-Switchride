@@ -3,13 +3,9 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ComingSoonBadge, DisabledAction, DisabledField, DisabledSelect, ProvisionPanel } from "@/components/ui/Provision";
 import { Card } from "@/components/ui/Card";
+import { PaymentGatewayForm } from "@/components/PaymentGatewayForm";
 
 const integrations = [
-  {
-    name: "Razorpay",
-    status: "Not connected",
-    detail: "Live UPI, cards, webhooks, capture and gateway refunds.",
-  },
   {
     name: "SMS (MSG91 / Twilio)",
     status: "Not connected",
@@ -47,7 +43,7 @@ export default function IntegrationsPage() {
     <div>
       <PageHeader
         title="Integrations"
-        description="These screens are ready for credentials and wiring. Live providers will be connected in a later plan."
+        description="Connect each tenant's payment gateway below. SMS, push, vault and KYC vendors remain provisioned until credentials are wired."
       />
 
       <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -65,18 +61,9 @@ export default function IntegrationsPage() {
         ))}
       </div>
 
-      <ProvisionPanel
-        title="Razorpay keys"
-        description="Key ID, secret and webhook secret will be stored in the API environment, not in the browser."
-      >
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <DisabledField label="Key ID" placeholder="rzp_live_…" />
-          <DisabledField label="Key secret" type="password" placeholder="••••••••" />
-          <DisabledField label="Webhook secret" type="password" placeholder="••••••••" />
-          <DisabledSelect label="Mode" options={["Test", "Live"]} />
-          <DisabledAction label="Save Razorpay" />
-        </div>
-      </ProvisionPanel>
+      <div className="mb-8">
+        <PaymentGatewayForm />
+      </div>
 
       <ProvisionPanel
         title="SMS gateway"

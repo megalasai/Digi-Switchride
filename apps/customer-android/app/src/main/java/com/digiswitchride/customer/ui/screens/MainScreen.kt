@@ -168,7 +168,8 @@ private fun VehicleTab(vm: RiderAppViewModel) {
 @Composable
 private fun PayTab(vm: RiderAppViewModel) {
     val s = vm.state.collectAsState().value
-    val methods = listOf("Wallet", "UPI", "QR", "NetBanking", "DebitCard", "CreditCard")
+    val methods = s.home?.paymentGateway?.methods?.takeIf { it.isNotEmpty() }
+        ?: listOf("Wallet", "UPI", "QR", "NetBanking", "DebitCard", "CreditCard")
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { InfoCard("Outstanding", "₹${s.home?.outstanding?.amount?.toInt() ?: 0}", "${s.home?.outstanding?.count ?: 0} dues") }
         item { InfoCard("Wallet", "₹${s.home?.walletBalance?.toInt() ?: 0}", "Credits and debits below") }
