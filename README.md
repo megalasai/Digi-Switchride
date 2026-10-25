@@ -28,7 +28,7 @@ apps/
   admin-web/            # Next.js admin portal
   customer-android/     # Kotlin + Jetpack Compose
   customer-ios/         # Swift + SwiftUI
-packages/
+libs/
   shared/               # Shared TypeScript types (@digi-switchride/shared)
 iot/
   simulator/            # Dev vehicle simulator (Node)

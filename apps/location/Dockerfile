@@ -7,7 +7,7 @@ COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/admin-web/package.json apps/admin-web/package.json
 COPY apps/telemetry/package.json apps/telemetry/package.json
-COPY packages/shared/package.json packages/shared/package.json
+COPY libs/shared/package.json libs/shared/package.json
 COPY apps/location/package.json apps/location/package.json
 COPY apps/location/tsconfig.json apps/location/tsconfig.json
 COPY apps/location/src apps/location/src
@@ -19,7 +19,7 @@ COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/admin-web/package.json apps/admin-web/package.json
 COPY apps/telemetry/package.json apps/telemetry/package.json
-COPY packages/shared/package.json packages/shared/package.json
+COPY libs/shared/package.json libs/shared/package.json
 COPY apps/location/package.json apps/location/package.json
 RUN npm ci -w @digi-switchride/location --omit=dev
 COPY --from=build /app/apps/location/dist apps/location/dist

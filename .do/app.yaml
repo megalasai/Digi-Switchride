@@ -4,7 +4,7 @@
 # of the whole monorepo.
 #
 # Location + telemetry stay off App Platform (SQLite volume + TCP).
-# Do not add a Functions component. `packages/` is an npm workspace, not DO Functions.
+# Do not add a Functions component. Shared code is libs/shared, not DO Functions.
 
 name: digi-switchride
 region: blr

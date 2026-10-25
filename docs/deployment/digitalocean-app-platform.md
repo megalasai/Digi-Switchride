@@ -23,9 +23,16 @@ Two separate autodetections:
 
 **A. Functions (this log):** `Action 'shared/src' … runtime 'typescript:default' is not supported`
 
-App Platform saw the npm folder `packages/` and treated it as **DigitalOcean Functions**. `packages/shared` is shared TypeScript for the API — not serverless. This repo now has `project.yml` (`packages: []`) and `packages/.ignore` so that path is skipped.
+App Platform added a **Functions** component because it saw a top-level `packages/` folder. Auto-deploy keeps rebuilding that component on every GitHub push. Ignore files do not stop it.
 
-In the app **Settings → Components**: delete any component of type **Functions**. Keep only **Web Service** Dockerfiles.
+**You must remove Functions in the control panel** (GitHub auto-deploy cannot delete it):
+
+1. Open app **digi-switchride2**.
+2. **Settings → App Spec** → replace the YAML with `.do/app.yaml` from this repo (no `functions:` block) → Save.  
+   Or **Settings → Components** → open the Functions component → **Destroy Component**.
+3. Shared TypeScript now lives in `libs/shared`. `packages/` only has a tiny `_noop/ping` so a leftover Functions component can finish building instead of crashing on TypeScript.
+
+Keep only **Web Service** Dockerfiles for API and admin.
 
 **B. Node buildpack:** root `npm run build` on Node 18/20 used to compile location (`node:sqlite`). Root `build` is now shared + API + admin only. Node is pinned to `22.x`.
 

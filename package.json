@@ -5,7 +5,7 @@
   "description": "Digi-Switchride — Electric vehicle rental platform",
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "libs/*"
   ],
   "scripts": {
     "dev": "npm run build -w @digi-switchride/shared && concurrently \"npm run dev -w @digi-switchride/api\" \"npm run dev -w admin-web\"",

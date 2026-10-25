@@ -12,7 +12,7 @@ The initial plan specified .NET 8 + PostgreSQL/PostGIS. The team uses DigiTrack 
 
 Migrate the backend to **NestJS 11 + Mongoose 8 + MongoDB**, matching DigiTrack patterns:
 
-- npm workspaces monorepo (`apps/api`, `packages/shared`)
+- npm workspaces monorepo (`apps/api`, `libs/shared`)
 - Centralized schemas in `src/schemas/`
 - `mongo.config.ts` with SRV-to-standard URI conversion for Windows
 - Global API prefix `/api`, routes at `/api/v1/...`

@@ -8,7 +8,7 @@ COPY apps/admin-web/package.json apps/admin-web/package.json
 COPY apps/location/package.json apps/location/package.json
 COPY apps/telemetry/package.json apps/telemetry/package.json
 COPY apps/telemetry/tsconfig.json apps/telemetry/tsconfig.json
-COPY packages/shared/package.json packages/shared/package.json
+COPY libs/shared/package.json libs/shared/package.json
 COPY apps/telemetry/src apps/telemetry/src
 RUN npm ci -w @digi-switchride/telemetry && npm run build -w @digi-switchride/telemetry
 
@@ -19,7 +19,7 @@ COPY apps/api/package.json apps/api/package.json
 COPY apps/admin-web/package.json apps/admin-web/package.json
 COPY apps/location/package.json apps/location/package.json
 COPY apps/telemetry/package.json apps/telemetry/package.json
-COPY packages/shared/package.json packages/shared/package.json
+COPY libs/shared/package.json libs/shared/package.json
 RUN npm ci -w @digi-switchride/telemetry --omit=dev
 COPY --from=build /app/apps/telemetry/dist apps/telemetry/dist
 WORKDIR /app/apps/telemetry
