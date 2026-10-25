@@ -1,10 +1,7 @@
-# DigitalOcean App Platform spec.
-# Create the app from this file (Apps → Create → App Spec) or select
-# Dockerfiles in the UI. Do not let App Platform autodetect a single Node build
-# of the whole monorepo.
-#
-# Location + telemetry stay off App Platform (SQLite volume + TCP).
-# Do not add a Functions component. Shared code is libs/shared, not DO Functions.
+# DigitalOcean App Platform — one HTTP port per web service.
+# Import this spec (Apps → Create → App Spec) or add three Dockerfile
+# components. Do not put admin + API on one component.
+# Do not add a Functions component (`packages/` is not Functions).
 
 name: digi-switchride
 region: blr
@@ -47,6 +44,12 @@ services:
       - key: CORS_ORIGIN
         scope: RUN_TIME
         value: "*"
+      - key: LOCATION_SERVICE_URL
+        scope: RUN_TIME
+        value: http://location:4100
+      - key: LOCATION_API_URL
+        scope: RUN_TIME
+        value: http://location:4100
 
   - name: admin
     dockerfile_path: apps/admin-web/Dockerfile
@@ -71,3 +74,29 @@ services:
         value: http://api:4000
       - key: NEXT_PUBLIC_API_URL
         value: /api-proxy/v1
+
+  - name: location
+    dockerfile_path: apps/location/Dockerfile
+    github:
+      repo: megalasai/Digi-Switchride
+      branch: cursor/nestjs-mongodb-platform-scaffold
+      deploy_on_push: true
+    http_port: 4100
+    instance_count: 1
+    instance_size_slug: basic-xs
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 180
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4100"
+      - key: HOST
+        value: "0.0.0.0"
+      - key: LOCATION_WORKERS
+        value: "1"
+      - key: LOCATION_DB
+        value: /tmp/india.sqlite
+      - key: LOCATION_CORS_ORIGIN
+        value: "*"

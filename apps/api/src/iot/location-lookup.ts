@@ -31,7 +31,11 @@ type ReverseMatch = {
 };
 
 export async function reversePlaceName(config: ConfigService, lat: number, lng: number): Promise<string | null> {
-  const base = (config.get<string>('LOCATION_SERVICE_URL') ?? 'http://localhost:4100').replace(/\/$/, '');
+  const base = (
+    config.get<string>('LOCATION_SERVICE_URL') ??
+    config.get<string>('LOCATION_API_URL') ??
+    'http://localhost:4100'
+  ).replace(/\/$/, '');
   const apiKey = config.get<string>('LOCATION_API_KEY');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 1500);

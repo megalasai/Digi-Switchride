@@ -27,8 +27,8 @@ WORKDIR /app/apps/location
 ENV NODE_ENV=production
 ENV PORT=4100
 ENV HOST=0.0.0.0
-ENV LOCATION_DB=/data/india.sqlite
-VOLUME ["/data"]
+ENV LOCATION_WORKERS=1
+ENV LOCATION_DB=/tmp/india.sqlite
 EXPOSE 4100
 HEALTHCHECK --interval=30s --timeout=5s --start-period=600s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||4100)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"

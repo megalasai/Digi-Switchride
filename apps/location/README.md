@@ -120,10 +120,12 @@ Or a container, from the repository root:
 
 ```bash
 docker build -f apps/location/Dockerfile -t digi-switchride-location .
-docker run --rm -p 4100:4100 -v location-data:/data -e LOCATION_API_KEYS=switchride:replace-me digi-switchride-location
+docker run --rm -p 4100:4100 -e LOCATION_DB=/tmp/india.sqlite -e LOCATION_API_KEYS=switchride:replace-me digi-switchride-location
 ```
 
-The first start downloads the open data and writes `/data/india.sqlite`. Later starts reuse that file.
+The first start downloads open data and writes `LOCATION_DB` (default `/tmp/india.sqlite` in the image).
+
+App Platform: this service is a **separate** web component (`apps/location/Dockerfile`, HTTP **4100**). Do not attach it to the admin or API component — DigitalOcean allows one HTTP port per web service. The source lives in this folder on GitHub; `india.sqlite` is not committed (too large).
 
 Docker Compose profile, so the existing Mongo and Redis stack stays unchanged:
 

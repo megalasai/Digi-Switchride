@@ -8,7 +8,7 @@ App Platform is DigitalOcean’s PaaS: connect GitHub, build from the Dockerfile
 |------|----------------------|----------|
 | Admin web, API (HTTP) | **App Platform** web services | Yes |
 | MongoDB (riders, fleet, GPS, tenants) | **Managed Databases → MongoDB** | Yes — attach to the app |
-| Location finder (`india.sqlite`) | **Droplet + block volume** | Not App Platform |
+| Location finder (`india.sqlite`) | **App Platform** web service (HTTP 4100) or Droplet + volume | Yes — third Dockerfile service |
 | Telemetry HTTP ingest | App Platform **or** droplet | HTTP yes; **TCP :4210** needs a droplet |
 | Telemetry config SQLite | Droplet volume | Lost on App Platform redeploy |
 | Redis / Postgres / MySQL | Managed Databases | **Not used** by Digi-Switchride |
@@ -32,28 +32,30 @@ App Platform added a **Functions** component because it saw a top-level `package
    Or **Settings → Components** → open the Functions component → **Destroy Component**.
 3. Shared TypeScript now lives in `libs/shared`. `packages/` only has a tiny `_noop/ping` so a leftover Functions component can finish building instead of crashing on TypeScript.
 
-Keep only **Web Service** Dockerfiles for API and admin.
+Keep only **Web Service** Dockerfiles: API, admin, location. No Functions.
 
 **B. Node buildpack (app named like Digi-Switchride, not Functions):** `A build script exited with a non-zero exit code` after ~50s is almost always **Next.js OOM** on a small builder, or **devDependencies omitted** (`nest` / `tsc` not found). Root `npm run build` now compiles **shared + API only**. Admin is a separate Dockerfile service. `.npmrc` sets `production=false` so TypeScript/Nest are installed during build.
 
-Create the app as **two Dockerfile services**, not Functions and not one autodetected Node app:
+Create the app as **three Dockerfile web services** (one HTTP port each). DigitalOcean does not allow 3000 and 4000 on a single component.
 
 1. Branch `cursor/nestjs-mongodb-platform-scaffold`.
 2. API: Dockerfile `apps/api/Dockerfile`, HTTP **4000**, health `/api/health`.
 3. Admin: Dockerfile `apps/admin-web/Dockerfile`, HTTP **3000**, health `/login`.
-4. Or import `.do/app.yaml` (Apps → Create → App Spec).
-5. HTTP port must be **4000** / **3000**, not 8080.
+4. Location: Dockerfile `apps/location/Dockerfile`, HTTP **4100**, health `/health`.
+5. Or import `.do/app.yaml` (Apps → Create → App Spec).
+6. Destroy any Functions component.
 
 In **Create App**, if DigitalOcean suggests a Functions resource from `packages/`, **uncheck / remove it** before Create.
 
 ## App Platform: what to put on it
 
-Create one App with two **Web Services** (Dockerfile, repo `megalasai/Digi-Switchride`):
+Create one App with three **Web Services** (Dockerfile, repo `megalasai/Digi-Switchride`):
 
 | Component | Dockerfile | HTTP port | Instances (POC) |
 |-----------|------------|-----------|-----------------|
-| `api` | `apps/api/Dockerfile` | 4000 | 1 × basic-xxs or professional-xs |
-| `admin` | `apps/admin-web/Dockerfile` | 3000 | 1 × same |
+| `api` | `apps/api/Dockerfile` | 4000 | 1 × basic-xxs |
+| `admin` | `apps/admin-web/Dockerfile` | 3000 | 1 × basic-xxs |
+| `location` | `apps/location/Dockerfile` | 4100 | 1 × basic-xs (first boot seeds India SQLite) |
 
 Env on **api**:
 
@@ -61,7 +63,7 @@ Env on **api**:
 - `MONGODB_URI` — bind to the managed Mongo connection (see below)
 - `JWT_SECRET`, `PASSWORD_SALT`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`
 - `CORS_ORIGIN=https://admin-xxxx.ondigitalocean.app` (or your domain)
-- `LOCATION_API_URL=https://location.…` or the droplet private URL
+- `LOCATION_SERVICE_URL=http://location:4100` (internal App Platform name)
 
 Env on **admin**:
 
@@ -71,21 +73,18 @@ Env on **admin**:
 
 App Platform only exposes **HTTP/HTTPS**. It will not publish telemetry TCP `4210`. Keep Track360 **pull** (outbound HTTPS) — that works from App Platform. Device **push over TCP** does not.
 
-Location on App Platform: the SQLite DB is hundreds of MB to GB and is re-seeded on every deploy if the disk is ephemeral. Keep location on a droplet with a volume.
+Location on App Platform: first deploy downloads/seeds `india.sqlite` (can take several minutes; health check delay is 180s). The file is ephemeral unless you later attach a volume. The SQLite dump is **not** in Git (hundreds of MB; GitHub file limit 100 MB). Source is `apps/location/`.
 
-**Hybrid (recommended if you want App Platform):**
+**Hybrid:**
 
 ```
-GitHub  →  App Platform:  admin + api
+GitHub  →  App Platform:  admin :3000  +  api :4000  +  location :4100
                  |
                  |  private VPC
                  v
           Managed MongoDB
 
-Droplet:  location (SQLite) + telemetry (HTTP + optional TCP)
-                 |
-                 +--> same Managed MongoDB (GPS)
-                 +--> location SQLite on a block volume
+Droplet (optional later): telemetry TCP :4210
 ```
 
 ---
