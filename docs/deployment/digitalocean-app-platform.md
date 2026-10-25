@@ -17,23 +17,27 @@ Redis in `docker-compose.yml` is unused. Do not buy Redis, PostgreSQL, or MySQL 
 
 ---
 
-## Why “Build failed creating new app” happens
+## Why “Build failed” / Functions errors happen
 
-App Platform autodetection runs **`npm run build` at the repo root** with a Node 18/20 buildpack. That used to compile **location** (needs Node 22 `node:sqlite`) and **telemetry**, so the job exits non-zero.
+Two separate autodetections:
 
-Fix:
+**A. Functions (this log):** `Action 'shared/src' … runtime 'typescript:default' is not supported`
 
-1. Use branch `cursor/nestjs-mongodb-platform-scaffold` (not an old `master` without Dockerfiles).
-2. Create the app as **two Dockerfile services**, not one autodetected Node app:
-   - API: Dockerfile `apps/api/Dockerfile`, HTTP port **4000**, health `/api/health`
-   - Admin: Dockerfile `apps/admin-web/Dockerfile`, HTTP port **3000**, health `/login`
-3. Or import `.do/app.yaml` (Apps → Create → upload spec).
-4. Set **Node is not chosen as a buildpack**. Dockerfile builds use Node 22 from the image.
-5. HTTP port in the UI must match the Dockerfile (**4000** / **3000**). Leaving **8080** is a later health-check failure, not this compile error.
+App Platform saw the npm folder `packages/` and treated it as **DigitalOcean Functions**. `packages/shared` is shared TypeScript for the API — not serverless. This repo now has `project.yml` (`packages: []`) and `packages/.ignore` so that path is skipped.
 
-After this repo update, even a Node buildpack is safer: root `npm run build` only builds shared + API + admin.
+In the app **Settings → Components**: delete any component of type **Functions**. Keep only **Web Service** Dockerfiles.
 
-Paste the **Build logs** line that starts with `ERROR` if it still fails (often `npm ci` lockfile, or OOM on Next.js).
+**B. Node buildpack:** root `npm run build` on Node 18/20 used to compile location (`node:sqlite`). Root `build` is now shared + API + admin only. Node is pinned to `22.x`.
+
+Create the app as **two Dockerfile services**, not Functions and not one autodetected Node app:
+
+1. Branch `cursor/nestjs-mongodb-platform-scaffold`.
+2. API: Dockerfile `apps/api/Dockerfile`, HTTP **4000**, health `/api/health`.
+3. Admin: Dockerfile `apps/admin-web/Dockerfile`, HTTP **3000**, health `/login`.
+4. Or import `.do/app.yaml` (Apps → Create → App Spec).
+5. HTTP port must be **4000** / **3000**, not 8080.
+
+In **Create App**, if DigitalOcean suggests a Functions resource from `packages/`, **uncheck / remove it** before Create.
 
 ## App Platform: what to put on it
 

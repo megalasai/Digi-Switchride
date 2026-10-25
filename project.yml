@@ -1,0 +1,4 @@
+# DigitalOcean Functions uses a top-level `packages/` folder.
+# This repo uses `packages/` for npm workspaces (shared TypeScript), not Functions.
+# An empty list stops App Platform from deploying shared/src as actions.
+packages: []
