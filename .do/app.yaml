@@ -1,0 +1,72 @@
+# DigitalOcean App Platform spec.
+# Create the app from this file (Apps → Create → App Spec) or select
+# Dockerfiles in the UI. Do not let App Platform autodetect a single Node build
+# of the whole monorepo.
+#
+# Location + telemetry stay off App Platform (SQLite volume + TCP).
+
+name: digi-switchride
+region: blr
+features:
+  - buildpack-stack=ubuntu-22
+
+services:
+  - name: api
+    dockerfile_path: apps/api/Dockerfile
+    github:
+      repo: megalasai/Digi-Switchride
+      branch: cursor/nestjs-mongodb-platform-scaffold
+      deploy_on_push: true
+    http_port: 4000
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    health_check:
+      http_path: /api/health
+      initial_delay_seconds: 40
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+      - key: MONGODB_URI
+        scope: RUN_TIME
+        type: SECRET
+      - key: JWT_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: PASSWORD_SALT
+        scope: RUN_TIME
+        type: SECRET
+      - key: ADMIN_EMAIL
+        scope: RUN_TIME
+        value: admin@digiswitchride.com
+      - key: ADMIN_PASSWORD
+        scope: RUN_TIME
+        type: SECRET
+      - key: CORS_ORIGIN
+        scope: RUN_TIME
+        value: "*"
+
+  - name: admin
+    dockerfile_path: apps/admin-web/Dockerfile
+    github:
+      repo: megalasai/Digi-Switchride
+      branch: cursor/nestjs-mongodb-platform-scaffold
+      deploy_on_push: true
+    http_port: 3000
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    health_check:
+      http_path: /login
+      initial_delay_seconds: 30
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: HOSTNAME
+        value: "0.0.0.0"
+      - key: API_PROXY_TARGET
+        value: http://api:4000
+      - key: NEXT_PUBLIC_API_URL
+        value: /api-proxy/v1

@@ -17,6 +17,24 @@ Redis in `docker-compose.yml` is unused. Do not buy Redis, PostgreSQL, or MySQL 
 
 ---
 
+## Why “Build failed creating new app” happens
+
+App Platform autodetection runs **`npm run build` at the repo root** with a Node 18/20 buildpack. That used to compile **location** (needs Node 22 `node:sqlite`) and **telemetry**, so the job exits non-zero.
+
+Fix:
+
+1. Use branch `cursor/nestjs-mongodb-platform-scaffold` (not an old `master` without Dockerfiles).
+2. Create the app as **two Dockerfile services**, not one autodetected Node app:
+   - API: Dockerfile `apps/api/Dockerfile`, HTTP port **4000**, health `/api/health`
+   - Admin: Dockerfile `apps/admin-web/Dockerfile`, HTTP port **3000**, health `/login`
+3. Or import `.do/app.yaml` (Apps → Create → upload spec).
+4. Set **Node is not chosen as a buildpack**. Dockerfile builds use Node 22 from the image.
+5. HTTP port in the UI must match the Dockerfile (**4000** / **3000**). Leaving **8080** is a later health-check failure, not this compile error.
+
+After this repo update, even a Node buildpack is safer: root `npm run build` only builds shared + API + admin.
+
+Paste the **Build logs** line that starts with `ERROR` if it still fails (often `npm ci` lockfile, or OOM on Next.js).
+
 ## App Platform: what to put on it
 
 Create one App with two **Web Services** (Dockerfile, repo `megalasai/Digi-Switchride`):

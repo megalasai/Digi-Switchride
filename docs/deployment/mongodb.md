@@ -49,6 +49,33 @@ From the repository root, after Mongo is listening:
 node scripts/mongo-restore.mjs backups/mongodb/switchride-latest
 ```
 
+### Restore onto DigitalOcean Managed MongoDB
+
+Yes. Create **Databases → MongoDB** in the same region as the app, database name `switchride`, then load this backup from your laptop.
+
+1. In the cluster: **Users** → create `switchride_app` with a password.
+2. **Trusted sources** → add **your laptop’s public IP** (temporarily). Do not leave the cluster open to the world after restore.
+3. Copy the **public** connection string from the control panel (SRV or the non-SRV host list). Put the database name `switchride` in the path and `tls=true` / `authSource=admin` if they are not already there.
+4. From the project folder (where `backups/mongodb/switchride-latest` exists):
+
+```powershell
+$env:MONGODB_URI="mongodb+srv://switchride_app:YOUR_PASSWORD@your-cluster.mongo.ondigitalocean.com/switchride?tls=true&authSource=admin&retryWrites=true"
+node scripts/mongo-restore.mjs backups/mongodb/switchride-latest
+```
+
+If SRV/DNS fails on Windows, use the panel’s **non-SRV** URI (`mongodb://host:27017/...`) the same way.
+
+5. Remove your laptop IP from trusted sources. Add the **App Platform app** (and any telemetry droplet) instead.
+6. Set the same URI as secret `MONGODB_URI` on the API (use the **VPC / private** hostname for the app, public only for the laptop restore).
+
+The JSON restore **replaces** each collection it finds in the dump. Run it once on an empty cluster, not against a live customer database you want to keep.
+
+`mongorestore` also works if you have a BSON dump:
+
+```bash
+mongorestore --uri="%MONGODB_URI%" --nsFrom="switchride.*" --nsTo="switchride.*" backups/mongodb/bson/switchride
+```
+
 Or copy `backups/mongodb/switchride-latest` from another machine first.
 
 Fresh empty install (no backup): start the API once. It bootstraps:
