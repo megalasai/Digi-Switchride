@@ -9,7 +9,6 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@nestjs/cli": "6.8.1",
     "leaflet": "^1.9.4",
     "next": "^15.5.22",
     "react": "19.1.0",

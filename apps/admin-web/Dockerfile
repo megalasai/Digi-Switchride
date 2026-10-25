@@ -12,6 +12,7 @@ RUN npm ci -w admin-web
 COPY apps/admin-web apps/admin-web
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_PUBLIC_API_URL=/api-proxy/v1
+ENV NODE_OPTIONS=--max-old-space-size=2048
 RUN npm run build -w admin-web
 
 FROM node:22-bookworm-slim

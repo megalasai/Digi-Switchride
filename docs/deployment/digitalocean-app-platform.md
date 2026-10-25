@@ -34,7 +34,7 @@ App Platform added a **Functions** component because it saw a top-level `package
 
 Keep only **Web Service** Dockerfiles for API and admin.
 
-**B. Node buildpack:** root `npm run build` on Node 18/20 used to compile location (`node:sqlite`). Root `build` is now shared + API + admin only. Node is pinned to `22.x`.
+**B. Node buildpack (app named like Digi-Switchride, not Functions):** `A build script exited with a non-zero exit code` after ~50s is almost always **Next.js OOM** on a small builder, or **devDependencies omitted** (`nest` / `tsc` not found). Root `npm run build` now compiles **shared + API only**. Admin is a separate Dockerfile service. `.npmrc` sets `production=false` so TypeScript/Nest are installed during build.
 
 Create the app as **two Dockerfile services**, not Functions and not one autodetected Node app:
 
