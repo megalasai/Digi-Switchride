@@ -3,6 +3,7 @@
 Thumbs.db
 
 # IDE
+.cursor/
 .vs/
 .vscode/
 *.user
@@ -66,6 +67,9 @@ Pods/
 
 # Mongo JSON dumps (keep scripts; dumps stay local)
 backups/mongodb/
+
+# Local presentation captures (not product assets)
+docs/presentation/screenshots/
 
 # Docker
 docker-data/
