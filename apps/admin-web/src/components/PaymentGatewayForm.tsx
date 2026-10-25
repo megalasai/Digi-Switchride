@@ -23,7 +23,7 @@ export function PaymentGatewayForm({ tenantId: forcedTenantId }: { tenantId?: st
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
-  const [overview, setOverview] = useState<{ tenantName: string; tenantSlug: string; provider: string | null; enabled: boolean }[]>([]);
+  const [overview, setOverview] = useState<{ tenantId: string; tenantName: string; tenantSlug: string; provider: string | null; enabled: boolean }[]>([]);
 
   const load = (id?: string) => {
     setError("");

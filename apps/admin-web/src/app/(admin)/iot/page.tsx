@@ -52,7 +52,7 @@ export default function IoTPage() {
   const openCreate = () => { setEditId(null); setForm(emptyForm); setShowForm(true); setError(""); };
   const openEdit = (d: IoTDevice) => {
     setEditId(d.id);
-    setForm({ deviceId: d.id, vendorType: d.vendorType, vehicleId: d.vehicleId ?? "" });
+    setForm({ deviceId: d.id, vendorType: d.vendorType, vehicleId: d.vehicleId ?? "", tenantId: d.tenantId ?? "" });
     setShowForm(true); setError("");
   };
 

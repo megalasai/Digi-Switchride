@@ -73,7 +73,7 @@ export default function RidersPage() {
 
   const openEdit = (r: Rider) => {
     setEditId(r.id);
-    setForm({ phone: r.phone, fullName: r.fullName ?? "", email: r.email ?? "", accountStatus: r.accountStatus });
+    setForm({ phone: r.phone, fullName: r.fullName ?? "", email: r.email ?? "", accountStatus: r.accountStatus, tenantId: r.tenantId ?? "" });
     setFieldErrors({});
     setShowForm(true);
     setError("");

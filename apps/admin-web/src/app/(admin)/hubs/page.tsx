@@ -30,7 +30,7 @@ export default function HubsPage() {
   const openCreate = () => { setEditId(null); setForm(emptyForm); setShowForm(true); setError(""); };
   const openEdit = (hub: Hub) => {
     setEditId(hub.id);
-    setForm({ name: hub.name, address: hub.address, lat: String(hub.location.lat), lng: String(hub.location.lng), capacity: String(hub.capacity), status: hub.status });
+    setForm({ name: hub.name, address: hub.address, lat: String(hub.location.lat), lng: String(hub.location.lng), capacity: String(hub.capacity), status: hub.status, tenantId: hub.tenantId ?? "" });
     setShowForm(true); setError("");
   };
 

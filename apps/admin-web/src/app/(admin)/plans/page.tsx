@@ -114,7 +114,7 @@ export default function PlansPage() {
                   <TableCell>
                     {canWrite && (
                       <div className="flex gap-2">
-                        <Button variant="ghost" className="text-xs" type="button" onClick={() => { setEditId(p.id); setForm({ name: p.name, charges: String(p.charges), durationDays: String(p.durationDays), billingFrequency: p.billingFrequency, eligibility: p.eligibility ?? "", terms: p.terms ?? "" }); setShowForm(true); }}>Edit</Button>
+                        <Button variant="ghost" className="text-xs" type="button" onClick={() => { setEditId(p.id); setForm({ name: p.name, charges: String(p.charges), durationDays: String(p.durationDays), billingFrequency: p.billingFrequency, eligibility: p.eligibility ?? "", terms: p.terms ?? "", tenantId: p.tenantId ?? "" }); setShowForm(true); }}>Edit</Button>
                         <Button variant="ghost" className="text-xs" type="button" onClick={async () => { await api.updatePlan(p.id, { isActive: !p.isActive }); load(); }}>{p.isActive ? "Deactivate" : "Activate"}</Button>
                       </div>
                     )}
