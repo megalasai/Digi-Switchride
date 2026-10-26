@@ -48,10 +48,11 @@ services:
         value: production
       - key: PORT
         value: "4000"
+      # Use the Public network SRV URI until this app is attached to the DB VPC.
+      # private-db-… hostnames do not resolve on App Platform (ENOTFOUND).
       - key: MONGODB_URI
         scope: RUN_TIME
         type: SECRET
-        value: mongodb+srv://switchride_app:SET_PASSWORD@private-db-mdb-blr1-25924-d4478477.mongo.ondigitalocean.com/switchride?tls=true&authSource=admin&replicaSet=db-mdb-blr1-25924
       - key: JWT_SECRET
         scope: RUN_TIME
         type: SECRET

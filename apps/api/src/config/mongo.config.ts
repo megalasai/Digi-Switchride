@@ -1,48 +1,30 @@
 import { Logger } from '@nestjs/common';
 
+/**
+ * App Platform cannot resolve DigitalOcean *private* Mongo hostnames
+ * (`private-db-…`) unless the app is attached to that VPC.
+ * Do not rewrite mongodb+srv to mongodb://host:27017 — the SRV name is
+ * not a mongod A record (ENOTFOUND).
+ */
 export function resolveMongoUri(rawUri: string, logger?: Logger): string {
   const directOverride = process.env.MONGODB_URI_DIRECT?.trim();
   if (directOverride) {
     logger?.log('Using MONGODB_URI_DIRECT (non-SRV connection)');
     return directOverride;
   }
-  if (!rawUri.startsWith('mongodb+srv://')) return rawUri;
-
-  const converted = convertSrvToStandard(rawUri);
-  logger?.warn('Converted mongodb+srv URI to standard mongodb:// (avoids SRV DNS issues on Windows)');
-  return converted;
-}
-
-function convertSrvToStandard(srvUri: string): string {
-  const withoutScheme = srvUri.replace('mongodb+srv://', '');
-  const atIndex = withoutScheme.lastIndexOf('@');
-  if (atIndex === -1) return srvUri;
-
-  const credentials = withoutScheme.slice(0, atIndex);
-  const rest = withoutScheme.slice(atIndex + 1);
-  const slashIndex = rest.indexOf('/');
-  const host = slashIndex === -1 ? rest : rest.slice(0, slashIndex);
-  const pathAndQuery = slashIndex === -1 ? '' : rest.slice(slashIndex + 1);
-
-  const questionIndex = pathAndQuery.indexOf('?');
-  const database = questionIndex === -1 ? pathAndQuery : pathAndQuery.slice(0, questionIndex);
-  const query = questionIndex === -1 ? '' : pathAndQuery.slice(questionIndex + 1);
-
-  const params = new URLSearchParams(query);
-  params.set('ssl', 'true');
-  params.set('retryWrites', 'true');
-  params.set('w', 'majority');
-  if (!params.has('authSource')) params.set('authSource', 'admin');
-
-  const dbPath = database || 'switchride';
-  return `mongodb://${credentials}@${host}:27017/${dbPath}?${params.toString()}`;
+  if (rawUri.includes('private-db-') && rawUri.includes('ondigitalocean.com')) {
+    logger?.warn(
+      'MONGODB_URI uses a private VPC hostname. App Platform will fail DNS unless this app is attached to the database VPC. Use the Public network connection string, or attach the cluster in DigitalOcean.',
+    );
+  }
+  return rawUri;
 }
 
 export function getMongooseOptions(uri: string) {
   return {
     uri,
     family: 4 as const,
-    serverSelectionTimeoutMS: 15000,
-    connectTimeoutMS: 15000,
+    serverSelectionTimeoutMS: 20000,
+    connectTimeoutMS: 20000,
   };
 }

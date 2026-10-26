@@ -3,7 +3,7 @@ import { getTenantStore } from './tenant-als';
 
 export function tenantPlugin(schema: Schema) {
   if (!schema.path('tenantId')) {
-    schema.add({ tenantId: { type: String, index: true } });
+    schema.add({ tenantId: { type: String } });
   }
 
   const apply = function (this: { getFilter: () => Record<string, unknown>; where: (q: object) => void }) {
