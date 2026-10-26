@@ -2,13 +2,13 @@
 #   docker build -f apps/api/Dockerfile -t digi-switchride-api .
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json .npmrc ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/admin-web/package.json apps/admin-web/package.json
 COPY apps/location/package.json apps/location/package.json
 COPY apps/telemetry/package.json apps/telemetry/package.json
 COPY libs/shared/package.json libs/shared/package.json
-RUN npm ci -w @digi-switchride/shared -w @digi-switchride/api
+RUN npm ci -w @digi-switchride/shared -w @digi-switchride/api --include=dev
 COPY libs/shared libs/shared
 COPY apps/api apps/api
 RUN npm run build -w @digi-switchride/shared && npm run build -w @digi-switchride/api

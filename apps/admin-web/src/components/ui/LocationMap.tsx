@@ -5,7 +5,6 @@ import type { Map as LeafletMap, Marker as LeafletMarker, Polyline as LeafletPol
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Input";
 import { resolveWheelClass, vehicleMarkerSvg, type WheelClass } from "@/lib/vehicleIcons";
-import "leaflet/dist/leaflet.css";
 
 const INDIA = { lat: 21.1458, lng: 79.0882 };
 const TILES = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";

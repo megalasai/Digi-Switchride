@@ -3,7 +3,7 @@
 #   docker build -f apps/location/Dockerfile -t digi-switchride-location .
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json .npmrc ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/admin-web/package.json apps/admin-web/package.json
 COPY apps/telemetry/package.json apps/telemetry/package.json
@@ -11,7 +11,7 @@ COPY libs/shared/package.json libs/shared/package.json
 COPY apps/location/package.json apps/location/package.json
 COPY apps/location/tsconfig.json apps/location/tsconfig.json
 COPY apps/location/src apps/location/src
-RUN npm ci -w @digi-switchride/location && npm run build -w @digi-switchride/location
+RUN npm ci -w @digi-switchride/location --include=dev && npm run build -w @digi-switchride/location
 
 FROM node:24-bookworm-slim
 WORKDIR /app

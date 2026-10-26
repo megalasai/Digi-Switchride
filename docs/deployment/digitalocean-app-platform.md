@@ -60,7 +60,7 @@ Create one App with three **Web Services** (Dockerfile, repo `megalasai/Digi-Swi
 Env on **api**:
 
 - `PORT=4000`
-- `MONGODB_URI` — bind to the managed Mongo connection (see below)
+- `MONGODB_URI` — App Spec secret on the **api** service. Use the **private VPC** SRV URI. Do not commit the password to GitHub; set it in DigitalOcean **Settings → App Spec** (type `SECRET`). Attach the cluster as a trusted source for the app.
 - `JWT_SECRET`, `PASSWORD_SALT`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`
 - `CORS_ORIGIN=https://admin-xxxx.ondigitalocean.app` (or your domain)
 - `LOCATION_SERVICE_URL=http://location:4100` (internal App Platform name)

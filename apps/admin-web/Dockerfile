@@ -2,17 +2,19 @@
 #   docker build -f apps/admin-web/Dockerfile -t digi-switchride-admin .
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json .npmrc ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/admin-web/package.json apps/admin-web/package.json
 COPY apps/location/package.json apps/location/package.json
 COPY apps/telemetry/package.json apps/telemetry/package.json
 COPY libs/shared/package.json libs/shared/package.json
-RUN npm ci -w admin-web
+ENV NODE_ENV=development
+RUN npm ci -w admin-web --include=dev
 COPY apps/admin-web apps/admin-web
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_PUBLIC_API_URL=/api-proxy/v1
-ENV NODE_OPTIONS=--max-old-space-size=2048
+ENV NODE_OPTIONS=--max-old-space-size=1536
+ENV NODE_ENV=production
 RUN npm run build -w admin-web
 
 FROM node:22-bookworm-slim
