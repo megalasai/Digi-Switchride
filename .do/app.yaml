@@ -8,6 +8,28 @@ region: blr
 features:
   - buildpack-stack=ubuntu-22
 
+# One public hostname: each path prefix can belong to only one component.
+# Without this, App Platform assigns "/" to every web service and validation fails.
+ingress:
+  rules:
+    - match:
+        path:
+          prefix: /api
+      component:
+        name: api
+        preserve_path_prefix: true
+    - match:
+        path:
+          prefix: /geo
+      component:
+        name: location
+        rewrite: /
+    - match:
+        path:
+          prefix: /
+      component:
+        name: admin
+
 services:
   - name: api
     dockerfile_path: apps/api/Dockerfile

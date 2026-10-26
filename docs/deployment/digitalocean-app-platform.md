@@ -42,7 +42,7 @@ Create the app as **three Dockerfile web services** (one HTTP port each). Digita
 2. API: Dockerfile `apps/api/Dockerfile`, HTTP **4000**, health `/api/health`.
 3. Admin: Dockerfile `apps/admin-web/Dockerfile`, HTTP **3000**, health `/login`.
 4. Location: Dockerfile `apps/location/Dockerfile`, HTTP **4100**, health `/health`.
-5. Or import `.do/app.yaml` (Apps → Create → App Spec).
+5. Or import `.do/app.yaml` (Apps → Create → App Spec). The spec includes **ingress** so `/` is only the admin UI, `/api` is the Nest API, `/geo` is location. Without that, validation fails: path prefix `/` already in use.
 6. Destroy any Functions component.
 
 In **Create App**, if DigitalOcean suggests a Functions resource from `packages/`, **uncheck / remove it** before Create.
