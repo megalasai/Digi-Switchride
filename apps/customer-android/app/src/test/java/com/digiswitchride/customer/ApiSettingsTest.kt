@@ -7,7 +7,7 @@ import org.junit.Test
 class ApiSettingsTest {
     @Test
     fun normalizeBaseUrl_addsSchemeAndV1() {
-        assertEquals("http://10.0.2.2:4000/api/v1", ApiSettings.normalizeBaseUrl("10.0.2.2:4000"))
-        assertEquals("http://192.168.0.5:4000/api/v1", ApiSettings.normalizeBaseUrl("http://192.168.0.5:4000"))
+        assertEquals("http://162.159.140.98:4000/api/v1", ApiSettings.normalizeBaseUrl("162.159.140.98:4000"))
+        assertEquals("http://162.159.140.98:4000/api/v1", ApiSettings.normalizeBaseUrl("http://162.159.140.98:4000"))
     }
 }

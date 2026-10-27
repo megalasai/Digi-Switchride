@@ -2,68 +2,52 @@
 
 Rider mobile app: home dashboard, vehicle, payments, rental plan, KYC, support, and on-demand hub booking.
 
+The API host is **not** on the login screen. It is set in configuration:
+
+- `gradle.properties` → `API_BASE_URL=http://162.159.140.98:4000/api/v1`
+
 ## Requirements
 
 - Android Studio Ladybug or newer
 - JDK 17
 - Android SDK 35
 
-## Sync / dependency fixes
+## Build the APK you install on a phone
 
-This project uses **AGP 8.7.3** and **Gradle 8.10.2** (stable with Android Studio). If sync fails:
-
-1. **File → Invalidate Caches → Restart**
-2. **File → Sync Project with Gradle Files**
-3. Ensure **JDK 17** is set: *Settings → Build → Gradle → Gradle JDK*
-
-Google Maps was removed from dependencies (not required for current UI) to avoid Play Services sync issues.
-
-## API URL
-
-| Environment | API server field |
-|-------------|------------------|
-| Emulator | `10.0.2.2:4000` |
-| Physical phone | Your PC IP from `ipconfig`, e.g. `192.168.0.50:4000` |
-
-Backend base path: `/api/v1`
-
-Start API from repo root:
+From `apps/customer-android`:
 
 ```cmd
-npm run dev
+gradlew.bat assembleDebug
 ```
 
-## Run on emulator
+Install this file:
 
-1. Open `apps/customer-android` in Android Studio
+**`apps/customer-android/app/build/outputs/apk/debug/app-debug.apk`**
+
+On the phone: enable **Install from unknown sources** (or “Install via USB”), copy the APK, open it, install. There is no Play Store listing yet — use this debug APK.
+
+Release / Play Store would be `assembleRelease` + a keystore. That is not set up; use **debug** for the POC.
+
+## Run from Android Studio
+
+1. Open `apps/customer-android`
 2. Sync Gradle
-3. Run **app** on an API 26+ emulator
-4. Register / sign in
-5. Use bottom tabs: **Home**, **Vehicle**, **Pay**, **Plan**, **More**
+3. Run **app** on a device (API 26+)
+4. Sign in with organization slug (for example `digi-switchride`)
 
-## Feature map (spec → app)
+## Make it work
+
+1. API must be reachable: `http://162.159.140.98:4000/api/health` from the phone’s browser.
+2. If that fails, App Platform is probably only on **HTTPS :443**, not raw **:4000**. Then set `API_BASE_URL` to `https://YOUR-APP.ondigitalocean.app/api/v1`, rebuild, and reinstall the APK.
+3. API CORS already allows mobile clients. Cluster trusted sources must allow the API.
+
+## Feature map
 
 | Spec area | Where in app |
 |-----------|----------------|
-| Home (plan, wallet, dues, alerts) | **Home** tab |
-| My Vehicle / breakdown / service | **Vehicle** tab |
-| Payments & wallet | **Pay** tab |
+| Home | **Home** tab |
+| My Vehicle | **Vehicle** tab |
+| Payments | **Pay** tab |
 | Rental plan | **Plan** tab |
-| Profile, KYC, agreements, stations, support, feedback, refer | **More** menu |
-| On-demand hub book / start / end ride | **More → Book a ride** |
-
-## Admin setup for testing
-
-1. Login admin web as SuperAdmin
-2. Create **hub** (Nagpur coords default), **vehicles** (Available, assigned to hub)
-3. Create **rental plans**, assign rider vehicle/plan if using rental home data
-4. Approve rider **KYC** after mobile submit
-
-## Unit test (optional)
-
-```cmd
-cd apps\customer-android
-gradlew testDebugUnitTest
-```
-
-Tests `ApiSettings` URL normalization without a device.
+| Profile, KYC, support | **More** |
+| Book a ride | **More → Book a ride** |

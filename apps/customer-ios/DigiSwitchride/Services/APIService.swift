@@ -75,7 +75,7 @@ enum APIError: Error { case invalidURL, requestFailed, unauthorized }
 
 class APIService {
     static let shared = APIService()
-    private let baseURL = "http://localhost:4000/api/v1"
+    private let baseURL = AppConfig.apiBaseURL
     var accessToken: String?
 
     private func request<T: Decodable>(_ method: String, _ path: String, body: Encodable? = nil) async throws -> T {
@@ -83,6 +83,7 @@ class APIService {
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(AppConfig.tenantSlug, forHTTPHeaderField: "X-Tenant-Slug")
         if let token = accessToken { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         if let body { req.httpBody = try JSONEncoder().encode(body) }
         let (data, response) = try await URLSession.shared.data(for: req)

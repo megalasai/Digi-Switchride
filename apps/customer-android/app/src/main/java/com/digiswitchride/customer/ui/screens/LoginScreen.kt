@@ -28,7 +28,6 @@ fun LoginScreen(onAuthenticated: () -> Unit, viewModel: AuthViewModel = hiltView
     var password by remember { mutableStateOf("") }
     var fullName by remember { mutableStateOf("") }
     val state by viewModel.state.collectAsState()
-    val apiHost by viewModel.apiHost.collectAsState()
     val tenantSlug by viewModel.tenantSlug.collectAsState()
 
     LaunchedEffect(state.isAuthenticated) {
@@ -97,19 +96,6 @@ fun LoginScreen(onAuthenticated: () -> Unit, viewModel: AuthViewModel = hiltView
                         label = { Text("Organization slug") },
                         placeholder = { Text("digi-switchride") },
                         supportingText = { Text("Your operator’s organization id") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = apiHost,
-                        onValueChange = { viewModel.updateApiHost(it) },
-                        label = { Text("API server") },
-                        placeholder = { Text("192.168.0.50:4000") },
-                        supportingText = {
-                            Text("Emulator: 10.0.2.2:4000 · Phone: your PC IP from ipconfig")
-                        },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),

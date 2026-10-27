@@ -2,6 +2,7 @@ package com.digiswitchride.customer.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.digiswitchride.customer.BuildConfig
 import com.digiswitchride.customer.data.ApiErrorParser
 import com.digiswitchride.customer.data.ApiSettings
 import com.digiswitchride.customer.data.TokenManager
@@ -28,8 +29,6 @@ class AuthViewModel @Inject constructor(
 ) : ViewModel() {
     private val _state = MutableStateFlow(AuthState())
     val state: StateFlow<AuthState> = _state
-    private val _apiHost = MutableStateFlow("")
-    val apiHost: StateFlow<String> = _apiHost
     private val _tenantSlug = MutableStateFlow("digi-switchride")
     val tenantSlug: StateFlow<String> = _tenantSlug
     private val _sessionChecked = MutableStateFlow(false)
@@ -39,7 +38,6 @@ class AuthViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            _apiHost.value = apiSettings.getDisplayHost()
             _tenantSlug.value = apiSettings.getTenantSlug()
             _hasSession.value = tokenManager.getAccessToken() != null
             _sessionChecked.value = true
@@ -56,7 +54,6 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    fun updateApiHost(host: String) { _apiHost.value = host }
     fun updateTenantSlug(slug: String) {
         _tenantSlug.value = slug
         viewModelScope.launch {
@@ -72,16 +69,11 @@ class AuthViewModel @Inject constructor(
         }
     }
     fun clearError() { _state.value = _state.value.copy(error = null) }
-    private suspend fun persistApiHost() {
-        if (_apiHost.value.isNotBlank()) apiSettings.setBaseUrl(_apiHost.value)
-        apiSettings.setTenantSlug(_tenantSlug.value)
-    }
-
     fun login(username: String, password: String) {
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
             try {
-                persistApiHost()
+                apiSettings.setTenantSlug(_tenantSlug.value)
                 val tokens = api.login(LoginRequest(username.trim(), password))
                 tokenManager.saveTokens(tokens.accessToken, tokens.refreshToken)
                 _hasSession.value = true
@@ -96,7 +88,7 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
             try {
-                persistApiHost()
+                apiSettings.setTenantSlug(_tenantSlug.value)
                 val tokens = api.register(RegisterRequest(username.trim(), password, fullName?.trim()?.takeIf { it.isNotEmpty() }))
                 tokenManager.saveTokens(tokens.accessToken, tokens.refreshToken)
                 _hasSession.value = true
@@ -125,7 +117,7 @@ class AuthViewModel @Inject constructor(
             message.contains("Failed to connect", ignoreCase = true) ||
                 message.contains("timeout", ignoreCase = true) ||
                 message.contains("Unable to resolve host", ignoreCase = true) ->
-                "Cannot reach API server. On a phone use your PC IP (ipconfig), e.g. 192.168.0.50:4000"
+                "Cannot reach the API at ${BuildConfig.API_BASE_URL}. Check that the server is running and port 4000 is open."
             else -> ApiErrorParser.message(e)
         }
     }

@@ -18,10 +18,7 @@ class ApiSettings @Inject constructor(@ApplicationContext private val context: C
     private val baseUrlKey = stringPreferencesKey("base_url")
     private val tenantSlugKey = stringPreferencesKey("tenant_slug")
 
-    suspend fun getBaseUrl(): String {
-        val override = context.apiSettingsStore.data.map { it[baseUrlKey] }.first()
-        return normalizeBaseUrl(override ?: BuildConfig.API_BASE_URL)
-    }
+    suspend fun getBaseUrl(): String = BuildConfig.API_BASE_URL
 
     suspend fun setBaseUrl(input: String) {
         val normalized = normalizeBaseUrl(input)

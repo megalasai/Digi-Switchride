@@ -1,47 +1,31 @@
 # Digi-Switchride iOS App
 
-Native Swift + SwiftUI customer application for the Digi-Switchride platform.
+Native Swift + SwiftUI rider app.
 
-## Requirements
+The API host is **not** on the login screen. It is set in `DigiSwitchride/Config/AppConfig.swift`:
 
-- Xcode 15+
-- iOS 17.0+
-- macOS for building
-
-## Setup
-
-1. Open `DigiSwitchride.xcodeproj` in Xcode (create project from these sources)
-2. Set your development team in Signing & Capabilities
-3. Add Google Maps API key in Info.plist if using map view
-4. Update API base URL in `Services/APIService.swift` for your environment
-
-## Project Structure
-
-```
-DigiSwitchride/
-├── App/
-│   └── DigiSwitchrideApp.swift      # App entry point + tab navigation
-├── Theme/
-│   └── AppTheme.swift               # Brand colors and button styles
-├── Components/
-│   └── Components.swift             # Reusable UI components
-├── Services/
-│   └── APIService.swift             # REST API client + AuthManager
-└── Views/
-    └── Screens.swift                # All UI screens
+```swift
+static let apiBaseURL = "http://162.159.140.98:4000/api/v1"
 ```
 
-## Features
+`Info.plist` allows HTTP (ATS) so this IP:4000 URL can load.
 
-- Home: plan, dues, wallet, vehicle, alerts, breakdown/service status
-- My Vehicle: details, breakdown alert, service requests, appointments
-- Payments & wallet: outstanding, pay methods, history
-- Rental plans: view and change eligible plans
-- Documents, charging stations, profile, feedback, support, refer & earn
+## There is no installable `.ipa` in this repo
 
-## API
+Apple does not allow sideloading an unsigned IPA the way Android uses an APK.
 
-Connects to Platform API at `/api/v1` — see `contracts/openapi/platform-v1.yaml`.
+| What you want | How |
+|---------------|-----|
+| Your iPhone (POC) | Mac + Xcode → open the sources → **Signing & Capabilities** → your Team → Run on the device |
+| Testers | Apple Developer Program + **TestFlight** (upload a signed IPA from Xcode Archive) |
+| App Store | Same, plus App Store Connect review |
 
-For simulator: use `http://localhost:4000/api/v1`
-For device: use your machine's local IP (e.g. `http://192.168.x.x:4000/api/v1`).
+The Xcode project file is not checked in. On a Mac: **File → New → Project → App**, use bundle sources under `DigiSwitchride/`, add every `.swift` file and `Info.plist`.
+
+You **cannot** produce a working iOS install from Windows.
+
+## Make it work
+
+1. Confirm `http://162.159.140.98:4000/api/health` in Safari on the iPhone.
+2. If that fails, App Platform likely only serves **HTTPS** on the `*.ondigitalocean.app` host. Put that URL (with `/api/v1`) in `AppConfig.swift` and run again.
+3. Trust the developer certificate on the iPhone: Settings → General → VPN & Device Management.
