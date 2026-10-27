@@ -28,27 +28,33 @@ export class AuthService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    const email = this.config.get<string>('ADMIN_EMAIL', 'admin@digiswitchride.com').toLowerCase();
-    const password = this.config.get<string>('ADMIN_PASSWORD', 'Admin@123');
-    const salt = this.config.get<string>('PASSWORD_SALT', 'dev-salt');
-    const passwordHash = hashPassword(password, salt);
+    await runWithoutTenant(async () => {
+      try {
+        const email = this.config.get<string>('ADMIN_EMAIL', 'admin@digiswitchride.com').toLowerCase();
+        const password = this.config.get<string>('ADMIN_PASSWORD', 'Admin@123');
+        const salt = this.config.get<string>('PASSWORD_SALT', 'dev-salt');
+        const passwordHash = hashPassword(password, salt);
 
-    const existing = await this.adminModel.findOne({ email });
-    if (!existing) {
-      await this.adminModel.create({
-        email,
-        passwordHash,
-        fullName: 'Super Admin',
-        role: 'SuperAdmin',
-        isActive: true,
-      });
-      return;
-    }
+        const existing = await this.adminModel.findOne({ email }).lean();
+        if (!existing) {
+          await this.adminModel.create({
+            email,
+            passwordHash,
+            fullName: 'Super Admin',
+            role: 'SuperAdmin',
+            isActive: true,
+          });
+          return;
+        }
 
-    existing.passwordHash = passwordHash;
-    existing.isActive = true;
-    if (!existing.role) existing.role = 'SuperAdmin';
-    await existing.save();
+        await this.adminModel.collection.updateOne(
+          { email },
+          { $set: { passwordHash, isActive: true, role: existing.role || 'SuperAdmin' } },
+        );
+      } catch (err) {
+        console.error('Admin bootstrap skipped:', err instanceof Error ? err.message : err);
+      }
+    });
   }
 
   async sendOtp(dto: SendOtpDto) {
