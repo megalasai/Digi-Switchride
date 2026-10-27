@@ -55,9 +55,6 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(email, password, tenantSlug || undefined);
-      const org = orgs.find((o) => o.slug === tenantSlug);
-      if (org) localStorage.setItem("adminTenantId", org.id);
-      else localStorage.removeItem("adminTenantId");
       router.replace("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");

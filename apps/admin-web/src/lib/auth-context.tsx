@@ -61,7 +61,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     localStorage.setItem("adminToken", data.accessToken);
     localStorage.setItem("adminUser", JSON.stringify(data.user));
-    if (data.user?.tenantId && data.user.role !== "SuperAdmin") {
+    if (data.user?.role === "SuperAdmin") {
+      localStorage.removeItem("adminTenantId");
+    } else if (data.user?.tenantId) {
       localStorage.setItem("adminTenantId", data.user.tenantId);
     }
     setUser(data.user);

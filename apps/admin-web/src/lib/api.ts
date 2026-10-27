@@ -28,7 +28,8 @@ async function request<T>(path: string, options: RequestInit = {}, opts?: { publ
     },
   });
   if (res.status === 401 && !opts?.public) {
-    handleUnauthorized();
+    const path = typeof window !== "undefined" ? window.location.pathname : "";
+    if (!path.startsWith("/login")) handleUnauthorized();
     throw new Error("Session expired. Please sign in again.");
   }
   if (!res.ok) throw new Error(await parseError(res));

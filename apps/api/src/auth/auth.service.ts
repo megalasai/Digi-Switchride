@@ -2,7 +2,7 @@ import { ConflictException, ForbiddenException, Injectable, NotFoundException, O
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { randomUUID } from 'crypto';
 import { normalizeAdminRole, type AdminRole } from '@digi-switchride/shared';
 import { AuditService, type AuditActor } from '../audit/audit.service';
@@ -244,11 +244,25 @@ export class AuthService implements OnModuleInit {
   }
 
   async validateCustomer(customerId: string) {
-    return runWithoutTenant(() => this.customerModel.findById(customerId));
+    return runWithoutTenant(() => this.findByEitherId(this.customerModel, customerId));
   }
 
   async validateAdmin(adminId: string) {
-    return runWithoutTenant(() => this.adminModel.findOne({ _id: adminId, isActive: true }));
+    return runWithoutTenant(async () => {
+      const admin = await this.findByEitherId(this.adminModel, adminId);
+      if (!admin?.isActive) return null;
+      return admin;
+    });
+  }
+
+  /** JSON restore stored _id as a string; mongoose findById uses ObjectId and misses the row. */
+  private async findByEitherId<T>(model: Model<T>, id: string): Promise<T | null> {
+    const found = await model.findById(id);
+    if (found) return found;
+    const raw = await model.collection.findOne({
+      $or: [{ _id: id }, ...(Types.ObjectId.isValid(id) ? [{ _id: new Types.ObjectId(id) }] : [])],
+    });
+    return raw ? model.hydrate(raw) : null;
   }
 
   private async issueCustomerTokens(customer: CustomerDocument, isNewUser: boolean) {
