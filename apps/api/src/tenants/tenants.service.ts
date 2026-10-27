@@ -4,7 +4,7 @@ import { Connection, Model } from 'mongoose';
 import { Tenant, TenantDocument } from '../schemas/tenant.schema';
 import { AdminUser, AdminUserDocument } from '../schemas/admin.schema';
 import { runWithoutTenant } from '../common/tenant-als';
-import { PARENT_COMPANY_NAME, PARENT_COMPANY_SLUG, PRODUCT_NAME } from '@digi-switchride/shared';
+import { displayProductName, PARENT_COMPANY_NAME, PARENT_COMPANY_SLUG, PRODUCT_NAME } from '@digi-switchride/shared';
 import { findByEitherId } from '../common/mongo-id';
 
 export const DEFAULT_TENANT_SLUG = 'digi-switchride';
@@ -95,7 +95,7 @@ export class TenantsService implements OnModuleInit {
     } else {
       const set: Record<string, unknown> = {};
       if (!tenant.kind) set.kind = 'Tenant';
-      if (tenant.name === 'Digi-Switchride') set.name = PRODUCT_NAME;
+      if (displayProductName(tenant.name) !== tenant.name) set.name = PRODUCT_NAME;
       if (Object.keys(set).length) {
         await this.tenantModel.collection.updateOne({ slug: DEFAULT_TENANT_SLUG }, { $set: set });
         Object.assign(tenant, set);
@@ -206,7 +206,7 @@ export class TenantsService implements OnModuleInit {
     return {
       id: tenant._id.toString(),
       slug: tenant.slug,
-      name: tenant.name,
+      name: /digi[\s-]*switch/i.test(tenant.name) ? PRODUCT_NAME : tenant.name,
       contactEmail: tenant.contactEmail,
       status: tenant.status,
       isDefault: tenant.isDefault,

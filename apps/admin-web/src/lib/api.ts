@@ -141,7 +141,12 @@ export const api = {
     request<ReportSummary>(`/admin/reports/summary?from=${from}&to=${to}`),
   reconciliation: (from: string, to: string) =>
     request<FinanceReconciliation>(`/admin/finance/reconciliation?from=${from}&to=${to}`),
-  iotDevices: () => request<{ items: IoTDevice[] }>("/admin/iot/devices"),
+  geoSearch: (q: string) =>
+    request<{ items: { display_name: string; lat: string; lon: string }[] }>(`/geo/search?q=${encodeURIComponent(q)}`).then((r) => r.items),
+  geoReverse: (lat: number, lng: number) =>
+    request<{ display_name?: string; source?: string } | null>(`/geo/reverse?lat=${lat}&lng=${lng}`),
+  geoStatus: () => request<{ ok: boolean; url: string; error?: string; status?: string }>("/geo/status"),
+  iotDevices: () => request<{ items: IoTDevice[]; sync?: { at: string; ok: boolean; synced: number; message: string } | null }>("/admin/iot/devices"),
   syncIotDevices: () => request<{ synced: number; linked: number; created?: number; message: string }>("/admin/iot/devices/sync", { method: "POST" }),
   createIoTDevice: (data: CreateIoTDevice) =>
     request("/admin/iot/devices", { method: "POST", body: JSON.stringify(data) }),

@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ComingSoonBadge, DisabledAction, DisabledField, DisabledSelect, ProvisionPanel } from "@/components/ui/Provision";
 import { Card } from "@/components/ui/Card";
@@ -39,12 +41,26 @@ const integrations = [
 ];
 
 export default function IntegrationsPage() {
+  const [location, setLocation] = useState<{ ok: boolean; url: string; error?: string } | null>(null);
+  useEffect(() => {
+    api.geoStatus().then(setLocation).catch((e) => setLocation({ ok: false, url: "/geo", error: e instanceof Error ? e.message : "unreachable" }));
+  }, []);
   return (
     <div>
       <PageHeader
         title="Integrations"
         description="Connect each tenant's payment gateway below. SMS, push, vault and KYC vendors remain provisioned until credentials are wired."
       />
+      <Card className="mb-6 p-5">
+        <p className="font-semibold text-text-primary">India location API</p>
+        <p className="mt-1 text-sm text-text-secondary">
+          {location == null
+            ? "Checking…"
+            : location.ok
+              ? `Working (${location.url}). Reverse geocode is used for live vehicle places.`
+              : `Not reachable (${location.error ?? "failed"}). Maps still show OpenStreetMap tiles; place names may stay empty until the location service is healthy.`}
+        </p>
+      </Card>
 
       <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2">
         {integrations.map((item) => (

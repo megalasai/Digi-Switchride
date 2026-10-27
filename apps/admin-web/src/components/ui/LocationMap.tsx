@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Input";
 import { resolveWheelClass, vehicleMarkerSvg, type WheelClass } from "@/lib/vehicleIcons";
 
+import { api } from "@/lib/api";
+
 const INDIA = { lat: 21.1458, lng: 79.0882 };
-const TILES = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
-const ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+const TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 type SearchHit = { display_name: string; lat: string; lon: string };
 
@@ -137,10 +138,7 @@ export function LocationPicker({
     setSearching(true);
     setSearchError("");
     try {
-      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=in&q=${encodeURIComponent(query.trim())}`;
-      const res = await fetch(url, { headers: { Accept: "application/json" } });
-      if (!res.ok) throw new Error("Search failed");
-      const data = (await res.json()) as SearchHit[];
+      const data = await api.geoSearch(query.trim());
       setHits(data);
       if (!data.length) setSearchError("No matching places. Try a fuller address.");
     } catch {
@@ -512,12 +510,9 @@ function vehicleLeafletIcon(
 async function reverseGeocode(lat: number, lng: number, onAddress?: (address: string) => void) {
   if (!onAddress) return;
   try {
-    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`;
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
-    if (!res.ok) return;
-    const data = (await res.json()) as { display_name?: string };
-    if (data.display_name) onAddress(data.display_name);
+    const data = await api.geoReverse(lat, lng);
+    if (data?.display_name) onAddress(data.display_name);
   } catch {
-    /* nominatim is best-effort */
+    /* location lookup is best-effort */
   }
 }

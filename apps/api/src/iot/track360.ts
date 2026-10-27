@@ -20,12 +20,33 @@ export type Track360Device = {
 type Track360Row = Record<string, unknown>;
 
 export function parseTrack360Payload(payload: unknown): Track360Device[] {
-  const root = payload as { data?: unknown };
-  const rows = Array.isArray(root?.data) ? root.data : Array.isArray(payload) ? payload : [];
-  return rows
-    .filter((row): row is Track360Row => row != null && typeof row === 'object')
+  return collectRows(payload)
     .map(mapRow)
     .filter((row) => Boolean(row.deviceId));
+}
+
+function collectRows(payload: unknown, depth = 0): Track360Row[] {
+  if (payload == null || depth > 5) return [];
+  if (Array.isArray(payload)) {
+    return payload.flatMap((item) => collectRows(item, depth + 1));
+  }
+  if (typeof payload !== 'object') return [];
+  const rec = payload as Track360Row;
+  const looksLikeDevice =
+    rec.latitude != null ||
+    rec.lat != null ||
+    rec.longitude != null ||
+    rec.lng != null ||
+    rec.deviceImei != null ||
+    rec.imei != null ||
+    rec.deviceId != null;
+  if (looksLikeDevice) return [rec];
+  const nested = ['data', 'result', 'devices', 'list', 'rows', 'vehicleList', 'VehicleList'];
+  const out: Track360Row[] = [];
+  for (const key of nested) {
+    if (rec[key] != null) out.push(...collectRows(rec[key], depth + 1));
+  }
+  return out;
 }
 
 function mapRow(row: Track360Row): Track360Device {

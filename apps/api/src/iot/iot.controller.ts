@@ -11,7 +11,7 @@ export class IoTController {
 
   @Get('devices')
   listDevices() {
-    return this.iotService.listDevices().then((items) => ({ items }));
+    return this.iotService.listDevices().then((items) => ({ items, sync: this.iotService.lastSync }));
   }
 
   @Post('devices/sync')

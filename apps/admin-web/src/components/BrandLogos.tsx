@@ -65,7 +65,8 @@ export function ProductBrand({
   companyName?: string | null;
 }) {
   const { branding } = useBranding();
-  const name = branding?.productName ?? PRODUCT;
+  const raw = branding?.productName ?? PRODUCT;
+  const name = /digi[\s-]*switch/i.test(raw) ? PRODUCT : raw;
   const company = companyName ?? branding?.companyName;
   const pin = size === "lg" ? "h-14 w-14" : size === "sm" ? "h-9 w-9" : "h-11 w-11";
   const nameColor = variant === "dark" ? "text-white" : "text-text-primary";

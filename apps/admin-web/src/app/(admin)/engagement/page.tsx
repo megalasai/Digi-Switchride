@@ -24,7 +24,7 @@ export default function EngagementPage() {
   const [agreements, setAgreements] = useState<AgreementItem[]>([]);
   const [notice, setNotice] = useState({ title: "", body: "", audience: "AllRiders" });
   const [fb, setFb] = useState({ riderId: "", rating: "5", comment: "", category: "App" });
-  const [ag, setAg] = useState({ riderId: "", type: "RentalAgreement", content: "This rental agreement covers vehicle use, charges, KYC and damage liability under Digi-Switchride terms.", documentUrl: "" });
+  const [ag, setAg] = useState({ riderId: "", type: "RentalAgreement", content: "This rental agreement covers vehicle use, charges, KYC and damage liability under Fleetel-Switchride terms.", documentUrl: "" });
   const [ref, setRef] = useState({ riderId: "", code: "" });
 
   const reload = () => {

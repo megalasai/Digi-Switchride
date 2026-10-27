@@ -16,6 +16,7 @@ import { EngagementModule } from './engagement/engagement.module';
 import { RiderModule } from './rider/rider.module';
 import { BrandingModule } from './branding/branding.module';
 import { TenantsModule } from './tenants/tenants.module';
+import { GeoModule } from './geo/geo.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -45,6 +46,7 @@ import { HealthController } from './health.controller';
     EngagementModule,
     RiderModule,
     BrandingModule,
+    GeoModule,
   ],
 })
 export class AppModule {}

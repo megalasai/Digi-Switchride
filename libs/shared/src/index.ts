@@ -81,6 +81,10 @@ export type PaymentGatewayMode = (typeof PAYMENT_GATEWAY_MODES)[number];
 export const PARENT_COMPANY_SLUG = 'fleetel';
 export const PARENT_COMPANY_NAME = 'Fleetel';
 export const PRODUCT_NAME = 'Fleetel-Switchride';
+export function displayProductName(name?: string | null) {
+  if (!name || /digi[\s-]*switch/i.test(name)) return PRODUCT_NAME;
+  return name;
+}
 export const KYC_DOCUMENT_TYPES: KycDocumentType[] = ['Aadhaar', 'PAN', 'DrivingLicence', 'Selfie'];
 export const REQUIRED_KYC_DOCUMENTS: KycDocumentType[] = ['Aadhaar', 'PAN', 'DrivingLicence'];
 export const BREAKDOWN_STATUSES: BreakdownStatus[] = ['Open', 'Assigned', 'InProgress', 'Escalated', 'Closed'];

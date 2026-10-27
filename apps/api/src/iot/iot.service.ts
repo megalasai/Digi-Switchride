@@ -10,13 +10,15 @@ import { toGeoLocation } from '../common/helpers';
 import { parseTrack360Payload, track360AuthHeader, track360PullUrl, type Track360Device } from './track360';
 import { applyHubScope, assignedHubIds } from '../common/hub-scope';
 import { runInWriteTenant } from '../common/tenant-write';
-import { currentTenantId, tenantAls } from '../common/tenant-als';
+import { runWithoutTenant } from '../common/tenant-als';
 import { findByEitherId } from '../common/mongo-id';
 import { TenantsService } from '../tenants/tenants.service';
+import { readSecret } from '../config/secrets';
 
 @Injectable()
 export class IoTService {
   private readonly logger = new Logger(IoTService.name);
+  lastSync: { at: string; ok: boolean; synced: number; message: string } | null = null;
 
   constructor(
     @InjectModel(IoTDevice.name) private deviceModel: Model<IoTDeviceDocument>,
@@ -98,13 +100,21 @@ export class IoTService {
   }
 
   async syncTrack360() {
-    const tenantId = currentOrDefaultTenant(this.tenants);
-    return tenantAls.run({ tenantId, hubIds: null, skip: false }, () => this.pullTrack360());
+    try {
+      const result = await runWithoutTenant(() => this.pullTrack360());
+      this.lastSync = { at: new Date().toISOString(), ok: true, synced: result.synced, message: result.message };
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.lastSync = { at: new Date().toISOString(), ok: false, synced: 0, message };
+      this.logger.warn(`Track360 sync failed: ${message}`);
+      return { synced: 0, linked: 0, created: 0, message };
+    }
   }
 
   private async pullTrack360() {
-    const username = this.config.get<string>('TRACK360_USERNAME', 'tyotaadmin');
-    const password = this.config.get<string>('TRACK360_PASSWORD', 'Admin@123');
+    const username = readSecret(this.config, 'TRACK360_USERNAME', 'tyotaadmin');
+    const password = readSecret(this.config, 'TRACK360_PASSWORD', 'Admin@123');
     const baseUrl = this.config.get<string>(
       'TRACK360_PULL_URL',
       'https://prod-s1.track360.net.in/api/v1/auth/pull_api',
@@ -115,16 +125,21 @@ export class IoTService {
 
     const url = track360PullUrl(baseUrl, username, password);
     const res = await fetch(url, {
+      signal: AbortSignal.timeout(20000),
       headers: {
         Accept: 'application/json',
         Authorization: track360AuthHeader(username, password),
       },
     });
     if (!res.ok) {
-      throw new Error(`Track360 pull failed (${res.status})`);
+      const body = await res.text().catch(() => '');
+      throw new Error(`Track360 pull failed (${res.status})${body ? `: ${body.slice(0, 180)}` : ''}`);
     }
     const payload = (await res.json()) as unknown;
     const devices = parseTrack360Payload(payload);
+    if (!devices.length) {
+      this.logger.warn('Track360 returned no device rows');
+    }
     let linked = 0;
     let created = 0;
     for (const device of devices) {
@@ -141,6 +156,17 @@ export class IoTService {
     }
     const backfill = await this.provisionAllDevices();
     created += backfill.created;
+    const tenantId = this.tenants.defaultTenantId();
+    if (tenantId) {
+      await this.deviceModel.collection.updateMany(
+        { $or: [{ tenantId: { $exists: false } }, { tenantId: null }, { tenantId: '' }] },
+        { $set: { tenantId } },
+      );
+      await this.vehicleModel.collection.updateMany(
+        { $or: [{ tenantId: { $exists: false } }, { tenantId: null }, { tenantId: '' }] },
+        { $set: { tenantId } },
+      );
+    }
     this.logger.log(`Track360 sync: ${devices.length} devices, ${created} vehicles created, ${linked} linked`);
     return {
       synced: devices.length,
@@ -573,10 +599,6 @@ export class IoTService {
       status: 'Active',
     });
   }
-}
-
-function currentOrDefaultTenant(tenants: TenantsService) {
-  return currentTenantId() || tenants.defaultTenantId() || '';
 }
 
 function isMongoDuplicate(error: unknown) {

@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { PRODUCT_NAME } from '@digi-switchride/shared';
+import { displayProductName, PRODUCT_NAME } from '@digi-switchride/shared';
 import { Branding, BrandingDocument } from '../schemas/branding.schema';
 import { TenantsService } from '../tenants/tenants.service';
 import { currentTenantId, tenantAls } from '../common/tenant-als';
@@ -22,7 +22,7 @@ export class BrandingService {
     const tenantId = currentTenantId();
     const tenant = tenantId ? await this.tenants.peek(tenantId) : null;
     return {
-      productName: doc.productName || PRODUCT_NAME,
+      productName: displayProductName(doc.productName),
       companyName: tenant?.name ?? null,
       companyId: tenantId,
       companySlug: tenant?.slug ?? null,
@@ -82,7 +82,13 @@ export class BrandingService {
   private async ensureDoc() {
     const tenantId = currentTenantId();
     let doc = await this.brandingModel.findOne({ key: KEY });
-    if (doc) return doc;
+    if (doc) {
+      if (displayProductName(doc.productName) !== doc.productName) {
+        doc.productName = PRODUCT_NAME;
+        await this.brandingModel.collection.updateOne({ key: KEY }, { $set: { productName: PRODUCT_NAME } }).catch(() => undefined);
+      }
+      return doc;
+    }
     const raw = await this.brandingModel.collection.findOne({
       key: KEY,
       ...(tenantId ? { tenantId } : {}),

@@ -39,7 +39,7 @@ export default function BrandingPage() {
       .getBranding(isSuper ? id || companyId : undefined)
       .then((b) => {
         setBranding(b);
-        setProductName(b.productName);
+        setProductName(/digi[\s-]*switch/i.test(b.productName) ? "Fleetel-Switchride" : b.productName);
         setPreview(null);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load branding"));

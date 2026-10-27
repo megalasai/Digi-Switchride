@@ -28,9 +28,14 @@ export default function IoTPage() {
   const [search, setSearch] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [linkVehicleId, setLinkVehicleId] = useState<Record<string, string>>({});
+  const [syncInfo, setSyncInfo] = useState<{ at: string; ok: boolean; synced: number; message: string } | null>(null);
 
   const load = () => {
-    api.iotDevices().then((r) => setDevices(r.items)).catch((e) => setError(e.message));
+    api.iotDevices().then((r) => {
+      setDevices(r.items);
+      setSyncInfo(r.sync ?? null);
+      if (r.sync && !r.sync.ok) setError(r.sync.message);
+    }).catch((e) => setError(e.message));
     api.vehicles().then((r) => setVehicles(r.items)).catch(() => {});
   };
   useEffect(() => {
@@ -137,6 +142,7 @@ export default function IoTPage() {
           {devices.length} device{devices.length === 1 ? "" : "s"} in the application
           {devices.filter((d) => d.vendorType === "Track360").length ? ` · ${devices.filter((d) => d.vendorType === "Track360").length} from Track360` : ""}
           {devices.filter((d) => d.connectionStatus === "Connected").length ? ` · ${devices.filter((d) => d.connectionStatus === "Connected").length} online` : ""}
+          {syncInfo ? ` · last sync ${new Date(syncInfo.at).toLocaleTimeString()} (${syncInfo.ok ? `${syncInfo.synced} devices` : syncInfo.message})` : ""}
         </p>
         <div className="mt-3">
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search IMEI, registration, status…" />

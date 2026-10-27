@@ -36,9 +36,9 @@ export async function reversePlaceName(config: ConfigService, lat: number, lng: 
     config.get<string>('LOCATION_API_URL') ??
     'http://localhost:4100'
   ).replace(/\/$/, '');
-  const apiKey = config.get<string>('LOCATION_API_KEY');
+  const apiKey = (config.get<string>('LOCATION_API_KEY') ?? '').trim();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 1500);
+  const timer = setTimeout(() => controller.abort(), 4000);
   try {
     const url = `${base}/v1/locations/reverse?latitude=${encodeURIComponent(String(lat))}&longitude=${encodeURIComponent(String(lng))}`;
     const res = await fetch(url, {
