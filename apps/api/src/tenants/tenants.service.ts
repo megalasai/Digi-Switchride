@@ -69,9 +69,12 @@ export class TenantsService implements OnModuleInit {
         notes: 'Platform operator. Customer companies are tenants of Fleetel.',
       });
     } else if (parent.kind !== 'Parent') {
+      await this.tenantModel.collection.updateOne(
+        { slug: PARENT_COMPANY_SLUG },
+        { $set: { kind: 'Parent', name: PARENT_COMPANY_NAME } },
+      );
       parent.kind = 'Parent';
       parent.name = PARENT_COMPANY_NAME;
-      await parent.save();
     }
     await this.tenantModel.updateMany({ slug: { $ne: PARENT_COMPANY_SLUG }, $or: [{ kind: { $exists: false } }, { kind: null }] }, { $set: { kind: 'Tenant' } });
     return parent;
@@ -90,9 +93,13 @@ export class TenantsService implements OnModuleInit {
         notes: 'Sample tenant on the Fleetel-Switchride product, operated by Fleetel.',
       });
     } else {
-      if (!tenant.kind) tenant.kind = 'Tenant';
-      if (tenant.name === 'Digi-Switchride') tenant.name = PRODUCT_NAME;
-      if (tenant.isModified()) await tenant.save();
+      const set: Record<string, unknown> = {};
+      if (!tenant.kind) set.kind = 'Tenant';
+      if (tenant.name === 'Digi-Switchride') set.name = PRODUCT_NAME;
+      if (Object.keys(set).length) {
+        await this.tenantModel.collection.updateOne({ slug: DEFAULT_TENANT_SLUG }, { $set: set });
+        Object.assign(tenant, set);
+      }
     }
     return tenant;
   }
@@ -176,7 +183,22 @@ export class TenantsService implements OnModuleInit {
       }
       tenant.status = data.status;
     }
-    await tenant.save();
+    try {
+      await tenant.save();
+    } catch (err) {
+      if (!err || typeof err !== 'object' || (err as { name?: string }).name !== 'DocumentNotFoundError') throw err;
+      await this.tenantModel.collection.updateOne(
+        { slug: tenant.slug },
+        {
+          $set: {
+            name: tenant.name,
+            contactEmail: tenant.contactEmail,
+            notes: tenant.notes,
+            status: tenant.status,
+          },
+        },
+      );
+    }
     return this.toTenant(tenant);
   }
 

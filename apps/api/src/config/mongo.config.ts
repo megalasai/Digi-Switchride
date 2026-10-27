@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { patchMongooseRestoredIds } from '../common/mongo-id';
 
 /**
  * App Platform cannot resolve DigitalOcean *private* Mongo hostnames
@@ -21,6 +22,7 @@ export function resolveMongoUri(rawUri: string, logger?: Logger): string {
 }
 
 export function getMongooseOptions(uri: string) {
+  patchMongooseRestoredIds();
   return {
     uri,
     family: 4 as const,
