@@ -70,7 +70,7 @@ services:
         value: Admin@123
       - key: CORS_ORIGIN
         scope: RUN_TIME
-        value: "*"
+        value: "https://fleetel-switchride-pmxt5.ondigitalocean.app"
       - key: LOCATION_SERVICE_URL
         scope: RUN_TIME
         value: http://location:4100
@@ -100,7 +100,7 @@ services:
       - key: API_PROXY_TARGET
         value: http://api:4000
       - key: NEXT_PUBLIC_API_URL
-        value: /api-proxy/v1
+        value: /api/v1
 
   - name: location
     dockerfile_path: apps/location/Dockerfile

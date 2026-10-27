@@ -13,7 +13,7 @@ RUN npm ci -w admin-web --include=dev --include=optional
 RUN npm install -w admin-web --no-save lightningcss-linux-x64-gnu@1.32.0 @tailwindcss/oxide-linux-x64-gnu@4.3.3
 COPY apps/admin-web apps/admin-web
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NEXT_PUBLIC_API_URL=/api-proxy/v1
+ENV NEXT_PUBLIC_API_URL=/api/v1
 ENV NODE_OPTIONS=--max-old-space-size=1536
 ENV NODE_ENV=production
 RUN npm run build -w admin-web

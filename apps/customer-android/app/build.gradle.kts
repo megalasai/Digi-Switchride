@@ -19,7 +19,7 @@ android {
         buildConfigField(
             "String",
             "API_BASE_URL",
-            "\"${project.findProperty("API_BASE_URL") ?: "http://162.159.140.98:4000/api/v1"}\"",
+            "\"${project.findProperty("API_BASE_URL") ?: "https://fleetel-switchride-pmxt5.ondigitalocean.app/api/v1"}\"",
         )
         manifestPlaceholders["MAPS_API_KEY"] =
             (project.findProperty("MAPS_API_KEY") as String?) ?: ""

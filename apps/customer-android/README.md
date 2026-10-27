@@ -4,7 +4,7 @@ Rider mobile app: home dashboard, vehicle, payments, rental plan, KYC, support, 
 
 The API host is **not** on the login screen. It is set in configuration:
 
-- `gradle.properties` → `API_BASE_URL=http://162.159.140.98:4000/api/v1`
+- `gradle.properties` → `API_BASE_URL=https://fleetel-switchride-pmxt5.ondigitalocean.app/api/v1`
 
 ## Requirements
 
@@ -37,8 +37,8 @@ Release / Play Store would be `assembleRelease` + a keystore. That is not set up
 
 ## Make it work
 
-1. API must be reachable: `http://162.159.140.98:4000/api/health` from the phone’s browser.
-2. If that fails, App Platform is probably only on **HTTPS :443**, not raw **:4000**. Then set `API_BASE_URL` to `https://YOUR-APP.ondigitalocean.app/api/v1`, rebuild, and reinstall the APK.
+1. API must be reachable: `https://fleetel-switchride-pmxt5.ondigitalocean.app/api/health` from the phone’s browser.
+2. Public access is **HTTPS on 443**. Do not use `:4000` on the public hostname.
 3. API CORS already allows mobile clients. Cluster trusted sources must allow the API.
 
 ## Feature map

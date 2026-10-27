@@ -5,7 +5,7 @@ Native Swift + SwiftUI rider app.
 The API host is **not** on the login screen. It is set in `DigiSwitchride/Config/AppConfig.swift`:
 
 ```swift
-static let apiBaseURL = "http://162.159.140.98:4000/api/v1"
+static let apiBaseURL = "https://fleetel-switchride-pmxt5.ondigitalocean.app/api/v1"
 ```
 
 `Info.plist` allows HTTP (ATS) so this IP:4000 URL can load.
@@ -26,6 +26,6 @@ You **cannot** produce a working iOS install from Windows.
 
 ## Make it work
 
-1. Confirm `http://162.159.140.98:4000/api/health` in Safari on the iPhone.
-2. If that fails, App Platform likely only serves **HTTPS** on the `*.ondigitalocean.app` host. Put that URL (with `/api/v1`) in `AppConfig.swift` and run again.
+1. Confirm `https://fleetel-switchride-pmxt5.ondigitalocean.app/api/health` in Safari on the iPhone.
+2. Public access is **HTTPS on 443**. Do not use port 4000 on this hostname.
 3. Trust the developer certificate on the iPhone: Settings → General → VPN & Device Management.

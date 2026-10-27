@@ -7,7 +7,7 @@ import org.junit.Test
 class ApiSettingsTest {
     @Test
     fun normalizeBaseUrl_addsSchemeAndV1() {
-        assertEquals("http://162.159.140.98:4000/api/v1", ApiSettings.normalizeBaseUrl("162.159.140.98:4000"))
-        assertEquals("http://162.159.140.98:4000/api/v1", ApiSettings.normalizeBaseUrl("http://162.159.140.98:4000"))
+        assertEquals("https://fleetel-switchride-pmxt5.ondigitalocean.app/api/v1", ApiSettings.normalizeBaseUrl("https://fleetel-switchride-pmxt5.ondigitalocean.app/api"))
+        assertEquals("https://fleetel-switchride-pmxt5.ondigitalocean.app/api/v1", ApiSettings.normalizeBaseUrl("https://fleetel-switchride-pmxt5.ondigitalocean.app"))
     }
 }
