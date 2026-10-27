@@ -73,7 +73,7 @@ export default function LoginPage() {
           <p className="mt-4 max-w-md text-sm leading-6 text-[#c5cffc]">Riders, vehicles, payments and workshops in one operations desk.</p>
         </div>
         <div className="relative">
-          <p className="text-xs text-[#9aa3bc]">Digi-Switchride · Fleetel</p>
+          <p className="text-xs text-[#9aa3bc]">Fleetel-Switchride · Fleetel</p>
         </div>
       </div>
       <div className="flex items-center justify-center bg-surface p-6">
@@ -85,7 +85,7 @@ export default function LoginPage() {
             {tenantSlug ? (
               <>
                 <p className="text-lg font-semibold text-text-primary">{orgs.find((o) => o.slug === tenantSlug)?.name}</p>
-                <TenantLogo branding={orgBranding} size="md" />
+                <TenantLogo branding={orgBranding} slug={tenantSlug} size="md" fallback />
               </>
             ) : null}
             <div>

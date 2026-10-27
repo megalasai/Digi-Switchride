@@ -2,7 +2,7 @@
   "name": "digi-switchride",
   "version": "0.1.0",
   "private": true,
-  "description": "Digi-Switchride — Electric vehicle rental platform",
+  "description": "Fleetel-Switchride — Electric vehicle rental platform",
   "workspaces": [
     "apps/*",
     "libs/*"

@@ -52,7 +52,7 @@ export const api = {
   dashboard: () => request<DashboardSnapshot>("/admin/dashboard"),
   publicBranding: (tenantSlug?: string) =>
     request<Branding>(
-      "/branding",
+      tenantSlug ? `/branding?slug=${encodeURIComponent(tenantSlug)}` : "/branding",
       { headers: tenantSlug ? { "X-Tenant-Slug": tenantSlug } : {} },
       { public: true },
     ),
@@ -265,6 +265,7 @@ export interface TenantOrg {
   isDefault?: boolean;
   kind?: "Parent" | "Tenant";
   notes?: string;
+  logoUrl?: string | null;
 }
 
 export interface PaymentGatewayConfig {
@@ -444,6 +445,7 @@ export interface Branding {
   productName: string;
   companyName?: string | null;
   companyId?: string | null;
+  companySlug?: string | null;
   hasOptionalLogo: boolean;
   optionalLogoCleared?: boolean;
   optionalLogoUrl: string | null;

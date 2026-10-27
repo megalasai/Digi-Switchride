@@ -88,7 +88,7 @@ function ActiveRidesView() {
                       {ride.customerPhone ? ` · ${ride.customerPhone}` : ""}
                     </p>
                     <p className="text-sm text-text-muted">
-                      {ride.lastPlace ?? "Waiting for Digi-Switchride location lookup"}
+                      {ride.lastPlace ?? "Waiting for Fleetel-Switchride location lookup"}
                       {ride.lastPlaceKind === "Hub" ? " (inside hub)" : ride.lastPlaceKind === "Location" ? " (outside hub)" : ""}
                     </p>
                     <p className="text-sm text-text-muted">

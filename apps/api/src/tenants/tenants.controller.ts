@@ -46,6 +46,7 @@ export class PublicTenantsController {
         name: t.name,
         isDefault: t.isDefault,
         kind: t.kind,
+        logoUrl: `/api/v1/branding/optional-logo?slug=${encodeURIComponent(t.slug)}`,
       })),
     };
   }

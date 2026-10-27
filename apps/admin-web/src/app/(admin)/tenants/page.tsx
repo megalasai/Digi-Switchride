@@ -45,7 +45,7 @@ export default function TenantsPage() {
     <div>
       <PageHeader
         title="Organizations"
-        description="Fleetel is the parent company. Digi-Switchride is the product. Every other organization is a tenant customer with its own fleet, riders, branding and payment gateway."
+        description="Fleetel is the parent company. Fleetel-Switchride is the product. Every other organization is a tenant customer with its own fleet, riders, branding and payment gateway."
         actions={<Button onClick={() => { setEditId(null); setForm(emptyForm); setShowForm(true); }}>Add tenant</Button>}
       />
       {success && <div className="mb-4"><Alert variant="success" message={success} /></div>}

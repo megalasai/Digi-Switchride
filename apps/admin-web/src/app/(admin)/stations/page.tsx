@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { FormPanel } from "@/components/ui/Card";
 import { DataTable, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/DataTable";
 import { Field, Input, Select } from "@/components/ui/Input";
-import { LocationPicker } from "@/components/ui/LocationMap";
+import { LocationMarkersMap, LocationPicker } from "@/components/ui/LocationMap";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ACCESS, canAccess } from "@/lib/access";
 import { api, ChargingStation, Hub } from "@/lib/api";
@@ -32,6 +32,11 @@ export default function StationsPage() {
     <div>
       <PageHeader title="Charging stations" description="Locations, charger count and operating hours" />
       {error && <div className="mb-4"><Alert message={error} /></div>}
+      <LocationMarkersMap
+        points={items
+          .filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lng))
+          .map((s) => ({ id: s.id, lat: s.lat as number, lng: s.lng as number, label: `${s.name}<br/>${s.address}` }))}
+      />
       {canWrite && (
         <FormPanel title="Add station">
           <form className="grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={async (e) => {

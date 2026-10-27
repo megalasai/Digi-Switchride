@@ -9,7 +9,7 @@ export class Branding {
   @Prop({ required: true, default: 'default' })
   key!: string;
 
-  @Prop({ default: 'Digi-Switchride' })
+  @Prop({ default: 'Fleetel-Switchride' })
   productName!: string;
 
   @Prop()

@@ -49,6 +49,20 @@ export function toGeoLocation(lat: number, lng: number) {
   return { type: 'Point' as const, coordinates: [lng, lat] as [number, number] };
 }
 
+export function readLatLng(location: unknown): { lat: number; lng: number } | null {
+  if (!location || typeof location !== 'object') return null;
+  const loc = location as { coordinates?: unknown; lat?: unknown; lng?: unknown };
+  if (Array.isArray(loc.coordinates) && loc.coordinates.length >= 2) {
+    const lng = Number(loc.coordinates[0]);
+    const lat = Number(loc.coordinates[1]);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+  }
+  const lat = Number(loc.lat);
+  const lng = Number(loc.lng);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+  return null;
+}
+
 export function normalizeIndiaPhone(phone: string): string {
   const digits = phone.replace(/\D/g, '');
   if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);

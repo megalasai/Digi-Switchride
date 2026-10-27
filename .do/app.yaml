@@ -77,6 +77,16 @@ services:
       - key: LOCATION_API_URL
         scope: RUN_TIME
         value: http://location:4100
+      - key: TRACK360_PULL_URL
+        scope: RUN_TIME
+        value: "https://prod-s1.track360.net.in/api/v1/auth/pull_api"
+      - key: TRACK360_USERNAME
+        scope: RUN_TIME
+        value: tyotaadmin
+      - key: TRACK360_PASSWORD
+        scope: RUN_TIME
+        type: SECRET
+        value: Admin@123
 
   - name: admin
     dockerfile_path: apps/admin-web/Dockerfile

@@ -8,8 +8,11 @@ const BrandingContext = createContext<{ branding: Branding | null; reload: () =>
   reload: () => {},
 });
 
+const PRODUCT = "Fleetel-Switchride";
+const FALLBACK_LOGO = "/brand/partner.png";
+
 const FALLBACK: Branding = {
-  productName: "Digi-Switchride",
+  productName: PRODUCT,
   companyName: null,
   hasOptionalLogo: false,
   optionalLogoCleared: false,
@@ -26,7 +29,7 @@ export function BrandingProvider({ children }: { children: React.ReactNode }) {
   }, []);
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
   return <BrandingContext.Provider value={{ branding, reload: load }}>{children}</BrandingContext.Provider>;
 }
 
@@ -34,14 +37,18 @@ export function useBranding() {
   return useContext(BrandingContext);
 }
 
-export function tenantLogoSrc(branding: Branding | null) {
-  if (!branding?.hasOptionalLogo && !branding?.optionalLogoDataUrl) return null;
-  if (branding.optionalLogoDataUrl) return branding.optionalLogoDataUrl;
-  if (branding.optionalLogoUrl) {
+export function tenantLogoSrc(branding: Branding | null, slug?: string | null) {
+  if (branding?.optionalLogoDataUrl) return branding.optionalLogoDataUrl;
+  if (branding?.optionalLogoUrl) {
     if (branding.optionalLogoUrl.startsWith("http") || branding.optionalLogoUrl.startsWith("data:")) {
       return branding.optionalLogoUrl;
     }
-    return `${API_BASE}/branding/optional-logo`;
+    if (branding.optionalLogoUrl.startsWith("/api/")) return branding.optionalLogoUrl;
+    return `${API_BASE}${branding.optionalLogoUrl.startsWith("/") ? branding.optionalLogoUrl : `/${branding.optionalLogoUrl}`}`;
+  }
+  if (branding?.hasOptionalLogo || slug) {
+    const query = slug || branding?.companySlug;
+    return query ? `${API_BASE}/branding/optional-logo?slug=${encodeURIComponent(query)}` : `${API_BASE}/branding/optional-logo`;
   }
   return null;
 }
@@ -58,7 +65,7 @@ export function ProductBrand({
   companyName?: string | null;
 }) {
   const { branding } = useBranding();
-  const name = branding?.productName ?? "Digi-Switchride";
+  const name = branding?.productName ?? PRODUCT;
   const company = companyName ?? branding?.companyName;
   const pin = size === "lg" ? "h-14 w-14" : size === "sm" ? "h-9 w-9" : "h-11 w-11";
   const nameColor = variant === "dark" ? "text-white" : "text-text-primary";
@@ -66,7 +73,7 @@ export function ProductBrand({
 
   return (
     <div className="flex min-w-0 items-center gap-3">
-      <img src="/brand/switchride.svg" alt="Digi-Switchride" className={`${pin} shrink-0`} />
+      <img src="/brand/switchride.svg" alt="Fleetel-Switchride" className={`${pin} shrink-0`} />
       {showName ? (
         <div className="min-w-0">
           <p className={`truncate text-base font-bold tracking-tight ${nameColor}`}>{company || name}</p>
@@ -79,22 +86,39 @@ export function ProductBrand({
 
 export function TenantLogo({
   branding,
+  slug,
   size = "md",
   label = true,
+  fallback = false,
 }: {
   branding?: Branding | null;
+  slug?: string | null;
   size?: "sm" | "md";
   label?: boolean;
+  fallback?: boolean;
 }) {
   const ctx = useBranding();
-  const src = tenantLogoSrc(branding ?? ctx.branding);
-  if (!src) return null;
+  const resolved = branding === undefined ? ctx.branding : branding;
+  const src = tenantLogoSrc(resolved, slug) ?? (fallback ? FALLBACK_LOGO : null);
+  const [shown, setShown] = useState(src);
+  useEffect(() => {
+    setShown(src);
+  }, [src]);
+  if (!shown) return null;
   const height = size === "sm" ? "h-8" : "h-12";
   return (
     <div className="min-w-0">
       {label ? <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted">Company logo</p> : null}
       <div className="inline-flex max-w-full items-center rounded-xl border border-border bg-white px-3 py-2">
-        <img src={src} alt="Company logo" className={`${height} w-auto max-w-[160px] object-contain object-left`} />
+        <img
+          src={shown}
+          alt="Company logo"
+          className={`${height} w-auto max-w-[160px] object-contain object-left`}
+          onError={() => {
+            if (fallback && shown !== FALLBACK_LOGO) setShown(FALLBACK_LOGO);
+            else setShown(null);
+          }}
+        />
       </div>
     </div>
   );

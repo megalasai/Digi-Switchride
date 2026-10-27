@@ -17,7 +17,7 @@ data class AuthState(
     val isLoading: Boolean = false,
     val isAuthenticated: Boolean = false,
     val error: String? = null,
-    val productName: String = "Digi-Switchride",
+    val productName: String = "Fleetel-Switchride",
     val optionalLogoUrl: String? = null,
 )
 
@@ -45,7 +45,7 @@ class AuthViewModel @Inject constructor(
                 val branding = api.branding()
                 val logo = if (branding.hasOptionalLogo) "${apiSettings.getBaseUrl().trimEnd('/')}/branding/optional-logo" else null
                 _state.value = _state.value.copy(
-                    productName = branding.productName ?: "Digi-Switchride",
+                    productName = branding.productName ?: "Fleetel-Switchride",
                     optionalLogoUrl = logo,
                 )
             } catch (_: Exception) {
@@ -62,7 +62,7 @@ class AuthViewModel @Inject constructor(
                 val branding = api.branding()
                 val logo = if (branding.hasOptionalLogo) "${apiSettings.getBaseUrl().trimEnd('/')}/branding/optional-logo" else null
                 _state.value = _state.value.copy(
-                    productName = branding.productName ?: "Digi-Switchride",
+                    productName = branding.productName ?: "Fleetel-Switchride",
                     optionalLogoUrl = logo,
                 )
             } catch (_: Exception) { }

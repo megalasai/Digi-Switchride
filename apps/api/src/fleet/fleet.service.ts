@@ -3,7 +3,8 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { RentalHub, RentalHubDocument, Vehicle, VehicleDocument, VehicleEvent, VehicleEventDocument } from '../schemas/fleet.schema';
 import { Customer, CustomerDocument } from '../schemas/customer.schema';
-import { haversineDistanceKm, normalizeVehicleRegistration, toGeoLocation } from '../common/helpers';
+import { haversineDistanceKm, normalizeVehicleRegistration, readLatLng, toGeoLocation } from '../common/helpers';
+import { findByEitherId, mongoIdCandidates } from '../common/mongo-id';
 import { IoTService } from '../iot/iot.service';
 import { AuditService, type AuditActor } from '../audit/audit.service';
 import { INDIA_VEHICLE_REG_PATTERN, VEHICLE_STATUSES, resolveWheelClass } from '@digi-switchride/shared';
@@ -27,14 +28,15 @@ export class FleetService {
     const hubs = await this.hubModel.find({ status: 'Active' });
     const results = await Promise.all(
       hubs.map(async (hub) => {
-        const [hubLng, hubLat] = hub.location.coordinates;
-        const distance = haversineDistanceKm(lat, lng, hubLat, hubLng);
+        const point = readLatLng(hub.location);
+        if (!point) return null;
+        const distance = haversineDistanceKm(lat, lng, point.lat, point.lng);
         if (distance > radiusKm) return null;
         const availableVehicles = await this.vehicleModel.countDocuments({ hubId: hub._id.toString(), status: 'Available' });
         return {
           id: hub._id.toString(),
           name: hub.name,
-          location: { lat: hubLat, lng: hubLng },
+          location: point,
           distanceKm: Math.round(distance * 100) / 100,
           availableVehicles,
           status: hub.status,
@@ -45,24 +47,9 @@ export class FleetService {
   }
 
   async getHub(hubId: string, lat?: number, lng?: number) {
-    const hub = await this.hubModel.findById(hubId);
+    const hub = await findByEitherId(this.hubModel, hubId);
     if (!hub) throw new NotFoundException('Hub not found');
-    const [hubLng, hubLat] = hub.location.coordinates;
-    const dist = lat != null && lng != null ? haversineDistanceKm(lat, lng, hubLat, hubLng) : 0;
-    const availableVehicles = await this.vehicleModel.countDocuments({ hubId, status: 'Available' });
-    return {
-      id: hub._id.toString(),
-      name: hub.name,
-      location: { lat: hubLat, lng: hubLng },
-      distanceKm: Math.round(dist * 100) / 100,
-      availableVehicles,
-      status: hub.status,
-      address: hub.address,
-      capacity: hub.capacity,
-      operatingHours: hub.operatingHours,
-      geoFenceRadiusM: hub.geoFenceRadiusM,
-      tenantId: (hub as { tenantId?: string }).tenantId,
-    };
+    return this.toHubView(hub, lat, lng);
   }
 
   async getHubVehicles(hubId: string, status?: string) {
@@ -73,7 +60,7 @@ export class FleetService {
   }
 
   async getVehicle(vehicleId: string) {
-    const v = await this.vehicleModel.findById(vehicleId);
+    const v = await findByEitherId(this.vehicleModel, vehicleId);
     if (!v) throw new NotFoundException('Vehicle not found');
     return this.toVehicle(v);
   }
@@ -81,7 +68,7 @@ export class FleetService {
   async getVehicleDetail(vehicleId: string) {
     const vehicle = await this.getVehicle(vehicleId);
     const rider = vehicle.assignedRiderId ? await this.customerModel.findById(vehicle.assignedRiderId) : null;
-    const hub = await this.hubModel.findById(vehicle.hubId);
+    const hub = await findByEitherId(this.hubModel, vehicle.hubId);
     const events = await this.eventModel.find({ vehicleId }).sort({ createdAt: -1 }).limit(50);
     return {
       vehicle,
@@ -120,7 +107,7 @@ export class FleetService {
   }
 
   async updateHub(hubId: string, data: { name?: string; location?: { lat: number; lng: number }; address?: string; capacity?: number; operatingHours?: string; geoFenceRadiusM?: number; status?: string }) {
-    const hub = await this.hubModel.findById(hubId);
+    const hub = await findByEitherId(this.hubModel, hubId);
     if (!hub) throw new NotFoundException('Hub not found');
 
     if (data.name != null) hub.name = data.name;
@@ -143,7 +130,7 @@ export class FleetService {
     const registrationNumber = this.requireValidRegistration(data.registrationNumber);
     const existing = await this.vehicleModel.findOne({ registrationNumber });
     if (existing) throw new ConflictException('Vehicle with this registration already exists');
-    const hub = await this.hubModel.findById(data.hubId);
+    const hub = await findByEitherId(this.hubModel, data.hubId);
     if (!hub) throw new NotFoundException('Hub not found');
     if (!hubAllowed(data.hubId)) throw new BadRequestException('You can only add vehicles to an assigned hub');
 
@@ -195,7 +182,7 @@ export class FleetService {
     if (data.model != null) vehicle.set('model', data.model);
     if (data.notes != null) vehicle.notes = data.notes;
     if (data.hubId != null && data.hubId !== vehicle.hubId) {
-      const hub = await this.hubModel.findById(data.hubId);
+      const hub = await findByEitherId(this.hubModel, data.hubId);
       if (!hub) throw new NotFoundException('Hub not found');
       const previousHub = vehicle.hubId;
       vehicle.hubId = data.hubId;
@@ -237,9 +224,29 @@ export class FleetService {
   async listAllHubs() {
     const filter: Record<string, unknown> = {};
     const hubs = assignedHubIds();
-    if (hubs) filter._id = { $in: hubs };
+    if (hubs) filter._id = { $in: hubs.flatMap((id) => mongoIdCandidates(id)) };
     const items = await this.hubModel.find(filter);
-    return Promise.all(items.map((h) => this.getHub(h._id.toString())));
+    return Promise.all(items.map((h) => this.toHubView(h)));
+  }
+
+  private async toHubView(hub: RentalHubDocument, lat?: number, lng?: number) {
+    const point = readLatLng(hub.location) ?? { lat: 21.1458, lng: 79.0882 };
+    const dist = lat != null && lng != null ? haversineDistanceKm(lat, lng, point.lat, point.lng) : 0;
+    const hubId = hub._id.toString();
+    const availableVehicles = await this.vehicleModel.countDocuments({ hubId, status: 'Available' });
+    return {
+      id: hubId,
+      name: hub.name,
+      location: point,
+      distanceKm: Math.round(dist * 100) / 100,
+      availableVehicles,
+      status: hub.status,
+      address: hub.address,
+      capacity: hub.capacity,
+      operatingHours: hub.operatingHours,
+      geoFenceRadiusM: hub.geoFenceRadiusM,
+      tenantId: (hub as { tenantId?: string }).tenantId,
+    };
   }
 
   async listVehicles(params: {

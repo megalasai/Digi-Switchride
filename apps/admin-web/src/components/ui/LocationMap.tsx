@@ -2,13 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Map as LeafletMap, Marker as LeafletMarker, Polyline as LeafletPolyline } from "leaflet";
+import "leaflet/dist/leaflet.css";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Input";
 import { resolveWheelClass, vehicleMarkerSvg, type WheelClass } from "@/lib/vehicleIcons";
 
 const INDIA = { lat: 21.1458, lng: 79.0882 };
-const TILES = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+const TILES = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+const ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
 type SearchHit = { display_name: string; lat: string; lon: string };
 
@@ -93,7 +95,7 @@ export function LocationPicker({
         void reverseGeocode(nextLat, nextLng, onAddressRef.current);
       });
       mapRef.current = map;
-      setTimeout(() => map.invalidateSize(), 80);
+      watchSize(mapEl.current, map);
     })();
 
     return () => {
@@ -244,7 +246,7 @@ export function LocationPreview({
       const heading = headingFromPath([...path, { lat, lng }]);
       const icon = vehicleLeafletIcon(L, resolveWheelClass(vehicleType, wheelClass), heading);
       L.marker([lat, lng], { icon }).addTo(map).bindPopup(label ?? `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
-      setTimeout(() => map?.invalidateSize(), 80);
+      watchSize(mapEl.current, map);
     })();
     return () => {
       cancelled = true;
@@ -293,7 +295,7 @@ export function LocationMarkersMap({
         points.forEach((p) => L.marker([p.lat, p.lng]).addTo(map!).bindPopup(p.label));
         map.fitBounds(bounds.pad(0.2));
       }
-      setTimeout(() => map?.invalidateSize(), 80);
+      watchSize(mapEl.current, map);
     })();
     return () => {
       cancelled = true;
@@ -354,7 +356,7 @@ export function LiveVehicleMap({
       const map = L.map(mapEl.current, { scrollWheelZoom: true }).setView([INDIA.lat, INDIA.lng], 5);
       L.tileLayer(TILES, { attribution: ATTRIBUTION, maxZoom: 19 }).addTo(map);
       mapRef.current = map;
-      setTimeout(() => map.invalidateSize(), 80);
+      watchSize(mapEl.current, map);
       await syncLiveMarkers(L);
     })();
     return () => {
@@ -436,6 +438,16 @@ export function LiveVehicleMap({
   }
 
   return <div ref={mapEl} className={className ?? "z-0 mb-6 h-80 w-full overflow-hidden rounded-2xl border border-border"} />;
+}
+
+function watchSize(el: HTMLElement | null, map: LeafletMap | null) {
+  if (!el || !map) return;
+  const redraw = () => map.invalidateSize();
+  setTimeout(redraw, 80);
+  setTimeout(redraw, 400);
+  if (typeof ResizeObserver === "undefined") return;
+  const ro = new ResizeObserver(redraw);
+  ro.observe(el);
 }
 
 function statusColor(status?: string | null) {

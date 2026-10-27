@@ -58,7 +58,16 @@ export function AdminHeader() {
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-3">
-        {user?.role !== "SuperAdmin" ? <TenantLogo size="sm" label={false} /> : null}
+        {user?.role !== "SuperAdmin" ? <TenantLogo size="sm" label={false} fallback /> : null}
+        {user?.role === "SuperAdmin" && tenantId ? (
+          <TenantLogo
+            size="sm"
+            label={false}
+            fallback
+            branding={null}
+            slug={tenants.find((t) => t.id === tenantId)?.slug}
+          />
+        ) : null}
         {user?.role === "SuperAdmin" && tenants.length > 0 && (
           <label className="flex items-center gap-2 text-xs text-text-muted">
             Working in

@@ -25,7 +25,7 @@ async function bootstrap() {
 
   const port = Number(config.get('PORT') ?? 4000);
   await app.listen(port, '0.0.0.0');
-  console.log(`Digi-Switchride API running on http://localhost:${port}/api`);
+  console.log(`Fleetel-Switchride API running on http://localhost:${port}/api`);
   console.log(`  LAN access: http://<your-ip>:${port}/api/v1  (use ipconfig / ifconfig)`);
 }
 

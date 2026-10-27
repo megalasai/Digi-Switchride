@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { Model } from 'mongoose';
-import { haversineDistanceKm } from '../common/helpers';
+import { haversineDistanceKm, readLatLng } from '../common/helpers';
 import type { RentalHubDocument } from '../schemas/fleet.schema';
 
 export const TRAIL_WINDOW_MS = 90_000;
@@ -74,9 +74,9 @@ export async function resolveHubOrPlace(
   const hubs = await hubModel.find({ status: { $ne: 'Inactive' } });
   let best: { id: string; name: string; distanceM: number; radiusM: number } | null = null;
   for (const hub of hubs) {
-    const coords = hub.location?.coordinates;
-    if (!coords || coords.length < 2) continue;
-    const distanceM = haversineDistanceKm(lat, lng, coords[1], coords[0]) * 1000;
+    const point = readLatLng(hub.location);
+    if (!point) continue;
+    const distanceM = haversineDistanceKm(lat, lng, point.lat, point.lng) * 1000;
     const radiusM = hub.geoFenceRadiusM ?? 100;
     if (distanceM <= radiusM && (!best || distanceM < best.distanceM)) {
       best = { id: hub._id.toString(), name: hub.name, distanceM, radiusM };

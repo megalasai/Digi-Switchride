@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '../auth/auth.module';
+import { TenantsModule } from '../tenants/tenants.module';
 import { Booking, BookingSchema, Ride, RideSchema } from '../schemas/booking.schema';
 import { Customer, CustomerSchema } from '../schemas/customer.schema';
 import { IoTDevice, IoTDeviceSchema, RentalHub, RentalHubSchema, Vehicle, VehicleSchema } from '../schemas/fleet.schema';
@@ -11,6 +12,7 @@ import { TrackingService } from './tracking.service';
 @Module({
   imports: [
     AuthModule,
+    TenantsModule,
     MongooseModule.forFeature([
       { name: IoTDevice.name, schema: IoTDeviceSchema },
       { name: Vehicle.name, schema: VehicleSchema },

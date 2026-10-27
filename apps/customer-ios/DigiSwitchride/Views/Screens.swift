@@ -11,7 +11,7 @@ struct LoginView: View {
         ScrollView {
             VStack(spacing: 32) {
                 Spacer(minLength: 40)
-                BrandHeader(title: "Digi-Switchride", subtitle: "Your vehicle, plan, payments and support")
+                BrandHeader(title: "Fleetel-Switchride", subtitle: "Your vehicle, plan, payments and support")
                 VStack(spacing: 16) {
                     Text(isRegister ? "Create account" : "Sign in").font(.title2.bold()).frame(maxWidth: .infinity, alignment: .leading)
                     TextField("Username", text: $username).textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder)

@@ -4,7 +4,8 @@ import { Connection, Model } from 'mongoose';
 import { Tenant, TenantDocument } from '../schemas/tenant.schema';
 import { AdminUser, AdminUserDocument } from '../schemas/admin.schema';
 import { runWithoutTenant } from '../common/tenant-als';
-import { PARENT_COMPANY_NAME, PARENT_COMPANY_SLUG } from '@digi-switchride/shared';
+import { PARENT_COMPANY_NAME, PARENT_COMPANY_SLUG, PRODUCT_NAME } from '@digi-switchride/shared';
+import { findByEitherId } from '../common/mongo-id';
 
 export const DEFAULT_TENANT_SLUG = 'digi-switchride';
 export { PARENT_COMPANY_SLUG };
@@ -81,16 +82,17 @@ export class TenantsService implements OnModuleInit {
     if (!tenant) {
       tenant = await this.tenantModel.create({
         slug: DEFAULT_TENANT_SLUG,
-        name: 'Digi-Switchride',
+        name: PRODUCT_NAME,
         status: 'Active',
         isDefault: true,
         kind: 'Tenant',
         contactEmail: 'admin@digiswitchride.com',
-        notes: 'Sample tenant on the Digi-Switchride product, operated by Fleetel.',
+        notes: 'Sample tenant on the Fleetel-Switchride product, operated by Fleetel.',
       });
-    } else if (!tenant.kind) {
-      tenant.kind = 'Tenant';
-      await tenant.save();
+    } else {
+      if (!tenant.kind) tenant.kind = 'Tenant';
+      if (tenant.name === 'Digi-Switchride') tenant.name = PRODUCT_NAME;
+      if (tenant.isModified()) await tenant.save();
     }
     return tenant;
   }
@@ -100,7 +102,7 @@ export class TenantsService implements OnModuleInit {
   }
 
   async findById(id: string) {
-    const tenant = await this.tenantModel.findById(id);
+    const tenant = await findByEitherId(this.tenantModel, id);
     if (!tenant) throw new NotFoundException('Tenant not found');
     return tenant;
   }
@@ -113,8 +115,8 @@ export class TenantsService implements OnModuleInit {
   async resolveTenantId(slugOrId?: string | null) {
     if (slugOrId) {
       if (/^[a-f0-9]{24}$/i.test(slugOrId)) {
-        const byId = await this.tenantModel.findOne({ _id: slugOrId, status: 'Active' });
-        if (byId) return byId._id.toString();
+        const byId = await findByEitherId(this.tenantModel, slugOrId);
+        if (byId && byId.status === 'Active') return byId._id.toString();
       }
       const bySlug = await this.findBySlug(slugOrId);
       if (bySlug) return bySlug._id.toString();
@@ -155,7 +157,7 @@ export class TenantsService implements OnModuleInit {
   }
 
   async peek(id: string) {
-    return this.tenantModel.findById(id);
+    return findByEitherId(this.tenantModel, id);
   }
 
   async update(
