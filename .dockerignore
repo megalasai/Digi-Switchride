@@ -5,9 +5,9 @@
 **/node_modules
 **/coverage
 **/*.tsbuildinfo
-apps/*/data
 apps/telemetry/data
-apps/location/data
+apps/location/data/*.sqlite*
+apps/location/data/*.osm.pbf
 apps/admin-web/.env.local
 apps/api/.env
 apps/telemetry/.env
