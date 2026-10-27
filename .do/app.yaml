@@ -56,15 +56,18 @@ services:
       - key: JWT_SECRET
         scope: RUN_TIME
         type: SECRET
+        value: Sw1tchR1de-Jwt-2026-Blr-7f3a9c2e4b8d1a6f
       - key: PASSWORD_SALT
         scope: RUN_TIME
         type: SECRET
+        value: Sw1tchR1de-Salt-2026-Blr-c4e8
       - key: ADMIN_EMAIL
         scope: RUN_TIME
         value: admin@digiswitchride.com
       - key: ADMIN_PASSWORD
         scope: RUN_TIME
         type: SECRET
+        value: Admin@123
       - key: CORS_ORIGIN
         scope: RUN_TIME
         value: "*"

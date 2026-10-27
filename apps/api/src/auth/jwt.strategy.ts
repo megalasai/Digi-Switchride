@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { normalizeAdminRole } from '@digi-switchride/shared';
+import { readSecret } from '../config/secrets';
 import { AuthService } from './auth.service';
 
 @Injectable()
@@ -13,7 +14,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      secretOrKey: config.get<string>('JWT_SECRET', 'dev-secret-key-min-32-chars-long!!'),
+      secretOrKey: readSecret(config, 'JWT_SECRET', 'dev-secret-key-min-32-chars-long!!'),
     });
   }
 

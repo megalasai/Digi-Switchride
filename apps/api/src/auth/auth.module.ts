@@ -3,6 +3,7 @@ import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
+import { readSecret } from '../config/secrets';
 import { Customer, CustomerSchema, OtpRecord, OtpRecordSchema, RefreshToken, RefreshTokenSchema } from '../schemas/customer.schema';
 import { AdminUser, AdminUserSchema } from '../schemas/admin.schema';
 import { AuditModule } from '../audit/audit.module';
@@ -26,7 +27,7 @@ import { AdminGuard, RolesGuard } from './admin.guard';
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService): JwtModuleOptions => ({
-        secret: config.get<string>('JWT_SECRET', 'dev-secret-key-min-32-chars-long!!'),
+        secret: readSecret(config, 'JWT_SECRET', 'dev-secret-key-min-32-chars-long!!'),
         signOptions: { expiresIn: '1h' },
       }),
     }),
