@@ -244,25 +244,30 @@ export class AuthService implements OnModuleInit {
   }
 
   async validateCustomer(customerId: string) {
-    return runWithoutTenant(() => this.findByEitherId(this.customerModel, customerId));
+    return runWithoutTenant(async () => {
+      const found = await this.customerModel.findById(customerId);
+      if (found) return found;
+      const raw = await this.customerModel.collection.findOne({ $or: this.idFilters(customerId) } as never);
+      return raw ? this.customerModel.hydrate(raw) : null;
+    });
   }
 
   async validateAdmin(adminId: string) {
     return runWithoutTenant(async () => {
-      const admin = await this.findByEitherId(this.adminModel, adminId);
-      if (!admin?.isActive) return null;
-      return admin;
+      const found = await this.adminModel.findById(adminId);
+      if (found?.isActive) return found;
+      const raw = await this.adminModel.collection.findOne({ $or: this.idFilters(adminId) } as never);
+      if (!raw) return null;
+      const admin = this.adminModel.hydrate(raw);
+      return admin.isActive ? admin : null;
     });
   }
 
   /** JSON restore stored _id as a string; mongoose findById uses ObjectId and misses the row. */
-  private async findByEitherId<T>(model: Model<T>, id: string): Promise<T | null> {
-    const found = await model.findById(id);
-    if (found) return found;
-    const raw = await model.collection.findOne({
-      $or: [{ _id: id }, ...(Types.ObjectId.isValid(id) ? [{ _id: new Types.ObjectId(id) }] : [])],
-    });
-    return raw ? model.hydrate(raw) : null;
+  private idFilters(id: string): object[] {
+    const filters: object[] = [{ _id: id }];
+    if (Types.ObjectId.isValid(id)) filters.push({ _id: new Types.ObjectId(id) });
+    return filters;
   }
 
   private async issueCustomerTokens(customer: CustomerDocument, isNewUser: boolean) {
