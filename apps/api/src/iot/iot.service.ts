@@ -71,7 +71,7 @@ export class IoTService {
       : null;
     const rows = await Promise.all(
       devices.map(async (d) => {
-        const vehicle = await this.resolveVehicle(d.deviceId);
+        const vehicle = await this.resolveVehicle(d.deviceId).catch(() => null);
         if (allowedVehicleIds && vehicle && !allowedVehicleIds.has(vehicle._id.toString())) return null;
         if (allowedVehicleIds && !vehicle) return null;
         return {
@@ -191,27 +191,33 @@ export class IoTService {
     let created = 0;
     let linked = 0;
     for (const device of devices) {
-      const result = await this.ensureVehicleForDevice({
-        deviceId: device.deviceId,
-        imei: device.imei ?? device.deviceId,
-        name: device.displayName || '',
-        lat: device.lastLat ?? null,
-        lng: device.lastLng ?? null,
-        vendorStatus: device.vendorStatus ?? device.connectionStatus ?? 'Unknown',
-        type: undefined,
-        vendorType: device.vendorType,
-      });
-      if (result.created) created += 1;
-      if (result.linked) linked += 1;
-      const gps = toCoord(device.lastLat, device.lastLng);
-      if (gps) {
-        await this.updateTelemetry(
-          device.deviceId,
-          gps.lat,
-          gps.lng,
-          device.batteryPercent,
-          device.odometerKm,
-          { speedKmh: device.speedKmh, ignition: device.ignition },
+      try {
+        const result = await this.ensureVehicleForDevice({
+          deviceId: device.deviceId,
+          imei: device.imei ?? device.deviceId,
+          name: device.displayName || '',
+          lat: device.lastLat ?? null,
+          lng: device.lastLng ?? null,
+          vendorStatus: device.vendorStatus ?? device.connectionStatus ?? 'Unknown',
+          type: undefined,
+          vendorType: device.vendorType,
+        });
+        if (result.created) created += 1;
+        if (result.linked) linked += 1;
+        const gps = toCoord(device.lastLat, device.lastLng);
+        if (gps) {
+          await this.updateTelemetry(
+            device.deviceId,
+            gps.lat,
+            gps.lng,
+            device.batteryPercent,
+            device.odometerKm,
+            { speedKmh: device.speedKmh, ignition: device.ignition },
+          );
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Provision ${device.deviceId} skipped: ${error instanceof Error ? error.message : error}`,
         );
       }
     }
@@ -277,7 +283,10 @@ export class IoTService {
     if (vehicle.status === 'Offline') {
       vehicle.status = 'Available';
     }
-    await vehicle.save();
+    await persistById(this.vehicleModel.collection, vehicle._id.toString(), {
+      iotDeviceId: deviceId,
+      status: vehicle.status,
+    });
 
     return {
       deviceId,
@@ -513,7 +522,10 @@ export class IoTService {
         if (gps) {
           already.lastLat = gps.lat;
           already.lastLng = gps.lng;
-          await already.save();
+          await persistById(this.vehicleModel.collection, already._id.toString(), {
+            lastLat: gps.lat,
+            lastLng: gps.lng,
+          });
         }
       }
       try {
@@ -589,11 +601,12 @@ export class IoTService {
       vehicle.lastLat = gps.lat;
       vehicle.lastLng = gps.lng;
     }
-    try {
-      await vehicle.save();
-    } catch {
-      /* unique registration clash — keep existing name */
-    }
+    await persistById(this.vehicleModel.collection, vehicle._id.toString(), {
+      registrationNumber: vehicle.registrationNumber,
+      model: vehicle.get('model'),
+      lastLat: vehicle.lastLat,
+      lastLng: vehicle.lastLng,
+    });
   }
 
   private async uniqueFallbackRegistration(name: string, deviceId: string): Promise<string> {

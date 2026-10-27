@@ -23,6 +23,8 @@ export async function findByEitherId(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
   if (!id) return null;
+  const byExpr = await model.findOne({ $expr: { $eq: [{ $toString: '$_id' }, id] } } as never);
+  if (byExpr) return byExpr;
   return model.findOne(mongoIdFilter(id) as never);
 }
 
@@ -70,8 +72,15 @@ export async function persistById(
   set: Record<string, unknown>,
 ) {
   const { _id: _omitId, __v: _omitV, ...rest } = set;
-  const res = await collection.updateOne(mongoIdFilter(id) as never, { $set: rest } as never);
-  return res.matchedCount;
+  const filters = [
+    { $expr: { $eq: [{ $toString: '$_id' }, id] } },
+    ...mongoIdCandidates(id).map((value) => ({ _id: value })),
+  ];
+  for (const filter of filters) {
+    const res = await collection.updateOne(filter as never, { $set: rest } as never);
+    if (res.matchedCount) return res.matchedCount;
+  }
+  return 0;
 }
 
 function snapshotForPersist(doc: mongoose.Document) {

@@ -34,7 +34,7 @@ export default function IoTPage() {
     api.iotDevices().then((r) => {
       setDevices(r.items);
       setSyncInfo(r.sync ?? null);
-      if (r.sync && !r.sync.ok) setError(r.sync.message);
+      if (!r.sync || r.sync.ok) setError("");
     }).catch((e) => setError(e.message));
     api.vehicles().then((r) => setVehicles(r.items)).catch(() => {});
   };
