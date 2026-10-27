@@ -1,5 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { createWriteStream } from 'node:fs';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { strFromU8, unzipSync } from 'fflate';
 import { coverageFromGeometries, geometriesFromGeoJson, type GeoJsonGeometry } from './coverage.js';
@@ -34,24 +37,33 @@ async function download(url: string, dest: string, refresh: boolean): Promise<vo
     console.log(`using cached ${path.basename(dest)}`);
     return;
   }
-  console.log(`downloading ${url}`);
-  const response = await fetch(url, {
-    headers: { 'user-agent': 'Digi-Switchride-Location/1.0' },
-    signal: AbortSignal.timeout(180_000),
-    redirect: 'follow',
-  });
-  if (!response.ok) {
-    throw new Error(`Download failed (${response.status}) for ${url}`);
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    try {
+      console.log(`downloading ${url} (attempt ${attempt}/5)`);
+      const response = await fetch(url, {
+        headers: { 'user-agent': 'Fleetel-Switchride-Location/1.0' },
+        signal: AbortSignal.timeout(600_000),
+        redirect: 'follow',
+      });
+      if (!response.ok || !response.body) {
+        throw new Error(`Download failed (${response.status}) for ${url}`);
+      }
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      const partial = `${dest}.part`;
+      await pipeline(Readable.fromWeb(response.body as never), createWriteStream(partial));
+      const size = fs.statSync(partial).size;
+      if (size < 100) throw new Error(`Download from ${url} was empty`);
+      fs.renameSync(partial, dest);
+      console.log(`saved ${path.basename(dest)} (${size} bytes)`);
+      return;
+    } catch (error) {
+      lastError = error;
+      console.warn(`download failed: ${error instanceof Error ? error.message : error}`);
+      await new Promise((resolve) => setTimeout(resolve, 4000 * attempt));
+    }
   }
-  const bytes = Buffer.from(await response.arrayBuffer());
-  if (bytes.length < 100) {
-    throw new Error(`Download from ${url} was empty`);
-  }
-  fs.mkdirSync(path.dirname(dest), { recursive: true });
-  const partial = `${dest}.part`;
-  fs.writeFileSync(partial, bytes);
-  fs.renameSync(partial, dest);
-  console.log(`saved ${path.basename(dest)} (${bytes.length} bytes)`);
+  throw lastError instanceof Error ? lastError : new Error(`Could not download ${url}`);
 }
 
 function readZipEntry(zipPath: string, entryName: string): string {

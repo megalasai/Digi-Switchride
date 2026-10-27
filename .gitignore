@@ -86,9 +86,16 @@ TestResults/
 # Azure
 .azure/
 
-# India location database and downloaded source dumps
+# India location database and bulky OSM extract. Keep GeoNames dumps so
+# App Platform can build SQLite without downloading at runtime.
 apps/location/data/**
 !apps/location/data/.gitkeep
+!apps/location/data/raw/
+!apps/location/data/raw/IN.zip
+!apps/location/data/raw/postal-IN.zip
+!apps/location/data/raw/admin1CodesASCII.txt
+!apps/location/data/raw/admin2Codes.txt
+!apps/location/data/raw/india-coverage.geojson
 
 # Terraform/Bicep
 *.tfstate

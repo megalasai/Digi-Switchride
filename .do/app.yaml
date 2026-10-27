@@ -123,7 +123,7 @@ services:
     instance_size_slug: basic-xs
     health_check:
       http_path: /health
-      initial_delay_seconds: 180
+      initial_delay_seconds: 40
     envs:
       - key: NODE_ENV
         value: production
@@ -134,6 +134,6 @@ services:
       - key: LOCATION_WORKERS
         value: "1"
       - key: LOCATION_DB
-        value: /tmp/india.sqlite
+        value: /app/apps/location/data/india.sqlite
       - key: LOCATION_CORS_ORIGIN
         value: "*"
