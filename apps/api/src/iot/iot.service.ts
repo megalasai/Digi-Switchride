@@ -11,7 +11,7 @@ import { parseTrack360Payload, track360AuthHeader, track360PullUrl, type Track36
 import { applyHubScope, assignedHubIds } from '../common/hub-scope';
 import { runInWriteTenant } from '../common/tenant-write';
 import { runWithoutTenant } from '../common/tenant-als';
-import { findByEitherId } from '../common/mongo-id';
+import { findByEitherId, persistById } from '../common/mongo-id';
 import { TenantsService } from '../tenants/tenants.service';
 import { readSecret } from '../config/secrets';
 
@@ -142,16 +142,24 @@ export class IoTService {
     }
     let linked = 0;
     let created = 0;
+    let failed = 0;
     for (const device of devices) {
-      const result = await this.upsertTrack360Device(device);
-      if (result.linked) linked += 1;
-      if (result.created) created += 1;
-      const gps = toCoord(device.lat, device.lng);
-      if (gps) {
-        await this.updateTelemetry(device.deviceId, gps.lat, gps.lng, device.batteryPercent, device.odometerKm, {
-          speedKmh: device.speedKmh,
-          ignition: device.ignition,
-        });
+      try {
+        const result = await this.upsertTrack360Device(device);
+        if (result.linked) linked += 1;
+        if (result.created) created += 1;
+        const gps = toCoord(device.lat, device.lng);
+        if (gps) {
+          await this.updateTelemetry(device.deviceId, gps.lat, gps.lng, device.batteryPercent, device.odometerKm, {
+            speedKmh: device.speedKmh,
+            ignition: device.ignition,
+          });
+        }
+      } catch (error) {
+        failed += 1;
+        this.logger.warn(
+          `Track360 device ${device.deviceId} skipped: ${error instanceof Error ? error.message : error}`,
+        );
       }
     }
     const backfill = await this.provisionAllDevices();
@@ -167,12 +175,14 @@ export class IoTService {
         { $set: { tenantId } },
       );
     }
-    this.logger.log(`Track360 sync: ${devices.length} devices, ${created} vehicles created, ${linked} linked`);
+    this.logger.log(
+      `Track360 sync: ${devices.length} devices, ${created} vehicles created, ${linked} linked, ${failed} skipped`,
+    );
     return {
       synced: devices.length,
       linked,
       created,
-      message: `Imported ${devices.length} Track360 devices (${created} new vehicles)`,
+      message: `Imported ${devices.length} Track360 devices (${created} new vehicles${failed ? `, ${failed} skipped` : ''})`,
     };
   }
 
@@ -384,11 +394,21 @@ export class IoTService {
     vehicle.lastPlace = place.lastPlace;
     vehicle.lastPlaceKind = place.lastPlaceKind;
     vehicle.lastHubId = place.lastHubId ?? undefined;
-    try {
-      await vehicle.save();
-    } catch (error) {
-      if (!isMongoDuplicate(error)) throw error;
-    }
+    await persistById(this.vehicleModel.collection, vehicle._id.toString(), {
+      batteryPercent: vehicle.batteryPercent,
+      odometerKm: vehicle.odometerKm,
+      lastLat: vehicle.lastLat,
+      lastLng: vehicle.lastLng,
+      lastTelemetryAt: vehicle.lastTelemetryAt,
+      speedKmh: vehicle.speedKmh,
+      ignition: vehicle.ignition,
+      locationTrail: vehicle.locationTrail,
+      status: vehicle.status,
+      lastPlace: vehicle.lastPlace,
+      lastPlaceKind: vehicle.lastPlaceKind,
+      lastHubId: vehicle.lastHubId,
+      iotDeviceId: vehicle.iotDeviceId,
+    });
 
     return {
       deviceId,

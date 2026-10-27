@@ -45,18 +45,11 @@ export function patchMongooseRestoredIds() {
       try {
         return await originalSave.call(this, opts as never);
       } catch (err) {
-        if (!isDocumentNotFound(err)) throw err;
+        if (!isOptimisticSaveError(err)) throw err;
         const id = this._id != null ? String(this._id) : '';
         if (!id) throw err;
-        const changes = (
-          typeof this.getChanges === 'function' ? this.getChanges() : { $set: this.toObject({ depopulate: true }) }
-        ) as Record<string, unknown>;
-        const update =
-          changes && (changes.$set || changes.$unset || changes.$inc)
-            ? changes
-            : { $set: this.toObject({ depopulate: true }) };
-        const res = await this.$model().collection.updateOne(mongoIdFilter(id) as never, update as never);
-        if (!res.matchedCount) throw err;
+        const matched = await persistById(this.$model().collection, id, snapshotForPersist(this));
+        if (!matched) throw err;
         return this;
       }
     };
@@ -71,8 +64,32 @@ export function patchMongooseRestoredIds() {
   };
 }
 
-function isDocumentNotFound(err: unknown) {
-  return Boolean(err && typeof err === 'object' && (err as { name?: string }).name === 'DocumentNotFoundError');
+export async function persistById(
+  collection: { updateOne: (filter: object, update: object) => Promise<{ matchedCount: number }> },
+  id: string,
+  set: Record<string, unknown>,
+) {
+  const { _id: _omitId, __v: _omitV, ...rest } = set;
+  const res = await collection.updateOne(mongoIdFilter(id) as never, { $set: rest } as never);
+  return res.matchedCount;
+}
+
+function snapshotForPersist(doc: mongoose.Document) {
+  const changes = (typeof doc.getChanges === 'function' ? doc.getChanges() : {}) as { $set?: Record<string, unknown> };
+  if (changes.$set && Object.keys(changes.$set).length) {
+    const { _id: _a, __v: _b, ...rest } = changes.$set;
+    return rest;
+  }
+  const raw = doc.toObject({ depopulate: true }) as Record<string, unknown>;
+  const { _id: _c, __v: _d, ...rest } = raw;
+  return rest;
+}
+
+export function isOptimisticSaveError(err: unknown) {
+  if (!err || typeof err !== 'object') return false;
+  const name = (err as { name?: string }).name;
+  const message = String((err as { message?: string }).message ?? '');
+  return name === 'DocumentNotFoundError' || name === 'VersionError' || message.includes('No matching document found');
 }
 
 patchMongooseRestoredIds();
