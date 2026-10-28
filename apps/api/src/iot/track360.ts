@@ -42,7 +42,7 @@ function collectRows(payload: unknown, depth = 0): Track360Row[] {
     rec.imei != null ||
     rec.deviceId != null;
   if (looksLikeDevice) return [rec];
-  const nested = ['data', 'result', 'devices', 'list', 'rows', 'vehicleList', 'VehicleList'];
+  const nested = ['data', 'result', 'devices', 'list', 'rows', 'items', 'vehicleList', 'VehicleList'];
   const out: Track360Row[] = [];
   for (const key of nested) {
     if (rec[key] != null) out.push(...collectRows(rec[key], depth + 1));

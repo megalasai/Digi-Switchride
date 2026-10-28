@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AdminGuard, RolesGuard } from '../auth/admin.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -54,6 +54,9 @@ export class IoTController {
       username?: string;
       password?: string;
       pullUrl?: string;
+      authType?: string;
+      apiToken?: string;
+      headerName?: string;
     },
   ) {
     return this.gps.upsert(body, req.user?.role === 'SuperAdmin');
@@ -61,8 +64,39 @@ export class IoTController {
 
   @Post('devices')
   @Roles('SuperAdmin', 'Administrator', 'Operations')
-  registerDevice(@Body() body: { deviceId: string; vendorType?: string; vehicleId?: string; tenantId?: string }) {
-    return this.iotService.registerDevice(body.deviceId, body.vendorType, body.vehicleId, body.tenantId);
+  registerDevice(
+    @Body()
+    body: {
+      deviceId: string;
+      vendorType?: string;
+      vehicleId?: string;
+      tenantId?: string;
+      vehicleNumber?: string;
+      imei?: string;
+      lat?: number;
+      lng?: number;
+    },
+  ) {
+    return this.iotService.registerDevice(body.deviceId, body.vendorType, body.vehicleId, body.tenantId, {
+      vehicleNumber: body.vehicleNumber,
+      imei: body.imei,
+      lat: body.lat,
+      lng: body.lng,
+    });
+  }
+
+  @Post('devices/import')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  importDevices(
+    @Body()
+    body: {
+      tenantId?: string;
+      vendorType?: string;
+      items?: unknown;
+      devices?: unknown;
+    },
+  ) {
+    return this.iotService.importVendorDevices(body.items ?? body.devices ?? body, body.tenantId, body.vendorType || 'GenericPull');
   }
 
   @Put('devices/:deviceId')
@@ -93,6 +127,21 @@ export class IoTController {
   @Roles('SuperAdmin', 'Administrator', 'Operations')
   deleteDevice(@Param('deviceId') deviceId: string) {
     return this.iotService.deleteDevice(deviceId);
+  }
+}
+
+@Controller('v1/iot')
+export class IoTIngestController {
+  constructor(private iotService: IoTService) {}
+
+  @Post('ingest')
+  ingest(
+    @Headers('x-ingest-key') ingestKey: string | undefined,
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: unknown,
+  ) {
+    const key = ingestKey?.trim() || (authorization?.toLowerCase().startsWith('bearer ') ? authorization.slice(7).trim() : '');
+    return this.iotService.ingestPushDevices(key, body);
   }
 }
 

@@ -24,7 +24,7 @@ export class TenantInterceptor implements NestInterceptor {
     const user = req.user;
     let tenantId: string | null;
 
-    if (path.includes('/internal/iot')) {
+    if (path.includes('/internal/iot') || path.includes('/iot/ingest')) {
       tenantId = null;
     } else if (user?.type === 'admin' && user.role === 'SuperAdmin') {
       if (headerId || headerSlug) tenantId = await this.tenants.resolveTenantId(headerId || headerSlug);
@@ -53,7 +53,8 @@ function isPublicUnauthenticated(path: string) {
     route === '/api/v1/auth/register' ||
     route === '/api/v1/auth/refresh' ||
     route.startsWith('/api/v1/auth/otp/') ||
-    route === '/api/v1/tenants/current'
+    route === '/api/v1/tenants/current' ||
+    route === '/api/v1/iot/ingest'
   );
 }
 

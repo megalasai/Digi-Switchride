@@ -6,7 +6,7 @@ import { Booking, BookingSchema, Ride, RideSchema } from '../schemas/booking.sch
 import { Customer, CustomerSchema } from '../schemas/customer.schema';
 import { IoTDevice, IoTDeviceSchema, RentalHub, RentalHubSchema, Vehicle, VehicleSchema } from '../schemas/fleet.schema';
 import { GpsIntegration, GpsIntegrationSchema } from '../schemas/gps-integration.schema';
-import { IoTController, IoTInternalController } from './iot.controller';
+import { IoTController, IoTIngestController, IoTInternalController } from './iot.controller';
 import { GpsIntegrationService } from './gps-integration.service';
 import { IoTService } from './iot.service';
 import { TrackingService } from './tracking.service';
@@ -25,7 +25,7 @@ import { TrackingService } from './tracking.service';
       { name: GpsIntegration.name, schema: GpsIntegrationSchema },
     ]),
   ],
-  controllers: [IoTController, IoTInternalController],
+  controllers: [IoTController, IoTIngestController, IoTInternalController],
   providers: [IoTService, TrackingService, GpsIntegrationService],
   exports: [IoTService],
 })

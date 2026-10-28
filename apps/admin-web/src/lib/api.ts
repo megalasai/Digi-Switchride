@@ -160,6 +160,11 @@ export const api = {
     ),
   createIoTDevice: (data: CreateIoTDevice) =>
     request("/admin/iot/devices", { method: "POST", body: JSON.stringify(data) }),
+  importIotDevices: (data: { tenantId?: string; vendorType?: string; items: unknown }) =>
+    request<{ synced: number; created: number; linked: number; failed: number; message: string }>(
+      "/admin/iot/devices/import",
+      { method: "POST", body: JSON.stringify(data) },
+    ),
   updateIoTDevice: (deviceId: string, data: UpdateIoTDevice) =>
     request(`/admin/iot/devices/${deviceId}`, { method: "PUT", body: JSON.stringify(data) }),
   sendIoTCommand: (deviceId: string, command: string) =>
@@ -195,9 +200,15 @@ export const api = {
   savePaymentGateway: (data: Partial<PaymentGatewayConfig> & { provider: string; tenantId?: string; keySecret?: string; webhookSecret?: string }) =>
     request<PaymentGatewayConfig>("/admin/payments/gateway", { method: "PUT", body: JSON.stringify(data) }),
   gpsIntegration: (tenantId?: string) =>
-    request<{ tenantId: string; tenantName?: string; tenantSlug?: string; providers: string[]; config: GpsIntegrationConfig }>(
-      `/admin/iot/gps-integration${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ""}`,
-    ),
+    request<{
+      tenantId: string;
+      tenantName?: string;
+      tenantSlug?: string;
+      providers: string[];
+      ingestUrl?: string;
+      integrations?: GpsIntegrationConfig[];
+      config: GpsIntegrationConfig;
+    }>(`/admin/iot/gps-integration${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ""}`),
   gpsIntegrations: () =>
     request<{
       items: {
@@ -213,8 +224,8 @@ export const api = {
         lastSyncedCount?: number;
       }[];
     }>("/admin/iot/gps-integrations"),
-  saveGpsIntegration: (data: Partial<GpsIntegrationConfig> & { provider: string; tenantId?: string; password?: string }) =>
-    request<GpsIntegrationConfig>("/admin/iot/gps-integration", { method: "PUT", body: JSON.stringify(data) }),
+  saveGpsIntegration: (data: Partial<GpsIntegrationConfig> & { provider: string; tenantId?: string; password?: string; apiToken?: string }) =>
+    request<GpsIntegrationConfig & { ingestKeyOnce?: string }>("/admin/iot/gps-integration", { method: "PUT", body: JSON.stringify(data) }),
   wallets: (search?: string) =>
     request<{ items: Rider[] }>(`/admin/wallets${search ? `?search=${encodeURIComponent(search)}` : ""}`),
   adjustWallet: (riderId: string, data: { type: "Credit" | "Debit"; amount: number; note: string; reference?: string }) =>
@@ -320,6 +331,11 @@ export interface GpsIntegrationConfig {
   passwordSet?: boolean;
   passwordMasked?: string | null;
   pullUrl?: string;
+  authType?: string;
+  apiTokenSet?: boolean;
+  ingestKeySet?: boolean;
+  ingestKeyMasked?: string | null;
+  headerName?: string;
   lastSyncAt?: string;
   lastSyncOk?: boolean;
   lastSyncMessage?: string;
@@ -626,6 +642,8 @@ export interface CreateIoTDevice {
   vendorType?: string;
   vehicleId?: string;
   tenantId?: string;
+  vehicleNumber?: string;
+  imei?: string;
 }
 
 export interface Booking {

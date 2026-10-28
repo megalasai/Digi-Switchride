@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
 import { Model } from 'mongoose';
@@ -31,32 +31,93 @@ export class IoTService {
     private gps: GpsIntegrationService,
   ) {}
 
-  async registerDevice(deviceId: string, vendorType = 'Simulator', vehicleId?: string, tenantId?: string) {
+  async registerDevice(
+    deviceId: string,
+    vendorType = 'Simulator',
+    vehicleId?: string,
+    tenantId?: string,
+    extras?: { vehicleNumber?: string; imei?: string; lat?: number; lng?: number },
+  ) {
     return runInWriteTenant(tenantId, async () => {
     const existing = await this.deviceModel.findOne({ deviceId });
     if (existing) throw new ConflictException(`Device ${deviceId} already exists`);
+    const imei = extras?.imei?.trim() || deviceId;
+    const vehicleNumber = extras?.vehicleNumber?.trim();
 
     await this.deviceModel.create({
       deviceId,
       vendorType,
       connectionStatus: 'Unknown',
-      imei: deviceId,
+      imei,
+      displayName: vehicleNumber || deviceId,
+      lastLat: extras?.lat,
+      lastLng: extras?.lng,
     });
     if (vehicleId) {
       await this.linkDeviceToVehicle(deviceId, vehicleId, vendorType);
     } else {
       await this.ensureVehicleForDevice({
         deviceId,
-        imei: deviceId,
-        name: deviceId,
-        lat: null,
-        lng: null,
+        imei,
+        name: vehicleNumber || deviceId,
+        vehicleNumber,
+        lat: extras?.lat ?? null,
+        lng: extras?.lng ?? null,
         vendorStatus: 'Unknown',
         type: vendorType === 'Track360' ? 'car' : 'scooter',
+        vendorType,
       });
     }
-    return { deviceId, vendorType, vehicleId: vehicleId ?? null };
+    return { deviceId, vendorType, vehicleId: vehicleId ?? null, vehicleNumber: vehicleNumber || null };
     });
+  }
+
+  async importVendorDevices(payload: unknown, tenantId?: string, vendorType = 'GenericPull') {
+    const owner = tenantId || currentTenantId();
+    if (!owner) throw new ConflictException('Select a tenant company');
+    const devices = parseTrack360Payload(payload);
+    let synced = 0;
+    let created = 0;
+    let linked = 0;
+    let failed = 0;
+    for (const row of devices) {
+      try {
+        const result = await this.upsertTrack360Device({ ...row, vendorType }, owner, vendorType);
+        synced += 1;
+        if (result.created) created += 1;
+        if (result.linked) linked += 1;
+        const gps = toCoord(row.lat, row.lng);
+        if (gps) {
+          await tenantAls.run({ tenantId: owner, hubIds: null, skip: false }, () =>
+            this.updateTelemetry(row.deviceId, gps.lat, gps.lng, row.batteryPercent, row.odometerKm, {
+              speedKmh: row.speedKmh,
+              ignition: row.ignition,
+            }),
+          );
+        }
+      } catch (error) {
+        failed += 1;
+        this.logger.warn(`Import device skipped: ${error instanceof Error ? error.message : error}`);
+      }
+    }
+    return {
+      synced,
+      created,
+      linked,
+      failed,
+      message: `Imported ${synced} ${vendorType} devices (${created} new vehicles${failed ? `, ${failed} skipped` : ''})`,
+    };
+  }
+
+  async ingestPushDevices(ingestKey: string, payload: unknown) {
+    const integration = await this.gps.findByIngestKey(ingestKey);
+    if (!integration) throw new UnauthorizedException('Invalid ingest key');
+    const vendorType = integration.displayName || integration.provider;
+    const result = await tenantAls.run({ tenantId: integration.tenantId, hubIds: null, skip: false }, () =>
+      this.importVendorDevices(payload, integration.tenantId, vendorType),
+    );
+    await this.gps.recordSync(integration.tenantId, { ok: true, synced: result.synced, message: result.message }, integration.provider);
+    return result;
   }
 
   async sendCommand(deviceId: string, command: string) {
@@ -155,13 +216,13 @@ export class IoTService {
         linked += result.linked;
         created += result.created;
         parts.push(result.message);
-        await this.gps.recordSync(config.tenantId, { ok: true, synced: result.synced, message: result.message });
+        await this.gps.recordSync(config.tenantId, { ok: true, synced: result.synced, message: result.message }, config.provider);
       } catch (error) {
         ok = false;
         const message = error instanceof Error ? error.message : String(error);
         this.logger.warn(`GPS sync failed for ${config.tenantId}: ${message}`);
         parts.push(message);
-        await this.gps.recordSync(config.tenantId, { ok: false, synced: 0, message });
+        await this.gps.recordSync(config.tenantId, { ok: false, synced: 0, message }, config.provider);
       }
     }
     const message = parts.join(' | ');
@@ -180,18 +241,16 @@ export class IoTService {
       username,
       password,
       pullUrl: this.config.get<string>('TRACK360_PULL_URL', DEFAULT_TRACK360_URL) ?? DEFAULT_TRACK360_URL,
+      authType: 'basic',
     };
   }
 
   private async pullGps(config: GpsPullConfig) {
     await this.rehomeByGpsUsername(config.username, config.tenantId);
-    const url = track360PullUrl(config.pullUrl, config.username, config.password);
+    const { url, headers } = gpsPullRequest(config);
     const res = await fetch(url, {
       signal: AbortSignal.timeout(20000),
-      headers: {
-        Accept: 'application/json',
-        Authorization: track360AuthHeader(config.username, config.password),
-      },
+      headers,
     });
     if (!res.ok) {
       const body = await res.text().catch(() => '');
@@ -199,7 +258,7 @@ export class IoTService {
     }
     const payload = (await res.json()) as unknown;
     const devices = parseTrack360Payload(payload);
-    await this.stampPulledDevices(config.tenantId, config.username, devices);
+    await this.stampPulledDevices(config.tenantId, config.username || config.provider, devices);
     if (!devices.length) {
       this.logger.warn(`${config.provider} returned no device rows for tenant ${config.tenantId}`);
     }
@@ -801,6 +860,25 @@ function toCoord(lat?: number | null, lng?: number | null): { lat: number; lng: 
   if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
   if (lat === 0 && lng === 0) return null;
   return { lat, lng };
+}
+
+function gpsPullRequest(config: GpsPullConfig) {
+  const authType = config.authType || (config.apiToken ? 'bearer' : 'basic');
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  let url = config.pullUrl;
+  if (authType === 'basic' && (config.username || config.password)) {
+    url = track360PullUrl(config.pullUrl, config.username, config.password);
+    headers.Authorization = track360AuthHeader(config.username, config.password);
+  } else if (authType === 'bearer' && config.apiToken) {
+    headers.Authorization = `Bearer ${config.apiToken}`;
+  } else if (authType === 'header' && config.apiToken) {
+    headers[config.headerName || 'X-API-Key'] = config.apiToken;
+  } else if (authType === 'query' && config.apiToken) {
+    const next = new URL(config.pullUrl);
+    next.searchParams.set(config.headerName || 'token', config.apiToken);
+    url = next.toString();
+  }
+  return { url, headers };
 }
 
 function vehicleTypeFromTrack360(type?: string): VehicleType {
