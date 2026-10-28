@@ -125,6 +125,9 @@ export class Vehicle {
 
   @Prop()
   ignition?: string;
+
+  @Prop({ default: false })
+  registrationLocked?: boolean;
 }
 
 export const VehicleSchema = SchemaFactory.createForClass(Vehicle);
@@ -215,6 +218,9 @@ export class IoTDevice {
 
   @Prop()
   vehicleStatus?: string;
+
+  @Prop({ trim: true })
+  gpsUsername?: string;
 }
 
 export const IoTDeviceSchema = SchemaFactory.createForClass(IoTDevice);

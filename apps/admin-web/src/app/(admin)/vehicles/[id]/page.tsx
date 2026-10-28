@@ -25,6 +25,7 @@ export default function VehicleDetailPage() {
   const [status, setStatus] = useState("Available");
   const [type, setType] = useState("EScooter");
   const [wheelClass, setWheelClass] = useState("TwoWheeler");
+  const [registrationNumber, setRegistrationNumber] = useState("");
   const [reason, setReason] = useState("");
   const [override, setOverride] = useState(false);
   const [error, setError] = useState("");
@@ -38,6 +39,7 @@ export default function VehicleDetailPage() {
       .then((d) => {
         setDetail(d);
         setStatus(d.vehicle.status);
+        setRegistrationNumber(d.vehicle.registrationNumber);
         setType(d.vehicle.type);
         setWheelClass(d.vehicle.wheelClass ?? (d.vehicle.type === "ERickshaw" ? "ThreeWheeler" : d.vehicle.type === "ECar" ? "FourWheeler" : "TwoWheeler"));
       })
@@ -155,6 +157,27 @@ export default function VehicleDetailPage() {
               <Input value={reason} onChange={(e) => setReason(e.target.value)} />
             </Field>
             <Button type="button" onClick={changeStatus}>Update status</Button>
+          </Card>
+          <Card className="space-y-3 p-6">
+            <h3 className="font-semibold">Vehicle number</h3>
+            <Field label="Registration number">
+              <Input value={registrationNumber} onChange={(e) => setRegistrationNumber(e.target.value.toUpperCase())} />
+            </Field>
+            <Button
+              type="button"
+              onClick={async () => {
+                setError("");
+                try {
+                  const next = await api.updateVehicle(params.id, { registrationNumber });
+                  setDetail({ ...detail!, vehicle: next });
+                  setSuccess("Vehicle number updated");
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Update failed");
+                }
+              }}
+            >
+              Save vehicle number
+            </Button>
           </Card>
           <Card className="space-y-3 p-6">
             <h3 className="font-semibold">Vehicle class</h3>

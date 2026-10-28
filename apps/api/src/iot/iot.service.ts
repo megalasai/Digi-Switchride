@@ -171,6 +171,7 @@ export class IoTService {
   }
 
   private async pullGps(config: GpsPullConfig) {
+    await this.rehomeByGpsUsername(config.username, config.tenantId);
     const url = track360PullUrl(config.pullUrl, config.username, config.password);
     const res = await fetch(url, {
       signal: AbortSignal.timeout(20000),
@@ -193,7 +194,11 @@ export class IoTService {
     let failed = 0;
     for (const device of devices) {
       try {
-        const result = await this.upsertTrack360Device({ ...device, vendorType: config.provider }, config.tenantId);
+        const result = await this.upsertTrack360Device(
+          { ...device, vendorType: config.provider },
+          config.tenantId,
+          config.username,
+        );
         if (result.linked) linked += 1;
         if (result.created) created += 1;
         const gps = toCoord(device.lat, device.lng);
@@ -505,7 +510,11 @@ export class IoTService {
     }
   }
 
-  private async upsertTrack360Device(row: Track360Device & { vendorType?: string }, tenantId: string) {
+  private async upsertTrack360Device(
+    row: Track360Device & { vendorType?: string },
+    tenantId: string,
+    gpsUsername?: string,
+  ) {
     const vendorType = row.vendorType || 'Track360';
     await this.rehomeDeviceToTenant(row, tenantId);
     const connectionStatus =
@@ -531,6 +540,7 @@ export class IoTService {
       lastLng: row.lng ?? undefined,
       batteryPercent: row.batteryPercent,
       odometerKm: row.odometerKm,
+      ...(gpsUsername ? { gpsUsername } : {}),
     };
     await tenantAls.run({ tenantId, hubIds: null, skip: false }, async () => {
       await this.deviceModel.findOneAndUpdate(
@@ -540,6 +550,20 @@ export class IoTService {
       );
     });
     return tenantAls.run({ tenantId, hubIds: null, skip: false }, () => this.ensureVehicleForDevice({ ...row, vendorType }));
+  }
+
+  private async rehomeByGpsUsername(username: string, tenantId: string) {
+    const key = username.trim();
+    if (!key) return;
+    const devices = await runWithoutTenant(() =>
+      this.deviceModel.find({ gpsUsername: { $regex: new RegExp(`^${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } }),
+    );
+    for (const device of devices) {
+      await this.rehomeDeviceToTenant(
+        { deviceId: device.deviceId, imei: device.imei ?? device.deviceId, name: '', lat: null, lng: null, vendorStatus: 'Unknown' },
+        tenantId,
+      );
+    }
   }
 
   private async rehomeDeviceToTenant(row: Track360Device, tenantId: string) {
@@ -580,7 +604,9 @@ export class IoTService {
 
     if (already) {
       const preferred = (row.vehicleNumber || row.name || '').replace(/\s+/g, ' ').trim();
-      if (preferred) await this.applyDeviceNameAndFix(already, preferred, row);
+      const locked = already.get('registrationLocked') === true;
+      const placeholder = isPlaceholderRegistration(already.registrationNumber, row.deviceId, row.imei);
+      if (preferred && !locked && placeholder) await this.applyDeviceNameAndFix(already, preferred, row);
       else {
         const gps = toCoord(row.lat, row.lng);
         if (gps) {
@@ -602,7 +628,7 @@ export class IoTService {
 
     const byName = await this.vehicleModel.findOne({ registrationNumber: name });
     if (byName && (!byName.iotDeviceId || byName.iotDeviceId === row.deviceId)) {
-      await this.applyDeviceNameAndFix(byName, name, row);
+      if (byName.get('registrationLocked') !== true) await this.applyDeviceNameAndFix(byName, name, row);
       try {
         await this.linkDeviceToVehicle(row.deviceId, byName._id.toString(), vendorType);
         return { linked: true, created: false };
@@ -719,6 +745,13 @@ function deviceKeys(...values: (string | undefined)[]) {
 
 function isMongoDuplicate(error: unknown) {
   return Boolean(error && typeof error === 'object' && 'code' in error && (error as { code?: number }).code === 11000);
+}
+
+function isPlaceholderRegistration(current: string | undefined, deviceId: string, imei?: string) {
+  const value = (current ?? '').replace(/[\s-]/g, '').toUpperCase();
+  if (!value) return true;
+  const keys = deviceKeys(deviceId, imei).map((key) => key.replace(/[\s-]/g, '').toUpperCase());
+  return keys.includes(value);
 }
 
 function vehicleDisplayName(name: string | undefined, deviceId: string) {

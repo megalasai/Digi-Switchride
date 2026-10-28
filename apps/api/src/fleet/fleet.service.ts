@@ -7,7 +7,7 @@ import { haversineDistanceKm, normalizeVehicleRegistration, readLatLng, toGeoLoc
 import { findByEitherId, mongoIdCandidates } from '../common/mongo-id';
 import { IoTService } from '../iot/iot.service';
 import { AuditService, type AuditActor } from '../audit/audit.service';
-import { INDIA_VEHICLE_REG_PATTERN, VEHICLE_STATUSES, resolveWheelClass } from '@digi-switchride/shared';
+import { VEHICLE_STATUSES, resolveWheelClass } from '@digi-switchride/shared';
 import { applyHubScope, assignedHubIds, hubAllowed } from '../common/hub-scope';
 import { runInWriteTenant } from '../common/tenant-write';
 
@@ -165,7 +165,7 @@ export class FleetService {
     data: { registrationNumber?: string; type?: string; wheelClass?: string; hubId?: string; model?: string; iotDeviceId?: string | null; status?: string; notes?: string },
     actor?: AuditActor | null,
   ) {
-    const vehicle = await this.vehicleModel.findById(vehicleId);
+    const vehicle = await findByEitherId(this.vehicleModel, vehicleId);
     if (!vehicle) throw new NotFoundException('Vehicle not found');
     const before = this.toVehicle(vehicle);
 
@@ -174,6 +174,7 @@ export class FleetService {
       const taken = await this.vehicleModel.findOne({ registrationNumber, _id: { $ne: vehicle._id } });
       if (taken) throw new ConflictException('Vehicle with this registration already exists');
       vehicle.registrationNumber = registrationNumber;
+      vehicle.set('registrationLocked', true);
     }
     if (data.type != null) vehicle.type = data.type as typeof vehicle.type;
     if (data.wheelClass != null || data.type != null) {
@@ -420,8 +421,8 @@ export class FleetService {
 
   private requireValidRegistration(value: string) {
     const registrationNumber = normalizeVehicleRegistration(value);
-    if (!INDIA_VEHICLE_REG_PATTERN.test(registrationNumber)) {
-      throw new BadRequestException('Enter a valid Indian registration (e.g. KA01AB1234)');
+    if (!/^[A-Z0-9][A-Z0-9]{2,31}$/.test(registrationNumber)) {
+      throw new BadRequestException('Enter a vehicle number using letters and digits (e.g. KA01AB1234)');
     }
     return registrationNumber;
   }

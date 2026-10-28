@@ -144,6 +144,21 @@ export class TenantsService implements OnModuleInit {
     return items.map((t) => this.toTenant(t));
   }
 
+  async findCustomerMatching(hints: string[]) {
+    const needles = hints.map((hint) => hint.toLowerCase().replace(/[^a-z0-9]/g, '')).filter(Boolean);
+    if (!needles.length) return null;
+    const items = await this.tenantModel.find({ kind: { $ne: 'Parent' } });
+    const ranked = items
+      .map((tenant) => {
+        const blob = `${tenant.name} ${tenant.slug} ${tenant._id.toString()}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const score = needles.reduce((sum, needle) => sum + (blob.includes(needle) || needle.includes(blob) ? needle.length : 0), 0);
+        return { tenant, score };
+      })
+      .filter((row) => row.score > 0)
+      .sort((a, b) => b.score - a.score);
+    return ranked[0] ? this.toTenant(ranked[0].tenant) : null;
+  }
+
   isParent(tenant: { kind?: string; slug?: string }) {
     return tenant.kind === 'Parent' || tenant.slug === PARENT_COMPANY_SLUG;
   }

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { currentTenantId, runWithoutTenant, tenantAls } from '../common/tenant-als';
@@ -6,6 +6,10 @@ import { GPS_PROVIDERS, GpsIntegration, GpsIntegrationDocument, type GpsProvider
 import { TenantsService } from '../tenants/tenants.service';
 
 export const DEFAULT_TRACK360_URL = 'https://prod-s1.track360.net.in/api/v1/auth/pull_api';
+
+const GPS_USERNAME_TENANTS: Record<string, string[]> = {
+  helloev1: ['hello ev', 'helloev', 'web-and-mobile'],
+};
 
 export type GpsIntegrationUpsert = {
   tenantId?: string;
@@ -26,11 +30,21 @@ export type GpsPullConfig = {
 };
 
 @Injectable()
-export class GpsIntegrationService {
+export class GpsIntegrationService implements OnModuleInit {
+  private readonly logger = new Logger(GpsIntegrationService.name);
+
   constructor(
     @InjectModel(GpsIntegration.name) private model: Model<GpsIntegrationDocument>,
     private tenants: TenantsService,
   ) {}
+
+  async onModuleInit() {
+    try {
+      await this.bindKnownGpsAccounts();
+    } catch (error) {
+      this.logger.warn(`Could not bind GPS accounts to tenants: ${error instanceof Error ? error.message : error}`);
+    }
+  }
 
   providers() {
     return [...GPS_PROVIDERS];
@@ -53,6 +67,7 @@ export class GpsIntegrationService {
   }
 
   async getAdmin(explicitTenantId?: string, allowAnyTenant = false) {
+    await this.bindKnownGpsAccounts();
     const tenantId = await this.resolveTenantId(explicitTenantId, allowAnyTenant);
     const tenant = await this.tenants.peek(tenantId);
     const doc = await this.model.findOne({ tenantId });
@@ -66,6 +81,7 @@ export class GpsIntegrationService {
   }
 
   async listOverview(allowAnyTenant = false) {
+    await this.bindKnownGpsAccounts();
     const tenants = await this.tenants.listCustomers();
     const scoped = allowAnyTenant ? null : currentTenantId();
     const visible = scoped ? tenants.filter((t) => t.id === scoped) : tenants;
@@ -93,7 +109,8 @@ export class GpsIntegrationService {
   }
 
   async upsert(data: GpsIntegrationUpsert, allowAnyTenant = false) {
-    const tenantId = await this.resolveTenantId(data.tenantId, allowAnyTenant);
+    const bound = await this.tenantIdForGpsUsername(data.username);
+    const tenantId = bound || (await this.resolveTenantId(data.tenantId, allowAnyTenant));
     if (!GPS_PROVIDERS.includes(data.provider as GpsProvider)) {
       throw new BadRequestException('Unsupported GPS provider');
     }
@@ -118,18 +135,69 @@ export class GpsIntegrationService {
   }
 
   async listEnabledForSync(scopedTenantId?: string | null): Promise<GpsPullConfig[]> {
+    await this.bindKnownGpsAccounts();
     const filter: Record<string, unknown> = { enabled: true };
     if (scopedTenantId) filter.tenantId = scopedTenantId;
     const rows = await runWithoutTenant(async () => this.model.find(filter));
-    return rows
-      .filter((row) => row.username && row.password && row.pullUrl)
-      .map((row) => ({
-        tenantId: row.tenantId,
+    const items: GpsPullConfig[] = [];
+    for (const row of rows) {
+      if (!row.username || !row.password || !row.pullUrl) continue;
+      const tenantId = (await this.tenantIdForGpsUsername(row.username)) || row.tenantId;
+      items.push({
+        tenantId,
         provider: row.provider,
-        username: row.username!,
-        password: row.password!,
+        username: row.username,
+        password: row.password,
         pullUrl: row.pullUrl || DEFAULT_TRACK360_URL,
-      }));
+      });
+    }
+    return items;
+  }
+
+  async tenantIdForGpsUsername(username?: string | null) {
+    const key = username?.trim().toLowerCase();
+    if (!key) return null;
+    const hints = GPS_USERNAME_TENANTS[key] ?? (key.startsWith('helloev') ? GPS_USERNAME_TENANTS.helloev1 : null);
+    if (!hints) return null;
+    const tenant = await this.tenants.findCustomerMatching(hints);
+    return tenant?.id ?? null;
+  }
+
+  async bindKnownGpsAccounts() {
+    const rows = await runWithoutTenant(async () => this.model.find());
+    for (const row of rows) {
+      const ownerId = await this.tenantIdForGpsUsername(row.username);
+      if (!ownerId) continue;
+      if (ownerId === row.tenantId) {
+        if (row.enabled !== true) {
+          await runWithoutTenant(async () =>
+            this.model.collection.updateOne({ _id: row._id }, { $set: { enabled: true } }),
+          );
+        }
+        continue;
+      }
+      await this.moveIntegrationToTenant(row, ownerId);
+      this.logger.log(`Bound GPS user ${row.username} to tenant ${ownerId}`);
+    }
+  }
+
+  private async moveIntegrationToTenant(row: GpsIntegrationDocument, tenantId: string) {
+    await runWithoutTenant(async () => {
+      const dest = await this.model.findOne({ tenantId, _id: { $ne: row._id } });
+      if (dest) {
+        dest.username = row.username;
+        dest.password = row.password || dest.password;
+        dest.pullUrl = row.pullUrl || dest.pullUrl;
+        dest.provider = row.provider;
+        dest.enabled = true;
+        dest.displayName = row.displayName || dest.displayName;
+        dest.tenantId = tenantId;
+        await dest.save();
+        await this.model.collection.deleteOne({ _id: row._id });
+        return;
+      }
+      await this.model.collection.updateOne({ _id: row._id }, { $set: { tenantId, enabled: true } });
+    });
   }
 
   async recordSync(tenantId: string, result: { ok: boolean; synced: number; message: string }) {

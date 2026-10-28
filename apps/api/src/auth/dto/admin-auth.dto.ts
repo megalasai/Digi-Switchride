@@ -28,6 +28,7 @@ import type { AdminRole } from '@digi-switchride/shared';
 
 const PHONE = INDIA_MOBILE_PATTERN.source;
 const VEHICLE_REG = INDIA_VEHICLE_REG_PATTERN.source;
+const VEHICLE_NUMBER = '^[A-Za-z0-9][A-Za-z0-9\\s-]{1,31}$';
 
 export class AdminLoginDto {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
@@ -153,7 +154,7 @@ export class AssignRiderPlanDto {
 
 export class CreateVehicleDto {
   @IsString()
-  @Matches(new RegExp(VEHICLE_REG), { message: 'Enter a valid Indian registration (e.g. KA01AB1234)' })
+  @Matches(new RegExp(VEHICLE_NUMBER), { message: 'Enter a vehicle number using letters and digits (e.g. KA01AB1234)' })
   registrationNumber!: string;
 
   @IsIn([...VEHICLE_TYPES])
@@ -188,7 +189,7 @@ export class CreateVehicleDto {
 
 export class UpdateVehicleDto {
   @IsOptional()
-  @Matches(new RegExp(VEHICLE_REG), { message: 'Enter a valid Indian registration (e.g. KA01AB1234)' })
+  @Matches(new RegExp(VEHICLE_NUMBER), { message: 'Enter a vehicle number using letters and digits (e.g. KA01AB1234)' })
   registrationNumber?: string;
 
   @IsOptional()

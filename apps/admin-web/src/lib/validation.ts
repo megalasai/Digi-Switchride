@@ -40,7 +40,7 @@ export function validatePassword(value: string, required = true) {
 export function validateRegistration(value: string) {
   const reg = normalizeRegistration(value);
   if (!reg) return "Registration number is required";
-  if (!INDIA_VEHICLE_REG_PATTERN.test(reg)) return "Enter a valid Indian registration (e.g. KA01AB1234)";
+  if (!/^[A-Z0-9]{3,32}$/.test(reg)) return "Enter a vehicle number using letters and digits (e.g. KA01AB1234)";
   return "";
 }
 

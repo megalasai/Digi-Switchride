@@ -6,7 +6,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { FormPanel } from "@/components/ui/Card";
-import { FormModeLabel } from "@/components/ui/RowActions";
+import { FormModeLabel, RowActions } from "@/components/ui/RowActions";
 import { DataTable, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/DataTable";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field, Input, Select } from "@/components/ui/Input";
@@ -32,6 +32,7 @@ export default function VehiclesPage() {
   const [availability, setAvailability] = useState("");
   const [hubId, setHubId] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState("");
@@ -83,7 +84,7 @@ export default function VehiclesPage() {
     setSuccess("");
     setSaving(true);
     try {
-      await api.createVehicle({
+      const payload = {
         registrationNumber: normalizeRegistration(form.registrationNumber),
         type: form.type,
         wheelClass: form.wheelClass,
@@ -92,9 +93,16 @@ export default function VehiclesPage() {
         iotDeviceId: form.iotDeviceId.trim() || undefined,
         notes: form.notes.trim() || undefined,
         tenantId: form.tenantId || undefined,
-      });
-      setSuccess("Vehicle registered");
+      };
+      if (editId) {
+        await api.updateVehicle(editId, payload);
+        setSuccess("Vehicle updated");
+      } else {
+        await api.createVehicle(payload);
+        setSuccess("Vehicle registered");
+      }
       setShowForm(false);
+      setEditId(null);
       setForm(emptyForm);
       load();
     } catch (err) {
@@ -113,7 +121,20 @@ export default function VehiclesPage() {
           <div className="flex flex-wrap gap-2">
             <Input className="w-48" placeholder="Registration" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
             {canWrite && (
-              <Button variant={showForm ? "secondary" : "primary"} onClick={() => setShowForm((v) => !v)}>
+              <Button
+                variant={showForm ? "secondary" : "primary"}
+                onClick={() => {
+                  if (showForm) {
+                    setShowForm(false);
+                    setEditId(null);
+                    setForm(emptyForm);
+                  } else {
+                    setEditId(null);
+                    setForm(emptyForm);
+                    setShowForm(true);
+                  }
+                }}
+              >
                 {showForm ? "Cancel" : "Add vehicle"}
               </Button>
             )}
@@ -144,8 +165,8 @@ export default function VehiclesPage() {
       {error && !showForm && <div className="mb-4"><Alert message={error} /></div>}
 
       {showForm && (
-        <FormPanel title="Register vehicle">
-          <FormModeLabel editing={false} />
+        <FormPanel title={editId ? "Edit vehicle number" : "Register vehicle"}>
+          <FormModeLabel editing={Boolean(editId)} />
           <form onSubmit={handleSubmit} className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2" noValidate>
             <CompanyField value={form.tenantId} onChange={(tenantId) => setForm({ ...form, tenantId })} />
             <Field label="Registration number" error={fieldErrors.registrationNumber} hint="e.g. KA01AB1234">
@@ -189,7 +210,7 @@ export default function VehiclesPage() {
             </Field>
             {error && <div className="md:col-span-2"><Alert message={error} /></div>}
             <div className="md:col-span-2 flex gap-2">
-              <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Register vehicle"}</Button>
+              <Button type="submit" disabled={saving}>{saving ? "Saving…" : editId ? "Save vehicle" : "Register vehicle"}</Button>
               <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>Cancel</Button>
             </div>
           </form>
@@ -224,7 +245,28 @@ export default function VehiclesPage() {
                   <TableCell>{v.batteryPercent}%</TableCell>
                   <TableCell>{v.assignedRiderName ?? v.assignedRiderPhone ?? "—"}</TableCell>
                   <TableCell>
-                    <Link className="text-xs font-semibold text-brand" href={`/vehicles/${v.id}`}>Details</Link>
+                    <div className="flex items-center gap-2">
+                      {canWrite && (
+                        <RowActions
+                          onEdit={() => {
+                            setEditId(v.id);
+                            setForm({
+                              registrationNumber: v.registrationNumber,
+                              type: v.type,
+                              wheelClass: v.wheelClass ?? "TwoWheeler",
+                              hubId: v.hubId ?? "",
+                              model: v.model ?? "",
+                              iotDeviceId: v.iotDeviceId ?? "",
+                              notes: v.notes ?? "",
+                              tenantId: v.tenantId ?? "",
+                            });
+                            setShowForm(true);
+                            setError("");
+                          }}
+                        />
+                      )}
+                      <Link className="text-xs font-semibold text-brand" href={`/vehicles/${v.id}`}>Details</Link>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
