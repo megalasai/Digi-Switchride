@@ -100,7 +100,12 @@ export default function HubsPage() {
           <Card key={hub.id} className="p-5">
             <div className="mb-3 flex items-start justify-between">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-light text-brand"><IconMapPin className="h-5 w-5" /></div>
-              <RowActions onEdit={() => openEdit(hub)} />
+              <RowActions
+                onEdit={() => openEdit(hub)}
+                onDelete={() => {
+                  api.deleteHub(hub.id).then(load).catch((e) => setError(e instanceof Error ? e.message : "Delete failed"));
+                }}
+              />
             </div>
             <h3 className="text-lg font-semibold text-text-primary">{hub.name}</h3>
             <div className="mt-1"><CompanyCell tenantId={hub.tenantId} /></div>

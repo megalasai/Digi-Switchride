@@ -90,7 +90,7 @@ export default function ServicePage() {
           )}
           <DataTable>
             <Table>
-              <TableHead><TableHeaderCell>Name</TableHeaderCell><TableHeaderCell>Contact</TableHeaderCell><TableHeaderCell>Status</TableHeaderCell></TableHead>
+              <TableHead><TableHeaderCell>Name</TableHeaderCell><TableHeaderCell>Contact</TableHeaderCell><TableHeaderCell>Status</TableHeaderCell><TableHeaderCell /></TableHead>
               <TableBody>
                 {centres.map((c) => (
                   <TableRow key={c.id}>
@@ -99,6 +99,21 @@ export default function ServicePage() {
                     </TableCell>
                     <TableCell>{c.contactName} · {c.contactPhone}</TableCell>
                     <TableCell><Badge status={c.isActive ? "Active" : "Inactive"} /></TableCell>
+                    <TableCell>
+                      {canWrite && (
+                        <Button
+                          variant="ghost"
+                          className="text-xs text-red-700"
+                          type="button"
+                          onClick={() => {
+                            if (!window.confirm(`Delete centre ${c.name}?`)) return;
+                            api.deleteServiceCentre(c.id).then(reload).catch((err) => setError(err instanceof Error ? err.message : "Delete failed"));
+                          }}
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

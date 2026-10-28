@@ -19,6 +19,7 @@ import {
   ServiceSlotDocument,
 } from '../schemas/operations.schema';
 import { normalizeIndiaPhone } from '../common/helpers';
+import { findByEitherId } from '../common/mongo-id';
 
 @Injectable()
 export class OperationsService {
@@ -139,6 +140,13 @@ export class OperationsService {
     if (data.isActive != null) centre.isActive = data.isActive;
     await centre.save();
     return this.toCentre(centre);
+  }
+
+  async deleteCentre(id: string) {
+    const centre = await findByEitherId(this.centreModel, id);
+    if (!centre) throw new NotFoundException('Service centre not found');
+    await this.centreModel.deleteOne({ _id: centre._id });
+    return { deleted: true, id };
   }
 
   async listSlots(centreId?: string, date?: string) {

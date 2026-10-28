@@ -44,11 +44,13 @@ export const api = {
     request<TenantOrg>("/admin/tenants", { method: "POST", body: JSON.stringify(data) }),
   updateTenant: (id: string, data: { name?: string; contactEmail?: string; status?: string; notes?: string }) =>
     request<TenantOrg>(`/admin/tenants/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteTenant: (id: string) => request<{ deleted: boolean }>(`/admin/tenants/${id}`, { method: "DELETE" }),
   adminUsers: () => request<{ items: AdminUser[] }>("/admin/users"),
   createAdminUser: (data: CreateAdminUser) =>
     request<AdminUser>("/admin/users", { method: "POST", body: JSON.stringify(data) }),
   updateAdminUser: (id: string, data: UpdateAdminUser) =>
     request<AdminUser>(`/admin/users/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteAdminUser: (id: string) => request<{ deleted: boolean }>(`/admin/users/${id}`, { method: "DELETE" }),
   dashboard: () => request<DashboardSnapshot>("/admin/dashboard"),
   publicBranding: (tenantSlug?: string) =>
     request<Branding>(
@@ -77,6 +79,7 @@ export const api = {
     request<Rider>("/admin/riders", { method: "POST", body: JSON.stringify(data) }),
   updateRider: (id: string, data: UpdateCustomer) =>
     request<Rider>(`/admin/riders/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteRider: (id: string) => request<{ deleted: boolean }>(`/admin/riders/${id}`, { method: "DELETE" }),
   assignRiderPlan: (id: string, rentalPlanId: string) =>
     request<RiderProfile>(`/admin/riders/${id}/plan`, { method: "POST", body: JSON.stringify({ rentalPlanId }) }),
   rentalPlans: () => request<{ items: RentalPlan[] }>("/admin/riders/plans"),
@@ -107,6 +110,7 @@ export const api = {
   hubs: () => request<{ items: Hub[] }>("/admin/hubs"),
   createHub: (data: CreateHub) =>
     request<Hub>("/admin/hubs", { method: "POST", body: JSON.stringify(data) }),
+  deleteHub: (id: string) => request<{ deleted: boolean }>(`/admin/hubs/${id}`, { method: "DELETE" }),
   updateHub: (id: string, data: UpdateHub) =>
     request<Hub>(`/admin/hubs/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   vehicles: (params?: { status?: string; hubId?: string; search?: string; availability?: string; page?: number }) => {
@@ -123,6 +127,7 @@ export const api = {
     request<Vehicle>("/admin/vehicles", { method: "POST", body: JSON.stringify(data) }),
   updateVehicle: (id: string, data: UpdateVehicle) =>
     request<Vehicle>(`/admin/vehicles/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteVehicle: (id: string) => request<{ deleted: boolean }>(`/admin/vehicles/${id}`, { method: "DELETE" }),
   updateVehicleStatus: (vehicleId: string, status: string, reason?: string) =>
     request<Vehicle>(`/admin/vehicles/${vehicleId}/status`, { method: "POST", body: JSON.stringify({ status, reason }) }),
   assignVehicle: (vehicleId: string, data: { riderId: string; override?: boolean; reason?: string }) =>
@@ -137,6 +142,7 @@ export const api = {
     request<Promotion>("/admin/promotions", { method: "POST", body: JSON.stringify(data) }),
   updatePromotion: (id: string, data: UpdatePromotion) =>
     request<Promotion>(`/admin/promotions/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deletePromotion: (id: string) => request<{ deleted: boolean }>(`/admin/promotions/${id}`, { method: "DELETE" }),
   reportSummary: (from: string, to: string) =>
     request<ReportSummary>(`/admin/reports/summary?from=${from}&to=${to}`),
   reconciliation: (from: string, to: string) =>
@@ -168,6 +174,8 @@ export const api = {
     }),
   unlinkIoTDevice: (deviceId: string) =>
     request(`/admin/iot/devices/${deviceId}/link`, { method: "DELETE" }),
+  deleteIoTDevice: (deviceId: string) =>
+    request<{ deleted: boolean }>(`/admin/iot/devices/${deviceId}`, { method: "DELETE" }),
   payments: (params?: { status?: string; search?: string }) => {
     const q = new URLSearchParams();
     if (params?.status) q.set("status", params.status);
@@ -216,6 +224,7 @@ export const api = {
     request<RentalPlan>("/admin/plans", { method: "POST", body: JSON.stringify(data) }),
   updatePlan: (id: string, data: Partial<CreateRentalPlan> & { isActive?: boolean }) =>
     request<RentalPlan>(`/admin/plans/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deletePlan: (id: string) => request<{ deleted: boolean }>(`/admin/plans/${id}`, { method: "DELETE" }),
   kycSubmissions: (status?: string) =>
     request<{ items: KycDocument[] }>(`/admin/kyc/submissions${status ? `?status=${status}` : ""}`),
   reviewKycDocument: (id: string, action: "Approve" | "Reject", reason?: string) =>
@@ -232,6 +241,8 @@ export const api = {
     request<ServiceCentre>("/admin/service-centres", { method: "POST", body: JSON.stringify(data) }),
   updateServiceCentre: (id: string, data: Partial<CreateServiceCentre> & { isActive?: boolean }) =>
     request<ServiceCentre>(`/admin/service-centres/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteServiceCentre: (id: string) =>
+    request<{ deleted: boolean }>(`/admin/service-centres/${id}`, { method: "DELETE" }),
   serviceSlots: (params?: { centreId?: string; date?: string }) => {
     const q = new URLSearchParams();
     if (params?.centreId) q.set("centreId", params.centreId);
@@ -261,6 +272,8 @@ export const api = {
     request<ChargingStation>("/admin/charging-stations", { method: "POST", body: JSON.stringify(data) }),
   updateChargingStation: (id: string, data: Partial<CreateChargingStation> & { status?: string }) =>
     request<ChargingStation>(`/admin/charging-stations/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteChargingStation: (id: string) =>
+    request<{ deleted: boolean }>(`/admin/charging-stations/${id}`, { method: "DELETE" }),
   notifications: () => request<{ items: AppNotice[] }>("/admin/notifications"),
   sendNotification: (data: { title: string; body: string; audience: string }) =>
     request("/admin/notifications", { method: "POST", body: JSON.stringify(data) }),

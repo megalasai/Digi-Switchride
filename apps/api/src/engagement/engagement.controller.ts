@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AdminGuard, RolesGuard } from '../auth/admin.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -34,6 +34,12 @@ export class ChargingStationsAdminController {
   @Roles('SuperAdmin', 'Administrator', 'Operations')
   update(@Param('id') id: string, @Body() body: UpdateChargingStationDto) {
     return this.engagement.updateStation(id, body);
+  }
+
+  @Delete(':id')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  remove(@Param('id') id: string) {
+    return this.engagement.deleteStation(id);
   }
 }
 

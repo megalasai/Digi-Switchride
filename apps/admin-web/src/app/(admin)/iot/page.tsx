@@ -229,7 +229,12 @@ export default function IoTPage() {
                   </TableCell>
                   <TableCell>{d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : "—"}</TableCell>
                   <TableCell>
-                    <RowActions onEdit={() => openEdit(d)} />
+                    <RowActions
+                      onEdit={() => openEdit(d)}
+                      onDelete={() => {
+                        api.deleteIoTDevice(d.id).then(() => load()).catch((err) => setError(err instanceof Error ? err.message : "Delete failed"));
+                      }}
+                    />
                     {d.vehicleId && (
                       <Button variant="ghost" className="text-xs text-danger" onClick={() => void handleUnlink(d.id)}>Unlink</Button>
                     )}

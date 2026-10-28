@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AdminGuard, RolesGuard } from '../auth/admin.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -222,6 +222,12 @@ export class AdminController {
       validFrom: body.validFrom ? new Date(body.validFrom) : undefined,
       validTo: body.validTo ? new Date(body.validTo) : undefined,
     });
+  }
+
+  @Delete('promotions/:id')
+  @Roles('SuperAdmin', 'Administrator', 'Finance')
+  deletePromotion(@Param('id') id: string) {
+    return this.promotionsService.remove(id);
   }
 
   @Get('reports/summary')

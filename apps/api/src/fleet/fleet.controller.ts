@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AdminGuard, RolesGuard } from '../auth/admin.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -55,6 +55,12 @@ export class FleetAdminController {
     return this.fleetService.updateHub(hubId, body);
   }
 
+  @Delete('hubs/:hubId')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  deleteHub(@Param('hubId') hubId: string) {
+    return this.fleetService.deleteHub(hubId);
+  }
+
   @Get('vehicles')
   @Roles('SuperAdmin', 'Administrator', 'Operations', 'CommandCenter', 'ServiceTeam')
   listVehicles(
@@ -84,6 +90,12 @@ export class FleetAdminController {
   @Roles('SuperAdmin', 'Administrator', 'Operations')
   updateVehicle(@Req() req: Parameters<typeof actorFromRequest>[0], @Param('vehicleId') vehicleId: string, @Body() body: UpdateVehicleDto) {
     return this.fleetService.updateVehicle(vehicleId, body, actorFromRequest(req));
+  }
+
+  @Delete('vehicles/:vehicleId')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  deleteVehicle(@Req() req: Parameters<typeof actorFromRequest>[0], @Param('vehicleId') vehicleId: string) {
+    return this.fleetService.deleteVehicle(vehicleId, actorFromRequest(req));
   }
 
   @Post('vehicles/:vehicleId/status')

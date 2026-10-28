@@ -55,7 +55,7 @@ export default function TenantsPage() {
           <form onSubmit={save} className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field label="Name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
             {!editId && (
-              <Field label="Slug" hint="Used by web and mobile, e.g. acme-fleet">
+              <Field label="Slug" hint="Short unique id for this company (lowercase, hyphens). Used on login to pick the org, branding/logo URLs, GPS and payment routing, and the X-Tenant-Slug header. Example: hello-ev">
                 <Input value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} required />
               </Field>
             )}
@@ -86,6 +86,18 @@ export default function TenantsPage() {
                 <TableCell><Badge status={t.status} /></TableCell>
                 <TableCell>
                   <Button variant="ghost" className="text-xs" onClick={() => { setEditId(t.id); setForm({ name: t.name, slug: t.slug, contactEmail: t.contactEmail ?? "", notes: t.notes ?? "" }); setShowForm(true); }}>Edit</Button>
+                  {t.kind !== "Parent" && (
+                    <Button
+                      variant="ghost"
+                      className="text-xs text-red-700"
+                      onClick={() => {
+                        if (!window.confirm(`Delete ${t.name} and its tenant data? This cannot be undone.`)) return;
+                        api.deleteTenant(t.id).then(load).catch((e) => setError(e instanceof Error ? e.message : "Delete failed"));
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  )}
                   {t.kind !== "Parent" && (
                   <Button variant="ghost" className="text-xs" onClick={() => {
                     localStorage.setItem("adminTenantId", t.id);

@@ -238,6 +238,17 @@ export default function RidersPage() {
                           <Button variant="ghost" className="px-2 py-1 text-xs" type="button" onClick={() => openEdit(r)}>
                             Edit
                           </Button>
+                          <Button
+                            variant="ghost"
+                            className="px-2 py-1 text-xs text-red-700"
+                            type="button"
+                            onClick={() => {
+                              if (!window.confirm(`Delete rider ${r.fullName ?? r.phone}?`)) return;
+                              api.deleteRider(r.id).then(load).catch((err) => setError(err instanceof Error ? err.message : "Delete failed"));
+                            }}
+                          >
+                            Delete
+                          </Button>
                         )}
                       </div>
                     </TableCell>

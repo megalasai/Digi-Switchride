@@ -45,6 +45,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     await this.relaxDeviceVehicleIndex();
+    await this.stringifyTenantIds();
     try {
       await this.ensureSampleActiveRide();
       this.timer = setInterval(() => {
@@ -59,11 +60,11 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       this.logger.warn(`Could not provision IoT vehicles: ${error instanceof Error ? error.message : error}`);
     }
-    void this.iotService.syncTrack360().catch((error) => {
+    void this.iotService.syncTrack360({ allTenants: true }).catch((error) => {
       this.logger.warn(`Track360 first sync skipped: ${error instanceof Error ? error.message : error}`);
     });
     this.track360Timer = setInterval(() => {
-      void this.iotService.syncTrack360().catch((error) => {
+      void this.iotService.syncTrack360({ allTenants: true }).catch((error) => {
         this.logger.warn(`GPS sync skipped: ${error instanceof Error ? error.message : error}`);
       });
     }, 30000);
@@ -72,6 +73,22 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
   onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
     if (this.track360Timer) clearInterval(this.track360Timer);
+  }
+
+  private async stringifyTenantIds() {
+    const db = this.deviceModel.db;
+    for (const name of ['iot_devices', 'vehicles', 'gps_integrations', 'rental_hubs']) {
+      try {
+        const col = db.collection(name);
+        const rows = await col.find({ tenantId: { $type: 'objectId' } }).toArray();
+        for (const row of rows) {
+          await col.updateOne({ _id: row._id }, { $set: { tenantId: String(row.tenantId) } });
+        }
+        if (rows.length) this.logger.log(`Normalized ${rows.length} ${name} tenantId values to strings`);
+      } catch (error) {
+        this.logger.warn(`Could not normalize ${name} tenantId: ${error instanceof Error ? error.message : error}`);
+      }
+    }
   }
 
   private async relaxDeviceVehicleIndex() {

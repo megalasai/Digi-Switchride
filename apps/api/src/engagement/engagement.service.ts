@@ -5,6 +5,7 @@ import type { AuditActor } from '../audit/audit.service';
 import { AuditService } from '../audit/audit.service';
 import { applyHubScope, hubAllowed } from '../common/hub-scope';
 import { runInWriteTenant } from '../common/tenant-write';
+import { findByEitherId } from '../common/mongo-id';
 import { Customer, CustomerDocument } from '../schemas/customer.schema';
 import {
   Agreement,
@@ -57,6 +58,13 @@ export class EngagementService {
     Object.assign(station, data);
     await station.save();
     return this.toStation(station);
+  }
+
+  async deleteStation(id: string) {
+    const station = await findByEitherId(this.stationModel, id);
+    if (!station) throw new NotFoundException('Charging station not found');
+    await this.stationModel.deleteOne({ _id: station._id });
+    return { deleted: true, id };
   }
 
   async listNotifications() {

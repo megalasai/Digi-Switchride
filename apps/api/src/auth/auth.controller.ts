@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
 import { actorFromRequest } from '../common/actor';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
@@ -63,5 +63,14 @@ export class AdminUsersController {
   @Roles('SuperAdmin', 'Administrator')
   updateUser(@Req() req: Parameters<typeof actorFromRequest>[0] & { user?: { role?: string; tenantId?: string } }, @Param('id') id: string, @Body() dto: UpdateAdminUserDto) {
     return this.authService.updateAdminUser(id, dto, actorFromRequest(req), req.user);
+  }
+
+  @Delete(':id')
+  @Roles('SuperAdmin', 'Administrator')
+  deleteUser(
+    @Req() req: Parameters<typeof actorFromRequest>[0] & { user?: { role?: string; tenantId?: string; adminId?: string } },
+    @Param('id') id: string,
+  ) {
+    return this.authService.deleteAdminUser(id, actorFromRequest(req), req.user);
   }
 }

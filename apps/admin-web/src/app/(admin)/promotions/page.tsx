@@ -129,7 +129,14 @@ export default function PromotionsPage() {
                 <TableCell className="font-mono font-bold">{p.code}</TableCell>
                 <TableCell>{p.discountType === "Percentage" ? `${p.discountValue}%` : `₹${p.discountValue}`}</TableCell>
                 <TableCell><Badge status={p.isActive ? "Active" : "Inactive"} /></TableCell>
-                <TableCell><RowActions onEdit={() => openEdit(p)} /></TableCell>
+                <TableCell>
+                  <RowActions
+                    onEdit={() => openEdit(p)}
+                    onDelete={() => {
+                      api.deletePromotion(p.id).then(load).catch((e) => setError(e instanceof Error ? e.message : "Delete failed"));
+                    }}
+                  />
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

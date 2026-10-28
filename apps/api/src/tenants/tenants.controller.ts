@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AdminGuard, RolesGuard } from '../auth/admin.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -28,6 +28,12 @@ export class TenantsController {
     @Body() body: { name?: string; contactEmail?: string; status?: 'Active' | 'Suspended'; notes?: string },
   ) {
     return this.tenants.update(id, body);
+  }
+
+  @Delete(':id')
+  @Roles('SuperAdmin')
+  remove(@Param('id') id: string) {
+    return this.tenants.remove(id);
   }
 }
 

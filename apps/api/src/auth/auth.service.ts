@@ -257,6 +257,35 @@ export class AuthService implements OnModuleInit {
     return after;
   }
 
+  async deleteAdminUser(
+    id: string,
+    actor?: AuditActor | null,
+    caller?: { role?: string; tenantId?: string; adminId?: string },
+  ) {
+    if (caller?.adminId && caller.adminId === id) {
+      throw new ForbiddenException('You cannot delete your own login');
+    }
+    const admin = await runWithoutTenant(async () => findByEitherId(this.adminModel, id));
+    if (!admin) throw new NotFoundException('Admin user not found');
+    const callerRole = normalizeAdminRole(caller?.role) ?? caller?.role;
+    if (callerRole !== 'SuperAdmin') {
+      const tenantId = caller?.tenantId || currentTenantId();
+      if (!tenantId || !this.adminInTenant(admin, tenantId)) {
+        throw new ForbiddenException('You can only delete users in your organization');
+      }
+      if (admin.role === 'SuperAdmin') throw new ForbiddenException('You cannot delete a SuperAdmin');
+    }
+    await runWithoutTenant(async () => this.adminModel.deleteOne({ _id: admin._id }));
+    await this.auditService.record({
+      actor,
+      action: 'admin.user.delete',
+      entityType: 'AdminUser',
+      entityId: id,
+      before: { email: admin.email, role: admin.role },
+    });
+    return { deleted: true, id };
+  }
+
   async refreshToken(refreshToken: string) {
     const token = await this.refreshTokenModel
       .findOne({ tokenHash: hashOtp(refreshToken), isRevoked: false, expiresAt: { $gt: new Date() } });

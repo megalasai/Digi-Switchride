@@ -271,6 +271,13 @@ export class PromotionsService {
     return this.toDto(promo);
   }
 
+  async remove(id: string) {
+    const promo = await this.promotionModel.findById(id);
+    if (!promo) throw new NotFoundException('Promotion not found');
+    await this.promotionModel.deleteOne({ _id: promo._id });
+    return { deleted: true, id };
+  }
+
   private toDto(p: PromotionDocument) {
     return {
       id: p._id.toString(),

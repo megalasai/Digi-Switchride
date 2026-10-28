@@ -11,6 +11,7 @@ import { parseTrack360Payload, track360AuthHeader, track360PullUrl, type Track36
 import { applyHubScope, assignedHubIds } from '../common/hub-scope';
 import { runInWriteTenant } from '../common/tenant-write';
 import { currentTenantId, runWithoutTenant, tenantAls } from '../common/tenant-als';
+import { tenantIdClause } from '../common/tenant.plugin';
 import { findByEitherId, mongoIdCandidates, persistById } from '../common/mongo-id';
 import { TenantsService } from '../tenants/tenants.service';
 import { readSecret } from '../config/secrets';
@@ -76,7 +77,20 @@ export class IoTService {
   }
 
   private async listScopedDevices() {
-    const devices = await this.deviceModel.find().sort({ deviceId: 1 });
+    const tenantId = currentTenantId();
+    const usernames = tenantId ? await this.gps.usernamesForTenant(tenantId) : [];
+    const devices = tenantId
+      ? await runWithoutTenant(() =>
+          this.deviceModel
+            .find({
+              $or: [
+                tenantIdClause(tenantId),
+                ...(usernames.length ? [{ gpsUsername: { $in: usernames } }] : []),
+              ],
+            })
+            .sort({ deviceId: 1 }),
+        )
+      : await this.deviceModel.find().sort({ deviceId: 1 });
     const hubs = assignedHubIds();
     const allowedVehicleIds = hubs
       ? new Set(
@@ -87,7 +101,6 @@ export class IoTService {
       devices.map(async (d) => {
         const vehicle = await this.resolveVehicle(d.deviceId).catch(() => null);
         if (allowedVehicleIds && vehicle && !allowedVehicleIds.has(vehicle._id.toString())) return null;
-        if (allowedVehicleIds && !vehicle) return null;
         return {
           id: d.deviceId,
           vehicleId: vehicle?._id.toString() ?? d.vehicleId,
@@ -186,6 +199,7 @@ export class IoTService {
     }
     const payload = (await res.json()) as unknown;
     const devices = parseTrack360Payload(payload);
+    await this.stampPulledDevices(config.tenantId, config.username, devices);
     if (!devices.length) {
       this.logger.warn(`${config.provider} returned no device rows for tenant ${config.tenantId}`);
     }
@@ -379,6 +393,14 @@ export class IoTService {
     return { deviceId, unlinked: true };
   }
 
+  async deleteDevice(deviceId: string) {
+    const device = await this.deviceModel.findOne({ deviceId });
+    if (!device) throw new NotFoundException('Device not found');
+    await this.unlinkDevice(deviceId).catch(() => undefined);
+    await this.deviceModel.deleteOne({ deviceId });
+    return { deleted: true, deviceId };
+  }
+
   async updateTelemetry(
     deviceId: string,
     lat: number,
@@ -550,6 +572,20 @@ export class IoTService {
       );
     });
     return tenantAls.run({ tenantId, hubIds: null, skip: false }, () => this.ensureVehicleForDevice({ ...row, vendorType }));
+  }
+
+  private async stampPulledDevices(tenantId: string, username: string, rows: Track360Device[]) {
+    const keys = [...new Set(rows.flatMap((row) => deviceKeys(row.deviceId, row.imei)))];
+    if (!keys.length) return;
+    const owner = String(tenantId);
+    await this.deviceModel.collection.updateMany(
+      { $or: [{ deviceId: { $in: keys } }, { imei: { $in: keys } }] },
+      { $set: { tenantId: owner, gpsUsername: username } },
+    );
+    await this.vehicleModel.collection.updateMany(
+      { iotDeviceId: { $in: keys } },
+      { $set: { tenantId: owner } },
+    );
   }
 
   private async rehomeByGpsUsername(username: string, tenantId: string) {

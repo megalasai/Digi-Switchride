@@ -248,6 +248,9 @@ export default function VehiclesPage() {
                     <div className="flex items-center gap-2">
                       {canWrite && (
                         <RowActions
+                          onDelete={() => {
+                            api.deleteVehicle(v.id).then(() => load()).catch((err) => setError(err instanceof Error ? err.message : "Delete failed"));
+                          }}
                           onEdit={() => {
                             setEditId(v.id);
                             setForm({

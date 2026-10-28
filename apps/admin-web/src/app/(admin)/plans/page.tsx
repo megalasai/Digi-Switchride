@@ -116,6 +116,17 @@ export default function PlansPage() {
                       <div className="flex gap-2">
                         <Button variant="ghost" className="text-xs" type="button" onClick={() => { setEditId(p.id); setForm({ name: p.name, charges: String(p.charges), durationDays: String(p.durationDays), billingFrequency: p.billingFrequency, eligibility: p.eligibility ?? "", terms: p.terms ?? "", tenantId: p.tenantId ?? "" }); setShowForm(true); }}>Edit</Button>
                         <Button variant="ghost" className="text-xs" type="button" onClick={async () => { await api.updatePlan(p.id, { isActive: !p.isActive }); load(); }}>{p.isActive ? "Deactivate" : "Activate"}</Button>
+                        <Button
+                          variant="ghost"
+                          className="text-xs text-red-700"
+                          type="button"
+                          onClick={() => {
+                            if (!window.confirm(`Delete plan ${p.name}?`)) return;
+                            api.deletePlan(p.id).then(load).catch((e) => setError(e instanceof Error ? e.message : "Delete failed"));
+                          }}
+                        >
+                          Delete
+                        </Button>
                       </div>
                     )}
                   </TableCell>

@@ -222,6 +222,32 @@ export class FleetService {
     return after;
   }
 
+  async deleteHub(hubId: string) {
+    const hub = await findByEitherId(this.hubModel, hubId);
+    if (!hub) throw new NotFoundException('Hub not found');
+    const inUse = await this.vehicleModel.countDocuments({ hubId: hub._id.toString() });
+    if (inUse) throw new BadRequestException('Move or delete vehicles at this hub first');
+    await this.hubModel.deleteOne({ _id: hub._id });
+    return { deleted: true, id: hub._id.toString() };
+  }
+
+  async deleteVehicle(vehicleId: string, actor?: AuditActor | null) {
+    const vehicle = await findByEitherId(this.vehicleModel, vehicleId);
+    if (!vehicle) throw new NotFoundException('Vehicle not found');
+    if (vehicle.iotDeviceId) {
+      await this.iotService.unlinkDevice(vehicle.iotDeviceId).catch(() => undefined);
+    }
+    await this.vehicleModel.deleteOne({ _id: vehicle._id });
+    await this.auditService.record({
+      actor,
+      action: 'vehicle.delete',
+      entityType: 'Vehicle',
+      entityId: vehicleId,
+      before: { registrationNumber: vehicle.registrationNumber },
+    });
+    return { deleted: true, id: vehicleId };
+  }
+
   async listAllHubs() {
     const filter: Record<string, unknown> = {};
     const hubs = assignedHubIds();

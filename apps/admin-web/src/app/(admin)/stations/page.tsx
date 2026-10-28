@@ -87,6 +87,7 @@ export default function StationsPage() {
             <TableHeaderCell>Chargers</TableHeaderCell>
             <TableHeaderCell>Hours</TableHeaderCell>
             <TableHeaderCell>Status</TableHeaderCell>
+            <TableHeaderCell />
           </TableHead>
           <TableBody>
             {items.map((s) => (
@@ -99,6 +100,21 @@ export default function StationsPage() {
                 <TableCell>{s.chargerCount}</TableCell>
                 <TableCell>{s.operatingHours ?? "—"}</TableCell>
                 <TableCell><Badge status={s.status} /></TableCell>
+                <TableCell>
+                  {canWrite && (
+                    <Button
+                      variant="ghost"
+                      className="text-xs text-red-700"
+                      type="button"
+                      onClick={() => {
+                        if (!window.confirm(`Delete station ${s.name}?`)) return;
+                        api.deleteChargingStation(s.id).then(load).catch((e) => setError(e instanceof Error ? e.message : "Delete failed"));
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

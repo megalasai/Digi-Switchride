@@ -11,6 +11,7 @@ import { Booking, BookingDocument, Payment, PaymentDocument, Ride, RideDocument 
 import { RentalPlan, RentalPlanDocument, WalletTransaction, WalletTransactionDocument } from '../schemas/rental.schema';
 import { normalizeIndiaPhone } from '../common/helpers';
 import { ProfileService } from './customers.service';
+import { findByEitherId } from '../common/mongo-id';
 
 @Injectable()
 export class RidersService implements OnModuleInit {
@@ -161,6 +162,21 @@ export class RidersService implements OnModuleInit {
     return after;
   }
 
+  async remove(riderId: string, actor?: AuditActor | null) {
+    const customer = await findByEitherId(this.customerModel, riderId);
+    if (!customer) throw new NotFoundException('Rider not found');
+    await this.vehicleModel.updateMany({ assignedRiderId: riderId }, { $unset: { assignedRiderId: 1 } });
+    await this.customerModel.deleteOne({ _id: customer._id });
+    await this.auditService.record({
+      actor,
+      action: 'rider.delete',
+      entityType: 'Rider',
+      entityId: riderId,
+      before: { phone: customer.phone, fullName: customer.fullName },
+    });
+    return { deleted: true, id: riderId };
+  }
+
   async getProfile(riderId: string) {
     const rider = await this.customerModel.findById(riderId);
     if (!rider) throw new NotFoundException('Rider not found');
@@ -304,6 +320,20 @@ export class RidersService implements OnModuleInit {
       after: after as unknown as Record<string, unknown>,
     });
     return after;
+  }
+
+  async deletePlan(id: string, actor?: AuditActor | null) {
+    const plan = await findByEitherId(this.planModel, id);
+    if (!plan) throw new NotFoundException('Rental plan not found');
+    await this.planModel.deleteOne({ _id: plan._id });
+    await this.auditService.record({
+      actor,
+      action: 'plan.delete',
+      entityType: 'RentalPlan',
+      entityId: id,
+      before: this.toPlan(plan) as unknown as Record<string, unknown>,
+    });
+    return { deleted: true, id };
   }
 
   async adjustWallet(

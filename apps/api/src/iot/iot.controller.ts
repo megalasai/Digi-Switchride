@@ -88,6 +88,12 @@ export class IoTController {
   unlinkDevice(@Param('deviceId') deviceId: string) {
     return this.iotService.unlinkDevice(deviceId);
   }
+
+  @Delete('devices/:deviceId')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  deleteDevice(@Param('deviceId') deviceId: string) {
+    return this.iotService.deleteDevice(deviceId);
+  }
 }
 
 @Controller('v1/internal/iot')

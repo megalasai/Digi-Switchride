@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AdminGuard, RolesGuard } from '../auth/admin.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -88,6 +88,12 @@ export class ServiceCentresAdminController {
   @Roles('SuperAdmin', 'Administrator', 'ServiceTeam')
   update(@Param('id') id: string, @Body() body: UpdateServiceCentreDto) {
     return this.operations.updateCentre(id, body);
+  }
+
+  @Delete(':id')
+  @Roles('SuperAdmin', 'Administrator', 'ServiceTeam')
+  remove(@Param('id') id: string) {
+    return this.operations.deleteCentre(id);
   }
 }
 

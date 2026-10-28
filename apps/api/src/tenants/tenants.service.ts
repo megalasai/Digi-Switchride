@@ -6,6 +6,7 @@ import { AdminUser, AdminUserDocument } from '../schemas/admin.schema';
 import { runWithoutTenant } from '../common/tenant-als';
 import { displayProductName, PARENT_COMPANY_NAME, PARENT_COMPANY_SLUG, PRODUCT_NAME } from '@digi-switchride/shared';
 import { findByEitherId } from '../common/mongo-id';
+import { tenantIdValues } from '../common/tenant.plugin';
 
 export const DEFAULT_TENANT_SLUG = 'digi-switchride';
 export { PARENT_COMPANY_SLUG };
@@ -150,7 +151,9 @@ export class TenantsService implements OnModuleInit {
     const items = await this.tenantModel.find({ kind: { $ne: 'Parent' } });
     const ranked = items
       .map((tenant) => {
-        const blob = `${tenant.name} ${tenant.slug} ${tenant._id.toString()}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const blob = `${tenant.name} ${tenant.slug} ${tenant.contactEmail ?? ''} ${tenant._id.toString()}`
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '');
         const score = needles.reduce((sum, needle) => sum + (blob.includes(needle) || needle.includes(blob) ? needle.length : 0), 0);
         return { tenant, score };
       })
@@ -217,6 +220,23 @@ export class TenantsService implements OnModuleInit {
       );
     }
     return this.toTenant(tenant);
+  }
+
+  async remove(id: string) {
+    const tenant = await this.findById(id);
+    if (this.isParent(tenant)) throw new BadRequestException('The parent company cannot be deleted');
+    const tenantId = tenant._id.toString();
+    await runWithoutTenant(async () => {
+      for (const name of TENANT_COLLECTIONS) {
+        try {
+          await this.connection.collection(name).deleteMany({ tenantId: { $in: tenantIdValues(tenantId) } });
+        } catch {
+          /* collection may not exist */
+        }
+      }
+      await this.tenantModel.collection.deleteOne({ $or: [{ _id: tenant._id }, { slug: tenant.slug }] });
+    });
+    return { deleted: true, id: tenantId };
   }
 
   toTenant(tenant: TenantDocument) {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AdminGuard, RolesGuard } from '../auth/admin.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -57,6 +57,12 @@ export class RidersAdminController {
     return this.ridersService.update(id, body, actorFromRequest(req));
   }
 
+  @Delete(':id')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  remove(@Req() req: Parameters<typeof actorFromRequest>[0], @Param('id') id: string) {
+    return this.ridersService.remove(id, actorFromRequest(req));
+  }
+
   @Post(':id/plan')
   @Roles('SuperAdmin', 'Administrator', 'Operations')
   assignPlan(
@@ -89,6 +95,12 @@ export class PlansAdminController {
   @Roles('SuperAdmin', 'Administrator')
   update(@Req() req: Parameters<typeof actorFromRequest>[0], @Param('id') id: string, @Body() body: UpdateRentalPlanDto) {
     return this.ridersService.updatePlan(id, body, actorFromRequest(req));
+  }
+
+  @Delete(':id')
+  @Roles('SuperAdmin', 'Administrator')
+  removePlan(@Req() req: Parameters<typeof actorFromRequest>[0], @Param('id') id: string) {
+    return this.ridersService.deletePlan(id, actorFromRequest(req));
   }
 }
 

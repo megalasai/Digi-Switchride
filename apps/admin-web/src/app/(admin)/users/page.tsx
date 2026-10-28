@@ -208,7 +208,22 @@ export default function UsersPage() {
                 <TableCell><Badge status={u.role} /></TableCell>
                 <TableCell><Badge status={u.isActive === false ? "Inactive" : "Active"} /></TableCell>
                 <TableCell>
-                  <Button variant="ghost" className="px-2 py-1 text-xs" type="button" onClick={() => openEdit(u)}>Edit</Button>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" className="px-2 py-1 text-xs" type="button" onClick={() => openEdit(u)}>Edit</Button>
+                    {u.id !== user?.id && (
+                      <Button
+                        variant="ghost"
+                        className="px-2 py-1 text-xs text-red-700"
+                        type="button"
+                        onClick={() => {
+                          if (!window.confirm(`Delete user ${u.email}?`)) return;
+                          api.deleteAdminUser(u.id).then(load).catch((e) => setError(e instanceof Error ? e.message : "Delete failed"));
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

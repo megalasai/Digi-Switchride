@@ -8,7 +8,7 @@ import { TenantsService } from '../tenants/tenants.service';
 export const DEFAULT_TRACK360_URL = 'https://prod-s1.track360.net.in/api/v1/auth/pull_api';
 
 const GPS_USERNAME_TENANTS: Record<string, string[]> = {
-  helloev1: ['hello ev', 'helloev', 'web-and-mobile'],
+  helloev1: ['hello ev', 'helloev', 'helloeveez', 'web-and-mobile'],
 };
 
 export type GpsIntegrationUpsert = {
@@ -136,13 +136,12 @@ export class GpsIntegrationService implements OnModuleInit {
 
   async listEnabledForSync(scopedTenantId?: string | null): Promise<GpsPullConfig[]> {
     await this.bindKnownGpsAccounts();
-    const filter: Record<string, unknown> = { enabled: true };
-    if (scopedTenantId) filter.tenantId = scopedTenantId;
-    const rows = await runWithoutTenant(async () => this.model.find(filter));
+    const rows = await runWithoutTenant(async () => this.model.find({ enabled: true }));
     const items: GpsPullConfig[] = [];
     for (const row of rows) {
       if (!row.username || !row.password || !row.pullUrl) continue;
-      const tenantId = (await this.tenantIdForGpsUsername(row.username)) || row.tenantId;
+      const tenantId = String((await this.tenantIdForGpsUsername(row.username)) || row.tenantId);
+      if (scopedTenantId && tenantId !== String(scopedTenantId)) continue;
       items.push({
         tenantId,
         provider: row.provider,
@@ -152,6 +151,17 @@ export class GpsIntegrationService implements OnModuleInit {
       });
     }
     return items;
+  }
+
+  async usernamesForTenant(tenantId: string) {
+    const rows = await runWithoutTenant(async () => this.model.find());
+    const names: string[] = [];
+    for (const row of rows) {
+      if (!row.username) continue;
+      const owner = String((await this.tenantIdForGpsUsername(row.username)) || row.tenantId);
+      if (owner === String(tenantId)) names.push(row.username);
+    }
+    return names;
   }
 
   async tenantIdForGpsUsername(username?: string | null) {
