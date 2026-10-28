@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleIni
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { currentTenantId, runWithoutTenant, tenantAls } from '../common/tenant-als';
+import { tenantIdValues } from '../common/tenant.plugin';
 import { GPS_AUTH_TYPES, GPS_PROVIDERS, GpsIntegration, GpsIntegrationDocument, type GpsAuthType, type GpsProvider } from '../schemas/gps-integration.schema';
 import { randomUUID } from 'crypto';
 import { TenantsService } from '../tenants/tenants.service';
@@ -221,13 +222,14 @@ export class GpsIntegrationService implements OnModuleInit {
 
   async usernamesForTenant(tenantId: string) {
     const rows = await runWithoutTenant(async () => this.model.find());
+    const wanted = new Set(tenantIdValues(tenantId).map((value) => String(value)));
     const names: string[] = [];
     for (const row of rows) {
       if (!row.username) continue;
       const owner = String((await this.tenantIdForGpsUsername(row.username)) || row.tenantId);
-      if (owner === String(tenantId)) names.push(row.username);
+      if (wanted.has(owner) || wanted.has(String(row.tenantId))) names.push(row.username);
     }
-    return names;
+    return [...new Set(names)];
   }
 
   async tenantIdForGpsUsername(username?: string | null) {

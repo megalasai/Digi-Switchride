@@ -27,9 +27,6 @@ export default function IoTPage() {
   const [syncing, setSyncing] = useState(false);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState(emptyForm);
-  const [importJson, setImportJson] = useState("");
-  const [importVendor, setImportVendor] = useState("GenericPull");
-  const [importing, setImporting] = useState(false);
   const [linkVehicleId, setLinkVehicleId] = useState<Record<string, string>>({});
   const [syncInfo, setSyncInfo] = useState<{ at: string; ok: boolean; synced: number; message: string } | null>(null);
 
@@ -132,7 +129,7 @@ export default function IoTPage() {
     <div>
       <PageHeader
         title="IoT Devices"
-        description="Register a tracker IMEI, import JSON from another GPS vendor, or sync connected APIs. Configure Track360, Traccar, HTTP pull, or push ingest under Integrations."
+        description="Register a tracker IMEI or link it to a vehicle. Connect Track360 and other GPS APIs, including JSON import, under Integrations."
         actions={
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => void syncTrack360()} disabled={syncing}>
@@ -193,55 +190,6 @@ export default function IoTPage() {
           </form>
         </FormPanel>
       )}
-
-      <Card className="mb-6 p-4">
-        <p className="font-semibold text-text-primary">Import vehicles from another GPS API</p>
-        <p className="mt-1 text-sm text-text-secondary">
-          Paste JSON (array or {"{ devices: [...] }"}) with imei/deviceId and optional vehicleNumber, lat, lng. Or configure a pull/push integration and use Sync GPS APIs.
-        </p>
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <Select value={importVendor} onChange={(e) => setImportVendor(e.target.value)}>
-            <option value="GenericPull">Generic HTTP GPS</option>
-            <option value="Traccar">Traccar</option>
-            <option value="Track360">Track360</option>
-            <option value="PushIngest">Push ingest</option>
-          </Select>
-          <textarea
-            className="md:col-span-2 min-h-[120px] w-full rounded-md border border-border bg-transparent p-2 font-mono text-xs"
-            value={importJson}
-            onChange={(e) => setImportJson(e.target.value)}
-            placeholder='[{"imei":"123456789012345","vehicleNumber":"TN01AB1234","lat":13.08,"lng":80.27}]'
-          />
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={importing}
-            onClick={() => {
-              setError("");
-              setSuccess("");
-              let payload: unknown;
-              try {
-                payload = JSON.parse(importJson);
-              } catch {
-                setError("Import JSON is not valid");
-                return;
-              }
-              setImporting(true);
-              api
-                .importIotDevices({ vendorType: importVendor, items: payload })
-                .then((r) => {
-                  setSuccess(r.message);
-                  setImportJson("");
-                  load();
-                })
-                .catch((err) => setError(err instanceof Error ? err.message : "Import failed"))
-                .finally(() => setImporting(false));
-            }}
-          >
-            {importing ? "Importing…" : "Import devices"}
-          </Button>
-        </div>
-      </Card>
 
       {filtered.length === 0 ? (
         <EmptyState

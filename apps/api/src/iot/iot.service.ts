@@ -21,6 +21,7 @@ import { DEFAULT_TRACK360_URL, GpsIntegrationService, type GpsPullConfig } from 
 export class IoTService {
   private readonly logger = new Logger(IoTService.name);
   lastSync: { at: string; ok: boolean; synced: number; message: string } | null = null;
+  private autoSynced = new Set<string>();
 
   constructor(
     @InjectModel(IoTDevice.name) private deviceModel: Model<IoTDeviceDocument>,
@@ -131,25 +132,57 @@ export class IoTService {
   }
 
   async listDevices(allTenants = false) {
-    if (allTenants) {
-      return runWithoutTenant(async () => this.listScopedDevices());
+    await this.gps.bindKnownGpsAccounts();
+    const scoped = currentTenantId();
+    const tenantId = allTenants && !scoped ? null : scoped;
+    if (tenantId) {
+      await this.rehomeTenantGpsFleet(tenantId);
+      const existing = await this.countTenantDevices(tenantId);
+      if (existing === 0 && !this.autoSynced.has(tenantId)) {
+        this.autoSynced.add(tenantId);
+        try {
+          await this.syncTrack360({ tenantId });
+        } catch (error) {
+          this.logger.warn(`Auto GPS sync for ${tenantId} failed: ${error instanceof Error ? error.message : error}`);
+        }
+      }
     }
-    return this.listScopedDevices();
+    if (!tenantId) {
+      return runWithoutTenant(() => this.listScopedDevices(null));
+    }
+    return this.listScopedDevices(tenantId);
   }
 
-  private async listScopedDevices() {
-    const tenantId = currentTenantId();
+  private async rehomeTenantGpsFleet(tenantId: string) {
+    const usernames = await this.gps.usernamesForTenant(tenantId);
+    for (const username of usernames) {
+      await this.rehomeByGpsUsername(username, tenantId);
+    }
+  }
+
+  private async countTenantDevices(tenantId: string) {
+    const usernames = await this.gps.usernamesForTenant(tenantId);
+    return runWithoutTenant(() => this.deviceModel.countDocuments(this.tenantDeviceFilter(tenantId, usernames)));
+  }
+
+  private tenantDeviceFilter(tenantId: string, usernames: string[]) {
+    const clauses: Record<string, unknown>[] = [tenantIdClause(tenantId)];
+    if (usernames.length) {
+      clauses.push({
+        gpsUsername: {
+          $regex: `^(${usernames.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})$`,
+          $options: 'i',
+        },
+      });
+    }
+    return { $or: clauses };
+  }
+
+  private async listScopedDevices(tenantId: string | null) {
     const usernames = tenantId ? await this.gps.usernamesForTenant(tenantId) : [];
     const devices = tenantId
       ? await runWithoutTenant(() =>
-          this.deviceModel
-            .find({
-              $or: [
-                tenantIdClause(tenantId),
-                ...(usernames.length ? [{ gpsUsername: { $in: usernames } }] : []),
-              ],
-            })
-            .sort({ deviceId: 1 }),
+          this.deviceModel.find(this.tenantDeviceFilter(tenantId, usernames)).sort({ deviceId: 1 }),
         )
       : await this.deviceModel.find().sort({ deviceId: 1 });
     const hubs = assignedHubIds();
@@ -180,7 +213,7 @@ export class IoTService {
           ignition: d.ignition,
           vendorStatus: d.vendorStatus,
           vehicleStatus: d.vehicleStatus,
-          tenantId: (d as { tenantId?: string }).tenantId ?? (vehicle as { tenantId?: string } | null)?.tenantId,
+          tenantId: String((d as { tenantId?: string }).tenantId ?? (vehicle as { tenantId?: string } | null)?.tenantId ?? ''),
         };
       }),
     );
@@ -670,7 +703,14 @@ export class IoTService {
       if (!existing) return;
       const prev = String((existing as { tenantId?: string }).tenantId ?? '');
       if (prev === tenantId) return;
-      await this.deviceModel.collection.updateOne({ _id: existing._id }, { $set: { tenantId } });
+      try {
+        await this.deviceModel.collection.updateOne({ _id: existing._id }, { $set: { tenantId } });
+      } catch (error) {
+        this.logger.warn(
+          `Could not move device ${existing.deviceId} to tenant ${tenantId}: ${error instanceof Error ? error.message : error}`,
+        );
+        return;
+      }
       const vehicleFilter: Record<string, unknown>[] = [{ iotDeviceId: existing.deviceId }, { iotDeviceId: row.deviceId }];
       if (existing.vehicleId) {
         for (const id of mongoIdCandidates(existing.vehicleId)) {

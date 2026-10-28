@@ -50,6 +50,8 @@ export function GpsIntegrationForm({ tenantId: forcedTenantId }: { tenantId?: st
   const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [importJson, setImportJson] = useState("");
+  const [importing, setImporting] = useState(false);
   const [overview, setOverview] = useState<
     { tenantId: string; tenantName: string; tenantSlug: string; provider: string | null; enabled: boolean; lastSyncMessage?: string }[]
   >([]);
@@ -268,6 +270,52 @@ export function GpsIntegrationForm({ tenantId: forcedTenantId }: { tenantId?: st
             </div>
           </form>
         )}
+      </Card>
+
+      <Card className="p-5">
+        <p className="font-semibold text-text-primary">Import vehicles from a GPS API</p>
+        <p className="mt-1 text-sm text-text-secondary">
+          Paste JSON (array or a devices list) with imei/deviceId and optional vehicleNumber, lat, lng. Vehicles are created on the tenant selected above.
+        </p>
+        <div className="mt-3 grid grid-cols-1 gap-3">
+          <textarea
+            className="min-h-[120px] w-full rounded-md border border-border bg-transparent p-2 font-mono text-xs"
+            value={importJson}
+            onChange={(e) => setImportJson(e.target.value)}
+            placeholder='[{"imei":"123456789012345","vehicleNumber":"TN01AB1234","lat":13.08,"lng":80.27}]'
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={importing || !form}
+            onClick={() => {
+              setError("");
+              setSuccess("");
+              let payload: unknown;
+              try {
+                payload = JSON.parse(importJson);
+              } catch {
+                setError("Import JSON is not valid");
+                return;
+              }
+              setImporting(true);
+              api
+                .importIotDevices({
+                  tenantId: tenantId || form?.tenantId,
+                  vendorType: form?.provider || "GenericPull",
+                  items: payload,
+                })
+                .then((r) => {
+                  setSuccess(r.message);
+                  setImportJson("");
+                })
+                .catch((err) => setError(err instanceof Error ? err.message : "Import failed"))
+                .finally(() => setImporting(false));
+            }}
+          >
+            {importing ? "Importing…" : "Import devices"}
+          </Button>
+        </div>
       </Card>
     </div>
   );
