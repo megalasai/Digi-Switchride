@@ -1,6 +1,6 @@
 import { from } from 'rxjs';
 import { lastValueFrom } from 'rxjs';
-import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
+import { CallHandler, ExecutionContext, ForbiddenException, Injectable, NestInterceptor } from '@nestjs/common';
 import { tenantAls } from '../common/tenant-als';
 import { TenantsService } from './tenants.service';
 
@@ -29,6 +29,11 @@ export class TenantInterceptor implements NestInterceptor {
     } else if (user?.type === 'admin' && user.role === 'SuperAdmin') {
       if (headerId || headerSlug) tenantId = await this.tenants.resolveTenantId(headerId || headerSlug);
       else tenantId = null;
+    } else if (user?.type === 'admin') {
+      if (!user.tenantId) {
+        throw new ForbiddenException('This account is not assigned to an organization');
+      }
+      tenantId = user.tenantId;
     } else if (user?.tenantId) {
       tenantId = user.tenantId;
     } else {

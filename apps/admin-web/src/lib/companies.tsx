@@ -13,10 +13,22 @@ export function useCompanies() {
   useEffect(() => {
     if (isSuper) {
       api.tenants().then((r) => setCompanies(r.items)).catch(() => setCompanies([]));
-    } else {
-      api.publicTenants().then((r) => setCompanies(r.items)).catch(() => setCompanies([]));
+      return;
     }
-  }, [isSuper]);
+    if (user?.tenantId) {
+      setCompanies([
+        {
+          id: user.tenantId,
+          slug: "",
+          name: user.tenantName || "Company",
+          status: "Active",
+          kind: "Tenant",
+        },
+      ]);
+    } else {
+      setCompanies([]);
+    }
+  }, [isSuper, user?.tenantId, user?.tenantName]);
 
   const workingId =
     (typeof window !== "undefined" ? localStorage.getItem("adminTenantId") : null) || user?.tenantId || "";

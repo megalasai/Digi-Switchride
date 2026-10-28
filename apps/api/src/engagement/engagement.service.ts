@@ -77,13 +77,13 @@ export class EngagementService {
   }
 
   async sendNotification(data: { title: string; body: string; audience: string }, actor?: AuditActor | null) {
-    const created = await this.notificationModel.create({
+    const created = await runInWriteTenant(undefined, async () => this.notificationModel.create({
       ...data,
       channel: 'InApp',
       status: 'Sent',
       sentAt: new Date(),
       createdBy: actor?.actorEmail,
-    });
+    }));
     await this.auditService.record({ actor, action: 'notification.send', entityType: 'Notification', entityId: created._id.toString(), after: { title: data.title, audience: data.audience } });
     return { id: created._id.toString(), status: created.status, channel: created.channel };
   }
@@ -111,7 +111,7 @@ export class EngagementService {
     const rider = await this.customerModel.findById(data.riderId);
     if (!rider) throw new NotFoundException('Rider not found');
     if (data.rating < 1 || data.rating > 5) throw new BadRequestException('Rating must be between 1 and 5');
-    const created = await this.feedbackModel.create(data);
+    const created = await runInWriteTenant(undefined, async () => this.feedbackModel.create(data));
     return { id: created._id.toString(), rating: created.rating };
   }
 
@@ -140,7 +140,7 @@ export class EngagementService {
   async issueAgreement(data: { riderId: string; type: string; content: string; documentUrl?: string }, actor?: AuditActor | null) {
     const rider = await this.customerModel.findById(data.riderId);
     if (!rider) throw new NotFoundException('Rider not found');
-    const created = await this.agreementModel.create({ ...data, status: 'Issued' });
+    const created = await runInWriteTenant(undefined, async () => this.agreementModel.create({ ...data, status: 'Issued' }));
     await this.auditService.record({ actor, action: 'agreement.issue', entityType: 'Agreement', entityId: created._id.toString(), after: { riderId: data.riderId, type: data.type } });
     return { id: created._id.toString(), status: created.status };
   }

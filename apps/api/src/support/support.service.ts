@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import type { AuditActor } from '../audit/audit.service';
+import { runInWriteTenant } from '../common/tenant-write';
 import { Customer, CustomerDocument } from '../schemas/customer.schema';
 import { SupportTicket, SupportTicketDocument } from '../schemas/booking.schema';
 
@@ -13,7 +14,9 @@ export class SupportService {
   ) {}
 
   async create(customerId: string, data: { category: string; subject: string; description: string; bookingId?: string }) {
-    const ticket = await this.ticketModel.create({ customerId, ...data, notes: [] });
+    const ticket = await runInWriteTenant(undefined, async () =>
+      this.ticketModel.create({ customerId, ...data, notes: [] }),
+    );
     return this.toDto(ticket);
   }
 

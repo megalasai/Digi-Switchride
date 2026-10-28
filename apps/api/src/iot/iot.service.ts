@@ -10,7 +10,7 @@ import { toGeoLocation } from '../common/helpers';
 import { parseTrack360Payload, track360AuthHeader, track360PullUrl, type Track360Device } from './track360';
 import { applyHubScope, assignedHubIds } from '../common/hub-scope';
 import { runInWriteTenant } from '../common/tenant-write';
-import { runWithoutTenant } from '../common/tenant-als';
+import { currentTenantId } from '../common/tenant-als';
 import { findByEitherId, persistById } from '../common/mongo-id';
 import { TenantsService } from '../tenants/tenants.service';
 import { readSecret } from '../config/secrets';
@@ -106,7 +106,7 @@ export class IoTService {
 
   async syncTrack360() {
     try {
-      const result = await runWithoutTenant(() => this.pullTrack360());
+      const result = await this.pullTrack360();
       this.lastSync = { at: new Date().toISOString(), ok: true, synced: result.synced, message: result.message };
       return result;
     } catch (error) {
@@ -479,26 +479,38 @@ export class IoTService {
   }
 
   private async upsertTrack360Device(row: Track360Device) {
+    const scope = currentTenantId();
+    const existing = await this.deviceModel.findOne({ deviceId: row.deviceId });
+    const existingTenant = existing ? String((existing as { tenantId?: string }).tenantId ?? '') : '';
+    if (scope && existingTenant && existingTenant !== String(scope)) {
+      return { linked: false, created: false };
+    }
     const connectionStatus = row.vendorStatus.toLowerCase() === 'online' ? 'Connected' : row.vendorStatus.toLowerCase() === 'offline' ? 'Disconnected' : 'Unknown';
     try {
       await this.deviceModel.findOneAndUpdate(
       { deviceId: row.deviceId },
       {
-        deviceId: row.deviceId,
-        vendorType: 'Track360',
-        imei: row.imei || row.deviceId,
-        displayName: row.name || undefined,
-        externalId: row.vendorDeviceId || row.deviceId,
-        speedKmh: row.speedKmh,
-        ignition: row.ignition,
-        vendorStatus: row.vendorStatus,
-        vehicleStatus: row.vehicleStatus,
-        connectionStatus,
-        lastSeenAt: row.lastSeenAt,
-        lastLat: row.lat ?? undefined,
-        lastLng: row.lng ?? undefined,
-        batteryPercent: row.batteryPercent,
-        odometerKm: row.odometerKm,
+        $set: {
+          deviceId: row.deviceId,
+          vendorType: 'Track360',
+          imei: row.imei || row.deviceId,
+          displayName: row.name || undefined,
+          externalId: row.vendorDeviceId || row.deviceId,
+          speedKmh: row.speedKmh,
+          ignition: row.ignition,
+          vendorStatus: row.vendorStatus,
+          vehicleStatus: row.vehicleStatus,
+          connectionStatus,
+          lastSeenAt: row.lastSeenAt,
+          lastLat: row.lat ?? undefined,
+          lastLng: row.lng ?? undefined,
+          batteryPercent: row.batteryPercent,
+          odometerKm: row.odometerKm,
+        },
+        $setOnInsert: {
+          deviceId: row.deviceId,
+          ...(scope ? { tenantId: scope } : {}),
+        },
       },
       { upsert: true, setDefaultsOnInsert: true },
       );
@@ -586,6 +598,7 @@ export class IoTService {
         lastLat: toCoord(row.lat, row.lng)?.lat,
         lastLng: toCoord(row.lat, row.lng)?.lng,
         notes: 'Created from IoT device',
+        ...(currentTenantId() ? { tenantId: currentTenantId() } : {}),
       });
       try {
         await this.linkDeviceToVehicle(row.deviceId, vehicle._id.toString(), vendorType);
@@ -654,6 +667,7 @@ export class IoTService {
       capacity: 500,
       geoFenceRadiusM: 250,
       status: 'Active',
+      ...(currentTenantId() ? { tenantId: currentTenantId() } : {}),
     });
   }
 }

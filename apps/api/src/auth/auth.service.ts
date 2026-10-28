@@ -13,6 +13,7 @@ import { AdminLoginDto, CreateAdminUserDto } from './dto/admin-auth.dto';
 import { SendOtpDto, VerifyOtpDto, CustomerRegisterDto, CustomerLoginDto } from './dto/auth.dto';
 import { TenantsService } from '../tenants/tenants.service';
 import { currentTenantId, runWithoutTenant, tenantAls } from '../common/tenant-als';
+import { findByEitherId } from '../common/mongo-id';
 import { readSecret } from '../config/secrets';
 
 @Injectable()
@@ -154,7 +155,7 @@ export class AuthService implements OnModuleInit {
     const tenantId =
       callerRole === 'SuperAdmin'
         ? dto.tenantId || currentTenantId() || this.tenants.defaultTenantId()
-        : caller?.tenantId || currentTenantId() || this.tenants.defaultTenantId();
+        : caller?.tenantId || currentTenantId();
     if (!tenantId) throw new ForbiddenException('Choose an organization for this user');
     const org = await this.tenants.peek(tenantId);
     if (org && this.tenants.isParent(org) && dto.role !== 'SuperAdmin') {
@@ -189,20 +190,45 @@ export class AuthService implements OnModuleInit {
     return result;
   }
 
-  async listAdminUsers() {
-    const admins = await runWithoutTenant(async () => this.adminModel.find().sort({ createdAt: -1 }));
-    return admins.map((a) => this.toAdminUser(a));
+  async listAdminUsers(caller?: { role?: string; tenantId?: string }) {
+    const callerRole = normalizeAdminRole(caller?.role) ?? caller?.role;
+    if (callerRole === 'SuperAdmin') {
+      const scoped = currentTenantId();
+      if (!scoped) {
+        const admins = await runWithoutTenant(async () => this.adminModel.find().sort({ createdAt: -1 }));
+        return admins.map((a) => this.toAdminUser(a));
+      }
+      const rows = await this.adminModel.collection
+        .find({ tenantId: { $in: this.tenantIdValues(scoped) }, role: { $ne: 'SuperAdmin' } })
+        .sort({ createdAt: -1 })
+        .toArray();
+      return rows.map((row) => this.toAdminUser(this.adminModel.hydrate(row)));
+    }
+    const tenantId = caller?.tenantId || currentTenantId();
+    if (!tenantId) throw new ForbiddenException('This account is not assigned to an organization');
+    const rows = await this.adminModel.collection
+      .find({ tenantId: { $in: this.tenantIdValues(tenantId) }, role: { $ne: 'SuperAdmin' } })
+      .sort({ createdAt: -1 })
+      .toArray();
+    return rows.map((row) => this.toAdminUser(this.adminModel.hydrate(row)));
   }
 
   async updateAdminUser(
     id: string,
     data: { fullName?: string; role?: AdminRole; password?: string; isActive?: boolean; tenantId?: string; hubIds?: string[] },
     actor?: AuditActor | null,
-    caller?: { role?: string },
+    caller?: { role?: string; tenantId?: string },
   ) {
-    const admin = await this.adminModel.findById(id);
+    const admin = await runWithoutTenant(async () => findByEitherId(this.adminModel, id));
     if (!admin) throw new NotFoundException('Admin user not found');
     const callerRole = normalizeAdminRole(caller?.role) ?? caller?.role;
+    if (callerRole !== 'SuperAdmin') {
+      const tenantId = caller?.tenantId || currentTenantId();
+      if (!tenantId || !this.adminInTenant(admin, tenantId)) {
+        throw new ForbiddenException('You can only manage users in your organization');
+      }
+      if (admin.role === 'SuperAdmin') throw new ForbiddenException('You cannot change a SuperAdmin');
+    }
     if (data.role === 'SuperAdmin' && callerRole !== 'SuperAdmin') {
       throw new ForbiddenException('Only a SuperAdmin can assign SuperAdmin');
     }
@@ -289,7 +315,20 @@ export class AuthService implements OnModuleInit {
 
   private adminInTenant(admin: AdminUserDocument, tenantId: string) {
     const assigned = String((admin as { tenantId?: string }).tenantId ?? '');
-    return Boolean(assigned) && assigned === String(tenantId);
+    return Boolean(assigned) && this.tenantIdValues(tenantId).some((value) => String(value) === assigned);
+  }
+
+  private tenantIdValues(tenantId: string): unknown[] {
+    const values: unknown[] = [tenantId];
+    if (Types.ObjectId.isValid(tenantId)) {
+      try {
+        const oid = new Types.ObjectId(tenantId);
+        if (oid.toString() === tenantId) values.push(oid);
+      } catch {
+        /* string only */
+      }
+    }
+    return values;
   }
 
   /** JSON restore stored _id as a string; mongoose findById uses ObjectId and misses the row. */

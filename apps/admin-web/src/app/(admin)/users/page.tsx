@@ -41,7 +41,9 @@ export default function UsersPage() {
     api.adminUsers().then((r) => setUsers(r.items)).catch((e) => setError(e.message));
     api.hubs().then((r) => setHubs(r.items)).catch(() => setHubs([]));
     if (isSuper) api.tenants().then((r) => setOrgs(r.items)).catch(() => setOrgs([]));
-    else api.publicTenants().then((r) => setOrgs(r.items)).catch(() => setOrgs([]));
+    else if (user?.tenantId) {
+      setOrgs([{ id: user.tenantId, slug: "", name: user.tenantName || "Company", status: "Active", kind: "Tenant" }]);
+    }
   };
   useEffect(() => { load(); }, []);
 
@@ -190,7 +192,7 @@ export default function UsersPage() {
           <TableHead>
             <TableHeaderCell>Name</TableHeaderCell>
             <TableHeaderCell>Email</TableHeaderCell>
-            <TableHeaderCell>Organization</TableHeaderCell>
+              {isSuper && <TableHeaderCell>Organization</TableHeaderCell>}
             <TableHeaderCell>Hubs</TableHeaderCell>
             <TableHeaderCell>Role</TableHeaderCell>
             <TableHeaderCell>Status</TableHeaderCell>
@@ -201,7 +203,7 @@ export default function UsersPage() {
               <TableRow key={u.id}>
                 <TableCell className="font-semibold">{u.fullName}</TableCell>
                 <TableCell>{u.email}</TableCell>
-                <TableCell>{orgName(u.tenantId)}</TableCell>
+                {isSuper && <TableCell>{orgName(u.tenantId)}</TableCell>}
                 <TableCell className="text-xs">{hubNames(u.hubIds)}</TableCell>
                 <TableCell><Badge status={u.role} /></TableCell>
                 <TableCell><Badge status={u.isActive === false ? "Inactive" : "Active"} /></TableCell>

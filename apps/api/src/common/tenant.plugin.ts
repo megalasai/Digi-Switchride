@@ -1,4 +1,4 @@
-import { Schema } from 'mongoose';
+import { Schema, Types } from 'mongoose';
 import { getTenantStore } from './tenant-als';
 
 export function tenantPlugin(schema: Schema) {
@@ -11,7 +11,7 @@ export function tenantPlugin(schema: Schema) {
     if (!store || store.skip || !store.tenantId) return;
     const filter = this.getFilter() ?? {};
     if (filter.tenantId !== undefined) return;
-    this.where({ tenantId: store.tenantId });
+    this.where(tenantIdClause(store.tenantId));
   };
 
   schema.pre('find', apply);
@@ -20,6 +20,11 @@ export function tenantPlugin(schema: Schema) {
   schema.pre('countDocuments', apply);
   schema.pre('updateMany', apply);
   schema.pre('deleteMany', apply);
+  schema.pre('aggregate', function () {
+    const store = getTenantStore();
+    if (!store || store.skip || !store.tenantId) return;
+    this.pipeline().unshift({ $match: tenantIdClause(store.tenantId) });
+  });
   schema.pre('save', function () {
     const store = getTenantStore();
     const doc = this as { tenantId?: string };
@@ -27,4 +32,17 @@ export function tenantPlugin(schema: Schema) {
       doc.tenantId = store.tenantId;
     }
   });
+}
+
+function tenantIdClause(tenantId: string) {
+  const values: unknown[] = [tenantId];
+  if (Types.ObjectId.isValid(tenantId)) {
+    try {
+      const oid = new Types.ObjectId(tenantId);
+      if (oid.toString() === tenantId) values.push(oid);
+    } catch {
+      /* keep string match only */
+    }
+  }
+  return { tenantId: { $in: values } };
 }

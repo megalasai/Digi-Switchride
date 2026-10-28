@@ -120,7 +120,9 @@ export class OperationsService {
   }
 
   async createCentre(data: { name: string; address: string; contactName: string; contactPhone: string; lat?: number; lng?: number }, actor?: AuditActor | null) {
-    const centre = await this.centreModel.create({ ...data, contactPhone: normalizeIndiaPhone(data.contactPhone), isActive: true });
+    const centre = await runInWriteTenant(undefined, async () =>
+      this.centreModel.create({ ...data, contactPhone: normalizeIndiaPhone(data.contactPhone), isActive: true }),
+    );
     await this.auditService.record({ actor, action: 'serviceCentre.create', entityType: 'ServiceCentre', entityId: centre._id.toString(), after: { name: data.name } });
     return this.toCentre(centre);
   }
@@ -153,7 +155,7 @@ export class OperationsService {
     if (data.endTime <= data.startTime) throw new BadRequestException('End time must be after start time');
     const overlap = await this.slotModel.findOne({ centreId: data.centreId, date: data.date, startTime: data.startTime });
     if (overlap) throw new BadRequestException('A slot already exists for this centre, date and start time');
-    const slot = await this.slotModel.create({ ...data, bookedCount: 0 });
+    const slot = await runInWriteTenant(undefined, async () => this.slotModel.create({ ...data, bookedCount: 0 }));
     return this.toSlot(slot);
   }
 
@@ -172,7 +174,7 @@ export class OperationsService {
       const vehicle = await this.vehicleModel.findById(data.vehicleId);
       if (!vehicle) throw new NotFoundException('Vehicle not found');
     }
-    const created = await this.requestModel.create({ ...data, status: 'Open' });
+    const created = await runInWriteTenant(undefined, async () => this.requestModel.create({ ...data, status: 'Open' }));
     await this.auditService.record({ actor, action: 'serviceRequest.create', entityType: 'ServiceRequest', entityId: created._id.toString(), after: { riderId: data.riderId } });
     const [enriched] = await this.enrichRequests([created]);
     return enriched;
@@ -223,7 +225,9 @@ export class OperationsService {
   ) {
     await this.assertRider(data.riderId);
     const slot = await this.bookSlot(data.slotId, data.centreId);
-    const created = await this.appointmentModel.create({ ...data, status: 'Scheduled' });
+    const created = await runInWriteTenant(undefined, async () =>
+      this.appointmentModel.create({ ...data, status: 'Scheduled' }),
+    );
     await this.auditService.record({ actor, action: 'appointment.schedule', entityType: 'Appointment', entityId: created._id.toString(), after: { slotId: data.slotId } });
     const [enriched] = await this.enrichAppointments([created]);
     return enriched;

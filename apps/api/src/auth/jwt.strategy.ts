@@ -27,7 +27,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         email: admin.email,
         role: normalizeAdminRole(admin.role) ?? admin.role,
         type: 'admin',
-        tenantId: (admin as { tenantId?: string }).tenantId ?? payload.tenantId,
+        tenantId: (() => {
+          const fromDoc = (admin as { tenantId?: string }).tenantId;
+          const raw = fromDoc != null && String(fromDoc) ? String(fromDoc) : payload.tenantId;
+          return raw ? String(raw) : undefined;
+        })(),
         hubIds: admin.hubIds?.length ? admin.hubIds : payload.hubIds,
       };
     }

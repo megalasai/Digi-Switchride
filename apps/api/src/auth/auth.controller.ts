@@ -49,8 +49,8 @@ export class AdminUsersController {
 
   @Get()
   @Roles('SuperAdmin', 'Administrator')
-  listUsers() {
-    return this.authService.listAdminUsers().then((items) => ({ items }));
+  listUsers(@Req() req: { user?: { role?: string; tenantId?: string } }) {
+    return this.authService.listAdminUsers(req.user).then((items) => ({ items }));
   }
 
   @Post()
@@ -61,7 +61,7 @@ export class AdminUsersController {
 
   @Put(':id')
   @Roles('SuperAdmin', 'Administrator')
-  updateUser(@Req() req: Parameters<typeof actorFromRequest>[0] & { user?: { role?: string } }, @Param('id') id: string, @Body() dto: UpdateAdminUserDto) {
+  updateUser(@Req() req: Parameters<typeof actorFromRequest>[0] & { user?: { role?: string; tenantId?: string } }, @Param('id') id: string, @Body() dto: UpdateAdminUserDto) {
     return this.authService.updateAdminUser(id, dto, actorFromRequest(req), req.user);
   }
 }

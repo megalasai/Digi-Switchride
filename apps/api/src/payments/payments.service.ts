@@ -10,6 +10,7 @@ import { OperationsService } from '../operations/operations.service';
 import { EngagementService } from '../engagement/engagement.service';
 import { applyHubScope } from '../common/hub-scope';
 import { currentTenantId } from '../common/tenant-als';
+import { runInWriteTenant } from '../common/tenant-write';
 import { PaymentGatewayService } from './gateway.service';
 
 @Injectable()
@@ -243,7 +244,9 @@ export class PromotionsService {
   constructor(@InjectModel(Promotion.name) private promotionModel: Model<PromotionDocument>) {}
 
   async create(data: { code: string; description?: string; discountType: string; discountValue: number; validFrom: Date; validTo: Date; maxUses?: number }) {
-    const promo = await this.promotionModel.create({ ...data, code: data.code.toUpperCase() });
+    const promo = await runInWriteTenant(undefined, async () =>
+      this.promotionModel.create({ ...data, code: data.code.toUpperCase() }),
+    );
     return this.toDto(promo);
   }
 
