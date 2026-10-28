@@ -199,7 +199,7 @@ export default function IoTPage() {
             </TableHead>
             <TableBody>
               {filtered.map((d) => (
-                <TableRow key={d.id}>
+                <TableRow key={`${d.tenantId ?? "none"}-${d.id}`}>
                   <TableCell>
                     <p className="font-semibold">{d.displayName || d.id}</p>
                     <p className="text-xs text-text-muted">IMEI {d.imei ?? d.id}</p>

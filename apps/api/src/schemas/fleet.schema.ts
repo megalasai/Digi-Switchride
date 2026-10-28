@@ -130,7 +130,7 @@ export class Vehicle {
 export const VehicleSchema = SchemaFactory.createForClass(Vehicle);
 VehicleSchema.plugin(tenantPlugin);
 VehicleSchema.index({ hubId: 1, status: 1 });
-VehicleSchema.index({ iotDeviceId: 1 }, { sparse: true, unique: true });
+VehicleSchema.index({ tenantId: 1, iotDeviceId: 1 }, { sparse: true, unique: true });
 VehicleSchema.index({ assignedRiderId: 1 }, { sparse: true });
 VehicleSchema.index({ tenantId: 1, registrationNumber: 1 }, { unique: true });
 
@@ -168,7 +168,7 @@ export type IoTDeviceDocument = HydratedDocument<IoTDevice>;
 
 @Schema({ timestamps: true, collection: 'iot_devices' })
 export class IoTDevice {
-  @Prop({ required: true, unique: true })
+  @Prop({ required: true })
   deviceId!: string;
 
   @Prop()
@@ -219,4 +219,5 @@ export class IoTDevice {
 
 export const IoTDeviceSchema = SchemaFactory.createForClass(IoTDevice);
 IoTDeviceSchema.index({ vehicleId: 1 }, { sparse: true });
+IoTDeviceSchema.index({ tenantId: 1, deviceId: 1 }, { unique: true });
 IoTDeviceSchema.plugin(tenantPlugin);

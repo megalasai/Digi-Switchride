@@ -14,14 +14,19 @@ export class IoTController {
   ) {}
 
   @Get('devices')
-  listDevices() {
-    return this.iotService.listDevices().then((items) => ({ items, sync: this.iotService.lastSync }));
+  listDevices(@Req() req: { user?: { role?: string } }) {
+    const allTenants = req.user?.role === 'SuperAdmin';
+    return this.iotService.listDevices(allTenants).then((items) => ({ items, sync: this.iotService.lastSync }));
   }
 
   @Post('devices/sync')
   @Roles('SuperAdmin', 'Administrator', 'Operations')
-  syncDevices() {
-    return this.iotService.syncTrack360();
+  syncDevices(@Req() req: { user?: { role?: string } }, @Query('tenantId') tenantId?: string) {
+    const isSuper = req.user?.role === 'SuperAdmin';
+    return this.iotService.syncTrack360({
+      tenantId: tenantId?.trim() || undefined,
+      allTenants: isSuper && !tenantId?.trim(),
+    });
   }
 
   @Get('gps-integrations')

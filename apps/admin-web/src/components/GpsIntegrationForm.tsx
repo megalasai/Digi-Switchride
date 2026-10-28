@@ -76,7 +76,7 @@ export function GpsIntegrationForm({ tenantId: forcedTenantId }: { tenantId?: st
     setError("");
     setSuccess("");
     try {
-      const result = await api.syncIotDevices();
+      const result = await api.syncIotDevices(tenantId || form?.tenantId || undefined);
       setSuccess(result.message ?? `Synced ${result.synced} devices`);
       if (tenantId) load(tenantId);
       if (isSuper) api.gpsIntegrations().then((r) => setOverview(r.items)).catch(() => {});

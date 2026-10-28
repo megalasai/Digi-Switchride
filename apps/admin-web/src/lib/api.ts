@@ -147,7 +147,11 @@ export const api = {
     request<{ display_name?: string; source?: string } | null>(`/geo/reverse?lat=${lat}&lng=${lng}`),
   geoStatus: () => request<{ ok: boolean; url: string; error?: string; status?: string }>("/geo/status"),
   iotDevices: () => request<{ items: IoTDevice[]; sync?: { at: string; ok: boolean; synced: number; message: string } | null }>("/admin/iot/devices"),
-  syncIotDevices: () => request<{ synced: number; linked: number; created?: number; message: string }>("/admin/iot/devices/sync", { method: "POST" }),
+  syncIotDevices: (tenantId?: string) =>
+    request<{ synced: number; linked: number; created?: number; message: string }>(
+      `/admin/iot/devices/sync${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ""}`,
+      { method: "POST" },
+    ),
   createIoTDevice: (data: CreateIoTDevice) =>
     request("/admin/iot/devices", { method: "POST", body: JSON.stringify(data) }),
   updateIoTDevice: (deviceId: string, data: UpdateIoTDevice) =>

@@ -3,6 +3,7 @@ export type Track360Device = {
   imei: string;
   vendorDeviceId?: string;
   name: string;
+  vehicleNumber?: string;
   lat: number | null;
   lng: number | null;
   batteryPercent?: number;
@@ -57,11 +58,26 @@ function mapRow(row: Track360Row): Track360Device {
   const batteryRaw = num(row.soc ?? row.batteryPercent ?? row.batteryLevel);
   const distance = num(row.totalDistance ?? row.odometerKm ?? row.odometer);
   const speed = num(row.speed);
+  const vehicleNumber = str(
+    row.vehicle_no ??
+      row.vehicleNo ??
+      row.vehicleNumber ??
+      row.vehicleno ??
+      row.vehicle_number ??
+      row.registrationNumber ??
+      row.regNo ??
+      row.reg_no ??
+      row.vehicleRegNo ??
+      row.VehicleNo ??
+      row.vehicle,
+  );
+  const name = str(row.name) || vehicleNumber;
   return {
     deviceId: imei || numericId,
     imei,
     vendorDeviceId: numericId || undefined,
-    name: str(row.name ?? row.vehicle_no ?? row.registrationNumber),
+    name,
+    vehicleNumber: vehicleNumber || undefined,
     lat: lat != null && Math.abs(lat) <= 90 && !(lat === 0 && lng === 0) ? lat : null,
     lng: lng != null && Math.abs(lng) <= 180 && !(lat === 0 && lng === 0) ? lng : null,
     batteryPercent: batteryRaw != null && batteryRaw >= 0 && batteryRaw <= 100 ? batteryRaw : undefined,

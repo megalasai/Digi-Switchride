@@ -10,8 +10,8 @@ import { toGeoLocation } from '../common/helpers';
 import { parseTrack360Payload, track360AuthHeader, track360PullUrl, type Track360Device } from './track360';
 import { applyHubScope, assignedHubIds } from '../common/hub-scope';
 import { runInWriteTenant } from '../common/tenant-write';
-import { currentTenantId, tenantAls } from '../common/tenant-als';
-import { findByEitherId, persistById } from '../common/mongo-id';
+import { currentTenantId, runWithoutTenant, tenantAls } from '../common/tenant-als';
+import { findByEitherId, mongoIdCandidates, persistById } from '../common/mongo-id';
 import { TenantsService } from '../tenants/tenants.service';
 import { readSecret } from '../config/secrets';
 import { DEFAULT_TRACK360_URL, GpsIntegrationService, type GpsPullConfig } from './gps-integration.service';
@@ -68,7 +68,14 @@ export class IoTService {
     return { commandId: randomUUID(), status: 'Sent' };
   }
 
-  async listDevices() {
+  async listDevices(allTenants = false) {
+    if (allTenants) {
+      return runWithoutTenant(async () => this.listScopedDevices());
+    }
+    return this.listScopedDevices();
+  }
+
+  private async listScopedDevices() {
     const devices = await this.deviceModel.find().sort({ deviceId: 1 });
     const hubs = assignedHubIds();
     const allowedVehicleIds = hubs
@@ -106,8 +113,8 @@ export class IoTService {
     return rows.filter((row): row is NonNullable<typeof row> => row != null);
   }
 
-  async syncTrack360() {
-    const scoped = currentTenantId();
+  async syncTrack360(opts?: { tenantId?: string; allTenants?: boolean }) {
+    const scoped = opts?.allTenants ? null : opts?.tenantId || currentTenantId();
     let configs = await this.gps.listEnabledForSync(scoped);
     if (!configs.length && !scoped) {
       const fallback = this.envGpsFallback();
@@ -186,7 +193,7 @@ export class IoTService {
     let failed = 0;
     for (const device of devices) {
       try {
-        const result = await this.upsertTrack360Device({ ...device, vendorType: config.provider });
+        const result = await this.upsertTrack360Device({ ...device, vendorType: config.provider }, config.tenantId);
         if (result.linked) linked += 1;
         if (result.created) created += 1;
         const gps = toCoord(device.lat, device.lng);
@@ -215,34 +222,27 @@ export class IoTService {
   }
 
   async provisionAllDevices() {
-    const devices = await this.deviceModel.find();
+    const devices = await runWithoutTenant(() => this.deviceModel.find());
     let created = 0;
     let linked = 0;
     for (const device of devices) {
+      const tenantId = String((device as { tenantId?: string }).tenantId ?? '');
+      if (!tenantId) continue;
       try {
-        const result = await this.ensureVehicleForDevice({
-          deviceId: device.deviceId,
-          imei: device.imei ?? device.deviceId,
-          name: device.displayName || '',
-          lat: device.lastLat ?? null,
-          lng: device.lastLng ?? null,
-          vendorStatus: device.vendorStatus ?? device.connectionStatus ?? 'Unknown',
-          type: undefined,
-          vendorType: device.vendorType,
-        });
+        const result = await tenantAls.run({ tenantId, hubIds: null, skip: false }, () =>
+          this.ensureVehicleForDevice({
+            deviceId: device.deviceId,
+            imei: device.imei ?? device.deviceId,
+            name: device.displayName || '',
+            lat: device.lastLat ?? null,
+            lng: device.lastLng ?? null,
+            vendorStatus: device.vendorStatus ?? device.connectionStatus ?? 'Unknown',
+            type: undefined,
+            vendorType: device.vendorType,
+          }),
+        );
         if (result.created) created += 1;
         if (result.linked) linked += 1;
-        const gps = toCoord(device.lastLat, device.lastLng);
-        if (gps) {
-          await this.updateTelemetry(
-            device.deviceId,
-            gps.lat,
-            gps.lng,
-            device.batteryPercent,
-            device.odometerKm,
-            { speedKmh: device.speedKmh, ignition: device.ignition },
-          );
-        }
       } catch (error) {
         this.logger.warn(
           `Provision ${device.deviceId} skipped: ${error instanceof Error ? error.message : error}`,
@@ -464,6 +464,7 @@ export class IoTService {
       lastPlaceKind: vehicle.lastPlaceKind,
       lastHubId: vehicle.lastHubId,
       iotDeviceId: vehicle.iotDeviceId,
+      ...(currentTenantId() ? { tenantId: currentTenantId() } : {}),
     });
 
     return {
@@ -489,85 +490,88 @@ export class IoTService {
   }
 
   private async upsertDeviceTelemetry(deviceId: string, patch: Record<string, unknown>) {
+    const tenantId = currentTenantId();
+    const filter = tenantId ? { deviceId, tenantId } : { deviceId };
+    const update = { deviceId, ...patch, ...(tenantId ? { tenantId } : {}) };
     try {
-      return await this.deviceModel.findOneAndUpdate(
-        { deviceId },
-        { deviceId, ...patch },
-        { upsert: true, new: true, setDefaultsOnInsert: true },
-      );
+      return await this.deviceModel.findOneAndUpdate(filter, update, {
+        upsert: true,
+        new: true,
+        setDefaultsOnInsert: true,
+      });
     } catch (error) {
       if (!isMongoDuplicate(error)) throw error;
-      return this.deviceModel.findOneAndUpdate({ deviceId }, patch, { new: true });
+      return this.deviceModel.findOneAndUpdate(filter, patch, { new: true });
     }
   }
 
-  private async upsertTrack360Device(row: Track360Device & { vendorType?: string }) {
-    const scope = currentTenantId();
+  private async upsertTrack360Device(row: Track360Device & { vendorType?: string }, tenantId: string) {
     const vendorType = row.vendorType || 'Track360';
-    const existing = await this.deviceModel.findOne({ deviceId: row.deviceId });
-    const existingTenant = existing ? String((existing as { tenantId?: string }).tenantId ?? '') : '';
-    if (scope && existingTenant && existingTenant !== String(scope)) {
-      return { linked: false, created: false };
-    }
-    const connectionStatus = row.vendorStatus.toLowerCase() === 'online' ? 'Connected' : row.vendorStatus.toLowerCase() === 'offline' ? 'Disconnected' : 'Unknown';
-    try {
+    await this.rehomeDeviceToTenant(row, tenantId);
+    const connectionStatus =
+      row.vendorStatus.toLowerCase() === 'online'
+        ? 'Connected'
+        : row.vendorStatus.toLowerCase() === 'offline'
+          ? 'Disconnected'
+          : 'Unknown';
+    const fields = {
+      deviceId: row.deviceId,
+      tenantId,
+      vendorType,
+      imei: row.imei || row.deviceId,
+      displayName: row.name || row.vehicleNumber || undefined,
+      externalId: row.vendorDeviceId || row.deviceId,
+      speedKmh: row.speedKmh,
+      ignition: row.ignition,
+      vendorStatus: row.vendorStatus,
+      vehicleStatus: row.vehicleStatus,
+      connectionStatus,
+      lastSeenAt: row.lastSeenAt,
+      lastLat: row.lat ?? undefined,
+      lastLng: row.lng ?? undefined,
+      batteryPercent: row.batteryPercent,
+      odometerKm: row.odometerKm,
+    };
+    await tenantAls.run({ tenantId, hubIds: null, skip: false }, async () => {
       await this.deviceModel.findOneAndUpdate(
-      { deviceId: row.deviceId },
-      {
-        $set: {
-          deviceId: row.deviceId,
-          vendorType,
-          imei: row.imei || row.deviceId,
-          displayName: row.name || undefined,
-          externalId: row.vendorDeviceId || row.deviceId,
-          speedKmh: row.speedKmh,
-          ignition: row.ignition,
-          vendorStatus: row.vendorStatus,
-          vehicleStatus: row.vehicleStatus,
-          connectionStatus,
-          lastSeenAt: row.lastSeenAt,
-          lastLat: row.lat ?? undefined,
-          lastLng: row.lng ?? undefined,
-          batteryPercent: row.batteryPercent,
-          odometerKm: row.odometerKm,
-        },
-        $setOnInsert: {
-          deviceId: row.deviceId,
-          ...(scope ? { tenantId: scope } : {}),
-        },
-      },
-      { upsert: true, setDefaultsOnInsert: true },
+        { deviceId: row.deviceId, tenantId },
+        { $set: fields },
+        { upsert: true, setDefaultsOnInsert: true },
       );
-    } catch (error) {
-      if (!isMongoDuplicate(error)) throw error;
-      await this.deviceModel.updateOne(
-        { deviceId: row.deviceId },
-        {
-          vendorType,
-          imei: row.imei || row.deviceId,
-          displayName: row.name || undefined,
-          externalId: row.vendorDeviceId || row.deviceId,
-          speedKmh: row.speedKmh,
-          ignition: row.ignition,
-          vendorStatus: row.vendorStatus,
-          vehicleStatus: row.vehicleStatus,
-          connectionStatus,
-          lastSeenAt: row.lastSeenAt,
-          lastLat: row.lat ?? undefined,
-          lastLng: row.lng ?? undefined,
-          batteryPercent: row.batteryPercent,
-          odometerKm: row.odometerKm,
-        },
-      );
-    }
+    });
+    return tenantAls.run({ tenantId, hubIds: null, skip: false }, () => this.ensureVehicleForDevice({ ...row, vendorType }));
+  }
 
-    return this.ensureVehicleForDevice(row);
+  private async rehomeDeviceToTenant(row: Track360Device, tenantId: string) {
+    const keys = deviceKeys(row.deviceId, row.imei);
+    await runWithoutTenant(async () => {
+      const existing = await this.deviceModel.findOne({
+        $or: [{ deviceId: { $in: keys } }, { imei: { $in: keys } }],
+      });
+      if (!existing) return;
+      const prev = String((existing as { tenantId?: string }).tenantId ?? '');
+      if (prev === tenantId) return;
+      await this.deviceModel.collection.updateOne({ _id: existing._id }, { $set: { tenantId } });
+      const vehicleFilter: Record<string, unknown>[] = [{ iotDeviceId: existing.deviceId }, { iotDeviceId: row.deviceId }];
+      if (existing.vehicleId) {
+        for (const id of mongoIdCandidates(existing.vehicleId)) {
+          vehicleFilter.push({ _id: id });
+        }
+      }
+      await this.vehicleModel.collection.updateMany({ $or: vehicleFilter }, { $set: { tenantId } });
+      this.logger.log(
+        `Reassigned GPS device ${existing.deviceId} from tenant ${prev || 'none'} to ${tenantId}`,
+      );
+    });
   }
 
   private async ensureVehicleForDevice(
-    row: Pick<Track360Device, 'deviceId' | 'imei' | 'name' | 'lat' | 'lng' | 'vendorStatus' | 'type'> & { vendorType?: string },
+    row: Pick<Track360Device, 'deviceId' | 'imei' | 'name' | 'lat' | 'lng' | 'vendorStatus' | 'type' | 'vehicleNumber'> & {
+      vendorType?: string;
+    },
   ): Promise<{ linked: boolean; created: boolean }> {
-    const name = vehicleDisplayName(row.name, row.deviceId);
+    const tenantId = currentTenantId();
+    const name = vehicleDisplayName(row.vehicleNumber || row.name, row.deviceId);
     const vendorType = row.vendorType || 'Track360';
     const already = (await this.vehicleModel.findOne({ iotDeviceId: row.deviceId }))
       ?? (await this.deviceModel.findOne({ deviceId: row.deviceId }).then(async (device) => (
@@ -575,7 +579,7 @@ export class IoTService {
       )));
 
     if (already) {
-      const preferred = (row.name ?? '').replace(/\s+/g, ' ').trim();
+      const preferred = (row.vehicleNumber || row.name || '').replace(/\s+/g, ' ').trim();
       if (preferred) await this.applyDeviceNameAndFix(already, preferred, row);
       else {
         const gps = toCoord(row.lat, row.lng);
@@ -622,7 +626,7 @@ export class IoTService {
         lastLat: toCoord(row.lat, row.lng)?.lat,
         lastLng: toCoord(row.lat, row.lng)?.lng,
         notes: 'Created from IoT device',
-        ...(currentTenantId() ? { tenantId: currentTenantId() } : {}),
+        ...(tenantId ? { tenantId } : {}),
       });
       try {
         await this.linkDeviceToVehicle(row.deviceId, vehicle._id.toString(), vendorType);
@@ -667,6 +671,7 @@ export class IoTService {
       model: vehicle.get('model'),
       lastLat: vehicle.lastLat,
       lastLng: vehicle.lastLng,
+      ...(currentTenantId() ? { tenantId: currentTenantId() } : {}),
     });
   }
 
@@ -694,6 +699,22 @@ export class IoTService {
       ...(currentTenantId() ? { tenantId: currentTenantId() } : {}),
     });
   }
+}
+
+function deviceKeys(...values: (string | undefined)[]) {
+  const keys = new Set<string>();
+  for (const value of values) {
+    const raw = String(value ?? '').trim();
+    if (!raw) continue;
+    keys.add(raw);
+    const digits = raw.replace(/\D/g, '');
+    if (digits) {
+      keys.add(digits);
+      if (digits.length === 16 && digits.startsWith('0')) keys.add(digits.slice(1));
+      if (digits.length === 15) keys.add(`0${digits}`);
+    }
+  }
+  return [...keys];
 }
 
 function isMongoDuplicate(error: unknown) {

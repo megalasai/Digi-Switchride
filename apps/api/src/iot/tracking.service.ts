@@ -76,17 +76,39 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
 
   private async relaxDeviceVehicleIndex() {
     try {
-      const indexes = await this.deviceModel.collection.indexes();
-      for (const index of indexes) {
+      const deviceIndexes = await this.deviceModel.collection.indexes();
+      for (const index of deviceIndexes) {
         const keys = index.key as Record<string, number>;
-        if (index.unique && keys?.vehicleId === 1 && Object.keys(keys).length === 1) {
+        const only = Object.keys(keys);
+        if (index.unique && keys?.vehicleId === 1 && only.length === 1) {
           await this.deviceModel.collection.dropIndex(index.name as string);
           this.logger.log('Dropped unique iot_devices.vehicleId index that caused duplicate-key errors');
         }
+        if (index.unique && keys?.deviceId === 1 && only.length === 1) {
+          await this.deviceModel.collection.dropIndex(index.name as string);
+          this.logger.log('Dropped global unique iot_devices.deviceId so each tenant can own its GPS devices');
+        }
       }
       await this.deviceModel.collection.createIndex({ vehicleId: 1 }, { sparse: true, background: true });
+      await this.deviceModel.collection.createIndex({ tenantId: 1, deviceId: 1 }, { unique: true, background: true });
     } catch (error) {
-      this.logger.warn(`Could not relax IoT vehicleId index: ${error instanceof Error ? error.message : error}`);
+      this.logger.warn(`Could not relax IoT device indexes: ${error instanceof Error ? error.message : error}`);
+    }
+    try {
+      const vehicleIndexes = await this.vehicleModel.collection.indexes();
+      for (const index of vehicleIndexes) {
+        const keys = index.key as Record<string, number>;
+        if (index.unique && keys?.iotDeviceId === 1 && Object.keys(keys).length === 1) {
+          await this.vehicleModel.collection.dropIndex(index.name as string);
+          this.logger.log('Dropped global unique vehicles.iotDeviceId so GPS vehicles stay on their tenant');
+        }
+      }
+      await this.vehicleModel.collection.createIndex(
+        { tenantId: 1, iotDeviceId: 1 },
+        { unique: true, sparse: true, background: true },
+      );
+    } catch (error) {
+      this.logger.warn(`Could not relax vehicle IoT indexes: ${error instanceof Error ? error.message : error}`);
     }
   }
 
