@@ -45,7 +45,7 @@ export default function TenantsPage() {
     <div>
       <PageHeader
         title="Organizations"
-        description="Fleetel is the parent company. Fleetel-Switchride is the product. Every other organization is a tenant customer with its own fleet, riders, branding and payment gateway."
+        description="Creating a tenant does not create a login. After you add the company, go to Admin Users and create an operator for that organization, then sign in with that email and pick the company."
         actions={<Button onClick={() => { setEditId(null); setForm(emptyForm); setShowForm(true); }}>Add tenant</Button>}
       />
       {success && <div className="mb-4"><Alert variant="success" message={success} /></div>}

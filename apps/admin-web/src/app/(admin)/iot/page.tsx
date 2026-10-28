@@ -15,7 +15,7 @@ import { IconRadio } from "@/components/icons";
 import { api, IoTDevice, Vehicle } from "@/lib/api";
 import { CompanyCell, CompanyField } from "@/lib/companies";
 
-const emptyForm = { deviceId: "", vendorType: "Track360", vehicleId: "", tenantId: "" };
+const emptyForm = { deviceId: "", vendorType: "WanWay", vehicleId: "", tenantId: "" };
 
 export default function IoTPage() {
   const [devices, setDevices] = useState<IoTDevice[]>([]);
@@ -122,7 +122,7 @@ export default function IoTPage() {
     <div>
       <PageHeader
         title="IoT Devices"
-        description="Track360 telematics devices plus any locally registered GPS units. Sync pulls the live fleet from Track360."
+        description="Register a WanWay IMEI and link it to a vehicle. GPS TCP is received by the separate telemetry service on a droplet/VM, which writes to the same MongoDB."
         actions={
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => void syncTrack360()} disabled={syncing}>
@@ -141,8 +141,12 @@ export default function IoTPage() {
         <p className="text-sm text-text-secondary">
           {devices.length} device{devices.length === 1 ? "" : "s"} in the application
           {devices.filter((d) => d.vendorType === "Track360").length ? ` · ${devices.filter((d) => d.vendorType === "Track360").length} from Track360` : ""}
+          {devices.filter((d) => d.vendorType === "WanWay").length ? ` · ${devices.filter((d) => d.vendorType === "WanWay").length} WanWay` : ""}
           {devices.filter((d) => d.connectionStatus === "Connected").length ? ` · ${devices.filter((d) => d.connectionStatus === "Connected").length} online` : ""}
           {syncInfo ? ` · last sync ${new Date(syncInfo.at).toLocaleTimeString()} (${syncInfo.ok ? `${syncInfo.synced} devices` : syncInfo.message})` : ""}
+        </p>
+        <p className="mt-2 text-xs text-text-muted">
+          WanWay trackers must send TCP to the telemetry droplet (ports 21100, 5001, 8821), not to this admin/API host. Point the device at that public IP and use the same MongoDB as the platform.
         </p>
         <div className="mt-3">
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search IMEI, registration, status…" />
@@ -156,6 +160,7 @@ export default function IoTPage() {
             <CompanyField value={form.tenantId} onChange={(tenantId) => setForm({ ...form, tenantId })} />
             {!editId && <Input placeholder="Device ID / IMEI" value={form.deviceId} onChange={(e) => setForm({ ...form, deviceId: e.target.value })} required />}
             <Select value={form.vendorType} onChange={(e) => setForm({ ...form, vendorType: e.target.value })}>
+              <option value="WanWay">WanWay (IMEI TCP)</option>
               <option value="Track360">Track360</option>
               <option value="Simulator">Simulator</option>
               <option value="AzureIoTHub">Azure IoT Hub</option>

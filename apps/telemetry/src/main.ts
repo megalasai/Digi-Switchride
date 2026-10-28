@@ -9,6 +9,7 @@ export async function start(): Promise<void> {
   await connectMongo(runtime.config.mongodb.uri);
   await runtime.startAdminHttp();
   await runtime.startChannels();
+  await runtime.startWanway();
   console.log(`SQLite config ${store.filePath}`);
   console.log(`MongoDB GPS ${runtime.config.mongodb.uri.replace(/\/\/([^@/]+)@/, '//***@')}`);
   console.log(`Location API ${runtime.config.locationApi.url}${runtime.config.locationApi.path}`);

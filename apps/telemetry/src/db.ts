@@ -38,6 +38,9 @@ const deviceSchema = new Schema(
     lastLat: Number,
     lastLng: Number,
     odometerKm: Number,
+    imei: String,
+    speedKmh: Number,
+    ignition: String,
   },
   { collection: 'iot_devices', timestamps: true },
 );

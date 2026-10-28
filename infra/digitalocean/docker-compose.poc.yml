@@ -80,6 +80,9 @@ services:
       TELEMETRY_HTTP_PORT: "4200"
       TELEMETRY_TCP_HOST: 0.0.0.0
       TELEMETRY_TCP_PORT: "4210"
+      WANWAY_TCP_ENABLED: "true"
+      WANWAY_TCP_HOST: 0.0.0.0
+      WANWAY_TCP_PORTS: "21100,5001,8821"
       TELEMETRY_SQLITE: /data/telemetry.sqlite
       MONGODB_URI: mongodb://mongo:27017/switchride
       LOCATION_API_URL: http://location:4100
@@ -95,6 +98,9 @@ services:
     ports:
       - "4200:4200"
       - "4210:4210"
+      - "21100:21100"
+      - "5001:5001"
+      - "8821:8821"
 
   caddy:
     image: caddy:2-alpine

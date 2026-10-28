@@ -67,6 +67,7 @@ export class IoTInternalController {
       speedKmh?: number;
       ignition?: string;
       name?: string;
+      vendorType?: string;
     },
   ) {
     return this.iotService.ingestLiveTelemetry(body);

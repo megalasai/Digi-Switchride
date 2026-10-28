@@ -10,6 +10,7 @@ App Platform is DigitalOcean’s PaaS: connect GitHub, build from the Dockerfile
 | MongoDB (riders, fleet, GPS, tenants) | **Managed Databases → MongoDB** | Yes — attach to the app |
 | Location finder (`india.sqlite`) | **App Platform** web service (HTTP 4100) or Droplet + volume | Yes — third Dockerfile service |
 | Telemetry HTTP ingest | App Platform **or** droplet | HTTP yes; **TCP :4210** needs a droplet |
+| WanWay GPS (GT06 TCP 21100 / 5001 / 8821) | **Droplet / VM with public IP** | App Platform will not publish these ports |
 | Telemetry config SQLite | Droplet volume | Lost on App Platform redeploy |
 | Redis / Postgres / MySQL | Managed Databases | **Not used** by Digi-Switchride |
 
@@ -71,7 +72,7 @@ Env on **admin**:
 - `API_PROXY_TARGET=http://api:4000` (internal component name) or the API public URL
 - `NEXT_PUBLIC_API_URL=/api-proxy/v1`
 
-App Platform only exposes **HTTP/HTTPS**. It will not publish telemetry TCP `4210`. Keep Track360 **pull** (outbound HTTPS) — that works from App Platform. Device **push over TCP** does not.
+App Platform only exposes **HTTP/HTTPS**. It will not publish telemetry TCP. Keep Track360 **pull** (outbound HTTPS) on the API. For WanWay and other GPS TCP, run **`apps/telemetry`** on a droplet/VM: same `MONGODB_URI`, open TCP `21100,5001,8821` (WanWay) and optionally `4210` / HTTP `4200`. Register the IMEI in IoT Devices (vendor WanWay) and link a vehicle.
 
 Location on App Platform: first deploy downloads/seeds `india.sqlite` (can take several minutes; health check delay is 180s). The file is ephemeral unless you later attach a volume. The SQLite dump is **not** in Git (hundreds of MB; GitHub file limit 100 MB). Source is `apps/location/`.
 
@@ -84,7 +85,7 @@ GitHub  →  App Platform:  admin :3000  +  api :4000  +  location :4100
                  v
           Managed MongoDB
 
-Droplet (optional later): telemetry TCP :4210
+Droplet: apps/telemetry  HTTP :4200  JSON TCP :4210  WanWay TCP :21100,:5001,:8821
 ```
 
 ---

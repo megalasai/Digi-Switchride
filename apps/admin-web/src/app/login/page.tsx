@@ -13,8 +13,8 @@ import { validateEmail, validatePassword } from "@/lib/validation";
 export default function LoginPage() {
   const { login, user } = useAuth();
   const router = useRouter();
-  const [email, setEmail] = useState("admin@digiswitchride.com");
-  const [password, setPassword] = useState("Admin@123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [tenantSlug, setTenantSlug] = useState("");
   const [orgs, setOrgs] = useState<TenantOrg[]>([]);
   const [orgBranding, setOrgBranding] = useState<Branding | null>(null);
@@ -97,7 +97,7 @@ export default function LoginPage() {
             <Select value={tenantSlug} onChange={(e) => setTenantSlug(e.target.value)}>
               <option value="">Fleetel SuperAdmin — parent company</option>
               {orgs.map((org) => (
-                <option key={org.id} value={org.slug}>{org.name}</option>
+                <option key={org.id} value={org.slug}>{org.name} ({org.slug})</option>
               ))}
             </Select>
           </Field>
@@ -111,7 +111,9 @@ export default function LoginPage() {
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Signing in…" : "Sign in"}
           </Button>
-          <p className="text-center text-xs text-text-muted">Tenant users pick their company. Fleetel SuperAdmin leaves Organization on the parent option.</p>
+          <p className="text-center text-xs text-text-muted">
+            SuperAdmin: leave Organization on Fleetel. Tenant operators: pick their company and use the email created under Admin Users — not the SuperAdmin account.
+          </p>
         </form>
       </div>
     </div>

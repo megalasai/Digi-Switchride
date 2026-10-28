@@ -73,9 +73,10 @@ export default function UsersPage() {
       fullName: validateFullName(form.fullName),
       email: editId ? "" : validateEmail(form.email, true),
       password: validatePassword(form.password, !editId),
+      tenantId: isSuper && !editId && !form.tenantId ? "Choose the tenant this user belongs to" : "",
     };
     setFieldErrors(next);
-    return !next.fullName && !next.email && !next.password;
+    return !next.fullName && !next.email && !next.password && !next.tenantId;
   };
 
   const toggleHub = (id: string) => {
@@ -147,8 +148,8 @@ export default function UsersPage() {
               </Select>
             </Field>
             {isSuper && (
-              <Field label="Organization">
-                <Select value={form.tenantId} onChange={(e) => setForm({ ...form, tenantId: e.target.value })}>
+              <Field label="Organization" error={fieldErrors.tenantId} hint="Tenant users sign in by picking this company on the login page">
+                <Select invalid={!!fieldErrors.tenantId} value={form.tenantId} onChange={(e) => setForm({ ...form, tenantId: e.target.value })}>
                   <option value="">Select organization</option>
                   {orgs.filter((org) => org.kind !== "Parent").map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
                 </Select>

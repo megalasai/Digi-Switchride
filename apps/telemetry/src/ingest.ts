@@ -13,6 +13,7 @@ export type GpsPing = {
   odometerKm?: number;
   speedKmh?: number;
   ignition?: string;
+  vendorType?: string;
   at?: Date;
 };
 
@@ -100,8 +101,30 @@ export function parseTcpLine(line: string): GpsPing | null {
   });
 }
 
+export async function touchDevice(
+  imei: string,
+  extras?: { ignition?: string; vendorType?: string },
+): Promise<{ deviceId: string; updated: boolean }> {
+  const deviceId = await resolveDeviceId(imei);
+  await DeviceModel.findOneAndUpdate(
+    { deviceId },
+    {
+      $set: {
+        lastSeenAt: new Date(),
+        connectionStatus: 'Connected',
+        imei,
+        ...(extras?.ignition ? { ignition: extras.ignition } : {}),
+      },
+      $setOnInsert: { deviceId, vendorType: extras?.vendorType ?? 'WanWay' },
+    },
+    { upsert: true, setDefaultsOnInsert: true },
+  );
+  return { deviceId, updated: true };
+}
+
 export async function ingestPing(config: AppConfig, store: ConfigStore, ping: GpsPing): Promise<IngestResult> {
   const at = ping.at && !Number.isNaN(ping.at.getTime()) ? ping.at : new Date();
+  if (ping.deviceId) ping.deviceId = await resolveDeviceId(ping.deviceId);
   const deviceKey = ping.deviceId || ping.registrationNumber || ping.vehicleId;
   if (!deviceKey) {
     return {
@@ -148,17 +171,28 @@ export async function ingestPing(config: AppConfig, store: ConfigStore, ping: Gp
       vehicleId != null
         ? await DeviceModel.findOne({ vehicleId, deviceId: { $ne: deviceId } }).select({ deviceId: 1 }).lean()
         : null;
-    await upsertIgnoringDuplicate(DeviceModel, { deviceId }, {
-      deviceId,
-      ...(vehicleId && !vehicleTaken ? { vehicleId } : {}),
-      lastLat: ping.lat,
-      lastLng: ping.lng,
-      batteryPercent: ping.batteryPercent,
-      odometerKm: ping.odometerKm,
-      lastSeenAt: at,
-      connectionStatus: 'Connected',
-      vendorType: ping.registrationNumber ? 'Track360' : 'GpsIngest',
-    });
+    await DeviceModel.findOneAndUpdate(
+      { deviceId },
+      {
+        $set: {
+          ...(vehicleId && !vehicleTaken ? { vehicleId } : {}),
+          lastLat: ping.lat,
+          lastLng: ping.lng,
+          batteryPercent: ping.batteryPercent,
+          odometerKm: ping.odometerKm,
+          lastSeenAt: at,
+          connectionStatus: 'Connected',
+          imei: ping.deviceId,
+          ...(ping.speedKmh != null ? { speedKmh: ping.speedKmh } : {}),
+          ...(ping.ignition ? { ignition: ping.ignition } : {}),
+        },
+        $setOnInsert: {
+          deviceId,
+          vendorType: ping.vendorType ?? (ping.registrationNumber ? 'Track360' : 'GpsIngest'),
+        },
+      },
+      { upsert: true, setDefaultsOnInsert: true },
+    );
   }
 
   if (vehicle) {
@@ -208,6 +242,18 @@ export async function ingestPing(config: AppConfig, store: ConfigStore, ping: Gp
   };
 }
 
+async function resolveDeviceId(raw: string): Promise<string> {
+  const digits = String(raw ?? '').replace(/\D/g, '');
+  if (!digits) return raw;
+  const keys = new Set([raw, digits]);
+  if (digits.length === 16 && digits.startsWith('0')) keys.add(digits.slice(1));
+  if (digits.length === 15) keys.add(`0${digits}`);
+  const found = await DeviceModel.findOne({
+    $or: [{ deviceId: { $in: [...keys] } }, { imei: { $in: [...keys] } }],
+  });
+  return found?.deviceId ?? digits;
+}
+
 async function resolveVehicle(ping: GpsPing) {
   if (ping.vehicleId) {
     const byId = await VehicleModel.findById(ping.vehicleId);
@@ -218,7 +264,10 @@ async function resolveVehicle(ping: GpsPing) {
     if (byReg) return byReg;
   }
   if (ping.deviceId) {
-    const device = await DeviceModel.findOne({ deviceId: ping.deviceId });
+    const keys = [ping.deviceId];
+    const device = await DeviceModel.findOne({
+      $or: [{ deviceId: { $in: keys } }, { imei: { $in: keys } }],
+    });
     if (device?.vehicleId) {
       const byDeviceVehicle = await VehicleModel.findById(device.vehicleId);
       if (byDeviceVehicle) return byDeviceVehicle;
@@ -248,6 +297,7 @@ async function forwardToPlatform(config: AppConfig, ping: GpsPing, deviceId?: st
         speedKmh: ping.speedKmh,
         ignition: ping.ignition,
         name: ping.registrationNumber,
+        vendorType: ping.vendorType,
       }),
     });
     if (!res.ok) {

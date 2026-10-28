@@ -16,8 +16,8 @@ export class TenantInterceptor implements NestInterceptor {
       headers: Record<string, string | string[] | undefined>;
     }>();
     const path = req.originalUrl ?? req.url ?? '';
-    if (path.startsWith('/api/health')) {
-      return next.handle();
+    if (isPublicUnauthenticated(path)) {
+      return from(tenantAls.run({ tenantId: null, skip: true }, () => lastValueFrom(next.handle())));
     }
     const headerId = headerValue(req.headers['x-tenant-id']);
     const headerSlug = headerValue(req.headers['x-tenant-slug']);
@@ -37,6 +37,19 @@ export class TenantInterceptor implements NestInterceptor {
 
     return from(tenantAls.run({ tenantId, hubIds: user?.hubIds?.length ? user.hubIds : null, skip: false }, () => lastValueFrom(next.handle())));
   }
+}
+
+function isPublicUnauthenticated(path: string) {
+  const route = path.split('?')[0] ?? '';
+  return (
+    route.startsWith('/api/health') ||
+    route === '/api/v1/auth/admin/login' ||
+    route === '/api/v1/auth/login' ||
+    route === '/api/v1/auth/register' ||
+    route === '/api/v1/auth/refresh' ||
+    route.startsWith('/api/v1/auth/otp/') ||
+    route === '/api/v1/tenants/current'
+  );
 }
 
 function headerValue(value: string | string[] | undefined) {

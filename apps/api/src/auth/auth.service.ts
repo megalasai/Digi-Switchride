@@ -13,6 +13,7 @@ import { AdminLoginDto, CreateAdminUserDto } from './dto/admin-auth.dto';
 import { SendOtpDto, VerifyOtpDto, CustomerRegisterDto, CustomerLoginDto } from './dto/auth.dto';
 import { TenantsService } from '../tenants/tenants.service';
 import { currentTenantId, runWithoutTenant, tenantAls } from '../common/tenant-als';
+import { readSecret } from '../config/secrets';
 
 @Injectable()
 export class AuthService implements OnModuleInit {
@@ -30,9 +31,9 @@ export class AuthService implements OnModuleInit {
   async onModuleInit() {
     await runWithoutTenant(async () => {
       try {
-        const email = this.config.get<string>('ADMIN_EMAIL', 'admin@digiswitchride.com').toLowerCase();
-        const password = this.config.get<string>('ADMIN_PASSWORD', 'Admin@123');
-        const salt = this.config.get<string>('PASSWORD_SALT', 'dev-salt');
+        const email = readSecret(this.config, 'ADMIN_EMAIL', 'admin@digiswitchride.com').toLowerCase();
+        const password = readSecret(this.config, 'ADMIN_PASSWORD', 'Admin@123');
+        const salt = this.passwordSalt();
         const passwordHash = hashPassword(password, salt);
 
         const existing = await this.adminModel.findOne({ email }).lean();
@@ -91,7 +92,7 @@ export class AuthService implements OnModuleInit {
   }
 
   async registerCustomer(dto: CustomerRegisterDto) {
-    const salt = this.config.get<string>('PASSWORD_SALT', 'dev-salt');
+    const salt = this.passwordSalt();
     const username = dto.username.trim().toLowerCase();
     const existing = await this.customerModel.findOne({ username });
     if (existing) throw new ConflictException('Username already taken');
@@ -108,7 +109,7 @@ export class AuthService implements OnModuleInit {
   }
 
   async loginCustomer(dto: CustomerLoginDto) {
-    const salt = this.config.get<string>('PASSWORD_SALT', 'dev-salt');
+    const salt = this.passwordSalt();
     const username = dto.username.trim().toLowerCase();
     const customer = await this.customerModel.findOne({ username, accountStatus: 'Active' });
     if (!customer?.passwordHash || customer.passwordHash !== hashPassword(dto.password, salt)) {
@@ -118,23 +119,24 @@ export class AuthService implements OnModuleInit {
   }
 
   async adminLogin(dto: AdminLoginDto) {
-    const salt = this.config.get<string>('PASSWORD_SALT', 'dev-salt');
-    const email = dto.email.toLowerCase();
-    const matches = await runWithoutTenant(() => this.adminModel.find({ email, isActive: true }));
-    const superAdmin = matches.find((a) => a.role === 'SuperAdmin');
-    const passwordOk = (admin: AdminUserDocument) => admin.passwordHash === hashPassword(dto.password, salt);
+    const email = dto.email.toLowerCase().trim();
+    const matches = await this.findAdminsByEmail(email);
+    const withPassword = matches.filter((admin) => this.passwordMatches(admin.passwordHash, dto.password));
+    const superAdmin = withPassword.find((a) => a.role === 'SuperAdmin');
 
     if (!dto.tenantSlug) {
-      if (superAdmin && passwordOk(superAdmin)) return this.issueAdminTokens(superAdmin);
+      if (superAdmin) return this.issueAdminTokens(superAdmin);
+      if (withPassword.length === 1) return this.issueAdminTokens(withPassword[0]);
       throw new UnauthorizedException('Select an organization to sign in');
     }
 
     const tenant = await this.tenants.findBySlug(dto.tenantSlug);
     if (!tenant) throw new UnauthorizedException('Unknown organization');
-    if (superAdmin && passwordOk(superAdmin)) return this.issueAdminTokens(superAdmin);
+    if (superAdmin) return this.issueAdminTokens(superAdmin);
 
-    const admin = matches.find((a) => (a as { tenantId?: string }).tenantId === tenant._id.toString());
-    if (!admin || !passwordOk(admin)) {
+    const forOrg = withPassword.filter((a) => this.adminInTenant(a, tenant._id.toString()));
+    const admin = forOrg[0] ?? (withPassword.length === 1 ? withPassword[0] : undefined);
+    if (!admin) {
       throw new UnauthorizedException('Invalid email, password, or organization');
     }
     return this.issueAdminTokens(admin);
@@ -159,13 +161,13 @@ export class AuthService implements OnModuleInit {
       throw new ForbiddenException('Assign company users to a tenant. Fleetel is the parent company.');
     }
 
-    const salt = this.config.get<string>('PASSWORD_SALT', 'dev-salt');
-    const existing = await runWithoutTenant(() =>
+    const salt = this.passwordSalt();
+    const existing = await runWithoutTenant(async () =>
       this.adminModel.findOne({ email: dto.email.toLowerCase(), tenantId }),
     );
     if (existing) throw new ConflictException('Email already registered for this organization');
 
-    const admin = await tenantAls.run({ tenantId, skip: false }, () =>
+    const admin = await tenantAls.run({ tenantId, skip: true }, async () =>
       this.adminModel.create({
         email: dto.email.toLowerCase(),
         passwordHash: hashPassword(dto.password, salt),
@@ -173,6 +175,7 @@ export class AuthService implements OnModuleInit {
         role: dto.role,
         tenantId,
         hubIds: dto.hubIds ?? [],
+        isActive: true,
       }),
     );
     const result = this.toAdminUser(admin);
@@ -187,7 +190,7 @@ export class AuthService implements OnModuleInit {
   }
 
   async listAdminUsers() {
-    const admins = await this.adminModel.find().sort({ createdAt: -1 });
+    const admins = await runWithoutTenant(async () => this.adminModel.find().sort({ createdAt: -1 }));
     return admins.map((a) => this.toAdminUser(a));
   }
 
@@ -213,8 +216,7 @@ export class AuthService implements OnModuleInit {
       (admin as { tenantId?: string }).tenantId = data.tenantId;
     }
     if (data.password) {
-      const salt = this.config.get<string>('PASSWORD_SALT', 'dev-salt');
-      admin.passwordHash = hashPassword(data.password, salt);
+      admin.passwordHash = hashPassword(data.password, this.passwordSalt());
     }
     await admin.save();
     const after = this.toAdminUser(admin);
@@ -259,8 +261,35 @@ export class AuthService implements OnModuleInit {
       const raw = await this.adminModel.collection.findOne({ $or: this.idFilters(adminId) } as never);
       if (!raw) return null;
       const admin = this.adminModel.hydrate(raw);
-      return admin.isActive ? admin : null;
+      return admin.isActive === false ? null : admin;
     });
+  }
+
+  private passwordSalt() {
+    return readSecret(this.config, 'PASSWORD_SALT', 'dev-salt');
+  }
+
+  private passwordMatches(hash: string | undefined, password: string) {
+    if (!hash) return false;
+    const salts = new Set([this.passwordSalt(), 'dev-salt', '']);
+    const envSalt = process.env.PASSWORD_SALT?.trim();
+    if (envSalt) salts.add(envSalt);
+    for (const salt of salts) {
+      if (hash === hashPassword(password, salt)) return true;
+    }
+    return false;
+  }
+
+  private async findAdminsByEmail(email: string): Promise<AdminUserDocument[]> {
+    const rows = await this.adminModel.collection
+      .find({ email, isActive: { $ne: false } })
+      .toArray();
+    return rows.map((row) => this.adminModel.hydrate(row));
+  }
+
+  private adminInTenant(admin: AdminUserDocument, tenantId: string) {
+    const assigned = String((admin as { tenantId?: string }).tenantId ?? '');
+    return Boolean(assigned) && assigned === String(tenantId);
   }
 
   /** JSON restore stored _id as a string; mongoose findById uses ObjectId and misses the row. */

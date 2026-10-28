@@ -8,12 +8,14 @@ import type { ConfigStore } from './store.js';
 import { startTcpSource } from './tcp.js';
 import type { AppConfig, GpsSource } from './types.js';
 import { publicSource } from './types.js';
+import { WanwayTcp } from './wanway-tcp.js';
 
 export class Runtime {
   private http: FastifyInstance | null = null;
   private tcp = new Map<string, Server>();
   private mqtt = new Map<string, MqttClient>();
   private pullers = new Map<string, NodeJS.Timeout>();
+  readonly wanway = new WanwayTcp();
   config: AppConfig;
 
   constructor(public readonly store: ConfigStore) {
@@ -25,6 +27,7 @@ export class Runtime {
       sqlite: this.store.filePath,
       settings: this.publicSettings(),
       sources: this.store.listSources().map(publicSource),
+      wanway: this.wanway.status,
     };
   }
 
@@ -111,8 +114,14 @@ export class Runtime {
     return saved;
   }
 
+  async startWanway(): Promise<void> {
+    this.config = this.store.appConfig();
+    await this.wanway.start(this.config, this.store);
+  }
+
   async shutdown(): Promise<void> {
     this.stopChannels();
+    this.wanway.stop();
     if (this.http) await this.http.close();
     this.store.close();
   }

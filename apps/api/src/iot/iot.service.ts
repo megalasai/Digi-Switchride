@@ -33,7 +33,12 @@ export class IoTService {
     const existing = await this.deviceModel.findOne({ deviceId });
     if (existing) throw new ConflictException(`Device ${deviceId} already exists`);
 
-    await this.deviceModel.create({ deviceId, vendorType, connectionStatus: 'Unknown' });
+    await this.deviceModel.create({
+      deviceId,
+      vendorType,
+      connectionStatus: 'Unknown',
+      imei: deviceId,
+    });
     if (vehicleId) {
       await this.linkDeviceToVehicle(deviceId, vehicleId, vendorType);
     } else {
@@ -234,18 +239,37 @@ export class IoTService {
     speedKmh?: number;
     ignition?: string;
     name?: string;
+    vendorType?: string;
   }) {
-    if (body.name) {
-      await this.deviceModel.findOneAndUpdate(
-        { deviceId: body.deviceId },
-        { deviceId: body.deviceId, displayName: body.name, vendorType: 'Track360' },
-        { upsert: true, setDefaultsOnInsert: true },
-      );
-    }
-    return this.updateTelemetry(body.deviceId, body.lat, body.lng, body.batteryPercent, body.odometerKm, {
+    const deviceId = await this.resolveDeviceKey(body.deviceId);
+    const vendorType = body.vendorType ?? (body.name ? 'Track360' : 'Simulator');
+    await this.deviceModel.findOneAndUpdate(
+      { deviceId },
+      {
+        $set: {
+          imei: String(body.deviceId).replace(/\D/g, '') || body.deviceId,
+          ...(body.name ? { displayName: body.name } : {}),
+        },
+        $setOnInsert: { deviceId, vendorType },
+      },
+      { upsert: true, setDefaultsOnInsert: true },
+    );
+    return this.updateTelemetry(deviceId, body.lat, body.lng, body.batteryPercent, body.odometerKm, {
       speedKmh: body.speedKmh,
       ignition: body.ignition,
     });
+  }
+
+  private async resolveDeviceKey(raw: string): Promise<string> {
+    const digits = String(raw ?? '').replace(/\D/g, '');
+    if (!digits) return raw;
+    const keys = new Set([raw, digits]);
+    if (digits.length === 16 && digits.startsWith('0')) keys.add(digits.slice(1));
+    if (digits.length === 15) keys.add(`0${digits}`);
+    const found = await this.deviceModel.findOne({
+      $or: [{ deviceId: { $in: [...keys] } }, { imei: { $in: [...keys] } }],
+    });
+    return found?.deviceId ?? digits;
   }
 
   /** Establish bidirectional mapping: device ↔ vehicle */

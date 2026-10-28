@@ -48,7 +48,7 @@ export async function startHttp(runtime: Runtime) {
     },
   }));
 
-  app.get('/health', async () => ({ status: 'ok' }));
+  app.get('/health', async () => ({ status: 'ok', service: 'telemetry', wanway: runtime.wanway.status }));
   app.get('/ready', async () => ({ status: 'ok', ...runtime.publicView() }));
   app.get('/v1/config', async () => runtime.publicView());
 

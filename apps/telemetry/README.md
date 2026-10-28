@@ -1,6 +1,12 @@
 # GPS Telemetry Service
 
-Standalone GPS ingest API. **Configuration** (ports, pull APIs, TCP, MQTT, location API URL, hub geofences) is stored in **SQLite**. **Received GPS** is stored in the main Digi-Switchride **MongoDB** (`switchride`: `gps_positions`, and linked `vehicles` / `iot_devices`).
+Canonical deploy repo (droplet): **https://github.com/megalasai/Telemetry**. This folder stays as the in-tree copy used by local `npm run dev:telemetry`.
+
+Standalone GPS ingest process. Deploy this on a **droplet or VM with a public IP** — not on DigitalOcean App Platform (HTTP only). The Nest API stays on App Platform; this service writes to the **same MongoDB**.
+
+**WanWay / GT06** TCP listens on `21100`, `5001`, and `8821`. Point trackers at this host. Register the IMEI in admin (vendor WanWay) and link a vehicle; positions show in the application.
+
+**Configuration** (HTTP ingest, JSON/CSV TCP 4210, MQTT, pull APIs) is stored in **SQLite**. **Received GPS** is stored in **MongoDB** (`gps_positions`, `vehicles`, `iot_devices`).
 
 It does not share the platform API process. Other apps call it over HTTP. It can also pull vendor APIs and accept TCP and MQTT.
 
@@ -22,6 +28,22 @@ npm run dev:telemetry
 ```
 
 Listens on `http://localhost:4200`.
+
+## Droplet / VM
+
+```bash
+docker build -f apps/telemetry/Dockerfile -t fleetel-telemetry .
+docker run -d --name telemetry --restart unless-stopped \
+  -p 4200:4200 -p 4210:4210 -p 21100:21100 -p 5001:5001 -p 8821:8821 \
+  -e MONGODB_URI="mongodb+srv://..." \
+  -e LOCATION_API_URL="https://fleetel-switchride-pmxt5.ondigitalocean.app/geo" \
+  -e PLATFORM_API_URL="https://fleetel-switchride-pmxt5.ondigitalocean.app" \
+  -e WANWAY_TCP_PORTS="21100,5001,8821" \
+  -v telemetry-data:/data \
+  fleetel-telemetry
+```
+
+Open those TCP ports on the firewall. Health: `http://<droplet-ip>:4200/health`.
 
 - SQLite config: `apps/telemetry/data/telemetry.sqlite`
 - MongoDB GPS: `mongodb://localhost:27017/switchride` collections `gps_positions`, `vehicles`, `iot_devices`
