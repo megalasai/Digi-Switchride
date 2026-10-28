@@ -37,6 +37,8 @@ const TENANT_COLLECTIONS = [
   'service_requests',
   'service_appointments',
   'audit_logs',
+  'payment_gateways',
+  'gps_integrations',
 ];
 
 @Injectable()

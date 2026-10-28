@@ -10,10 +10,11 @@ import { toGeoLocation } from '../common/helpers';
 import { parseTrack360Payload, track360AuthHeader, track360PullUrl, type Track360Device } from './track360';
 import { applyHubScope, assignedHubIds } from '../common/hub-scope';
 import { runInWriteTenant } from '../common/tenant-write';
-import { currentTenantId } from '../common/tenant-als';
+import { currentTenantId, tenantAls } from '../common/tenant-als';
 import { findByEitherId, persistById } from '../common/mongo-id';
 import { TenantsService } from '../tenants/tenants.service';
 import { readSecret } from '../config/secrets';
+import { DEFAULT_TRACK360_URL, GpsIntegrationService, type GpsPullConfig } from './gps-integration.service';
 
 @Injectable()
 export class IoTService {
@@ -26,6 +27,7 @@ export class IoTService {
     @InjectModel(RentalHub.name) private hubModel: Model<RentalHubDocument>,
     private config: ConfigService,
     private tenants: TenantsService,
+    private gps: GpsIntegrationService,
   ) {}
 
   async registerDevice(deviceId: string, vendorType = 'Simulator', vehicleId?: string, tenantId?: string) {
@@ -105,52 +107,86 @@ export class IoTService {
   }
 
   async syncTrack360() {
-    try {
-      const result = await this.pullTrack360();
-      this.lastSync = { at: new Date().toISOString(), ok: true, synced: result.synced, message: result.message };
-      return result;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+    const scoped = currentTenantId();
+    let configs = await this.gps.listEnabledForSync(scoped);
+    if (!configs.length && !scoped) {
+      const fallback = this.envGpsFallback();
+      if (fallback) configs = [fallback];
+    }
+    if (!configs.length) {
+      const message = scoped
+        ? 'No GPS integration is enabled for this company. Add Track360 username and password under Integrations.'
+        : 'No tenant GPS integrations are enabled.';
       this.lastSync = { at: new Date().toISOString(), ok: false, synced: 0, message };
-      this.logger.warn(`Track360 sync failed: ${message}`);
       return { synced: 0, linked: 0, created: 0, message };
     }
+
+    let synced = 0;
+    let linked = 0;
+    let created = 0;
+    let ok = true;
+    const parts: string[] = [];
+    for (const config of configs) {
+      try {
+        const result = await tenantAls.run({ tenantId: config.tenantId, hubIds: null, skip: false }, () =>
+          this.pullGps(config),
+        );
+        synced += result.synced;
+        linked += result.linked;
+        created += result.created;
+        parts.push(result.message);
+        await this.gps.recordSync(config.tenantId, { ok: true, synced: result.synced, message: result.message });
+      } catch (error) {
+        ok = false;
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`GPS sync failed for ${config.tenantId}: ${message}`);
+        parts.push(message);
+        await this.gps.recordSync(config.tenantId, { ok: false, synced: 0, message });
+      }
+    }
+    const message = parts.join(' | ');
+    this.lastSync = { at: new Date().toISOString(), ok, synced, message };
+    return { synced, linked, created, message };
   }
 
-  private async pullTrack360() {
-    const username = readSecret(this.config, 'TRACK360_USERNAME', 'tyotaadmin');
-    const password = readSecret(this.config, 'TRACK360_PASSWORD', 'Admin@123');
-    const baseUrl = this.config.get<string>(
-      'TRACK360_PULL_URL',
-      'https://prod-s1.track360.net.in/api/v1/auth/pull_api',
-    );
-    if (!username || !password) {
-      return { synced: 0, linked: 0, message: 'Track360 credentials are not configured' };
-    }
+  private envGpsFallback(): GpsPullConfig | null {
+    const username = readSecret(this.config, 'TRACK360_USERNAME', '');
+    const password = readSecret(this.config, 'TRACK360_PASSWORD', '');
+    const tenantId = this.tenants.defaultTenantId();
+    if (!username || !password || !tenantId) return null;
+    return {
+      tenantId,
+      provider: 'Track360',
+      username,
+      password,
+      pullUrl: this.config.get<string>('TRACK360_PULL_URL', DEFAULT_TRACK360_URL) ?? DEFAULT_TRACK360_URL,
+    };
+  }
 
-    const url = track360PullUrl(baseUrl, username, password);
+  private async pullGps(config: GpsPullConfig) {
+    const url = track360PullUrl(config.pullUrl, config.username, config.password);
     const res = await fetch(url, {
       signal: AbortSignal.timeout(20000),
       headers: {
         Accept: 'application/json',
-        Authorization: track360AuthHeader(username, password),
+        Authorization: track360AuthHeader(config.username, config.password),
       },
     });
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new Error(`Track360 pull failed (${res.status})${body ? `: ${body.slice(0, 180)}` : ''}`);
+      throw new Error(`${config.provider} pull failed (${res.status})${body ? `: ${body.slice(0, 180)}` : ''}`);
     }
     const payload = (await res.json()) as unknown;
     const devices = parseTrack360Payload(payload);
     if (!devices.length) {
-      this.logger.warn('Track360 returned no device rows');
+      this.logger.warn(`${config.provider} returned no device rows for tenant ${config.tenantId}`);
     }
     let linked = 0;
     let created = 0;
     let failed = 0;
     for (const device of devices) {
       try {
-        const result = await this.upsertTrack360Device(device);
+        const result = await this.upsertTrack360Device({ ...device, vendorType: config.provider });
         if (result.linked) linked += 1;
         if (result.created) created += 1;
         const gps = toCoord(device.lat, device.lng);
@@ -163,31 +199,18 @@ export class IoTService {
       } catch (error) {
         failed += 1;
         this.logger.warn(
-          `Track360 device ${device.deviceId} skipped: ${error instanceof Error ? error.message : error}`,
+          `${config.provider} device ${device.deviceId} skipped: ${error instanceof Error ? error.message : error}`,
         );
       }
     }
-    const backfill = await this.provisionAllDevices();
-    created += backfill.created;
-    const tenantId = this.tenants.defaultTenantId();
-    if (tenantId) {
-      await this.deviceModel.collection.updateMany(
-        { $or: [{ tenantId: { $exists: false } }, { tenantId: null }, { tenantId: '' }] },
-        { $set: { tenantId } },
-      );
-      await this.vehicleModel.collection.updateMany(
-        { $or: [{ tenantId: { $exists: false } }, { tenantId: null }, { tenantId: '' }] },
-        { $set: { tenantId } },
-      );
-    }
     this.logger.log(
-      `Track360 sync: ${devices.length} devices, ${created} vehicles created, ${linked} linked, ${failed} skipped`,
+      `${config.provider} sync ${config.tenantId}: ${devices.length} devices, ${created} vehicles created, ${linked} linked, ${failed} skipped`,
     );
     return {
       synced: devices.length,
       linked,
       created,
-      message: `Imported ${devices.length} Track360 devices (${created} new vehicles${failed ? `, ${failed} skipped` : ''})`,
+      message: `Imported ${devices.length} ${config.provider} devices (${created} new vehicles${failed ? `, ${failed} skipped` : ''})`,
     };
   }
 
@@ -478,8 +501,9 @@ export class IoTService {
     }
   }
 
-  private async upsertTrack360Device(row: Track360Device) {
+  private async upsertTrack360Device(row: Track360Device & { vendorType?: string }) {
     const scope = currentTenantId();
+    const vendorType = row.vendorType || 'Track360';
     const existing = await this.deviceModel.findOne({ deviceId: row.deviceId });
     const existingTenant = existing ? String((existing as { tenantId?: string }).tenantId ?? '') : '';
     if (scope && existingTenant && existingTenant !== String(scope)) {
@@ -492,7 +516,7 @@ export class IoTService {
       {
         $set: {
           deviceId: row.deviceId,
-          vendorType: 'Track360',
+          vendorType,
           imei: row.imei || row.deviceId,
           displayName: row.name || undefined,
           externalId: row.vendorDeviceId || row.deviceId,
@@ -519,7 +543,7 @@ export class IoTService {
       await this.deviceModel.updateOne(
         { deviceId: row.deviceId },
         {
-          vendorType: 'Track360',
+          vendorType,
           imei: row.imei || row.deviceId,
           displayName: row.name || undefined,
           externalId: row.vendorDeviceId || row.deviceId,

@@ -122,11 +122,11 @@ export default function IoTPage() {
     <div>
       <PageHeader
         title="IoT Devices"
-        description="Register a WanWay IMEI and link it to a vehicle. GPS TCP is received by the separate telemetry service on a droplet/VM, which writes to the same MongoDB."
+        description="Register a WanWay IMEI or sync API GPS devices. Add each company's Track360 username and password under Integrations. WanWay TCP is received by the telemetry droplet."
         actions={
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => void syncTrack360()} disabled={syncing}>
-              {syncing ? "Syncing…" : "Sync Track360"}
+              {syncing ? "Syncing…" : "Sync GPS APIs"}
             </Button>
             <Button variant={showForm && !editId ? "secondary" : "primary"} onClick={() => showForm && !editId ? setShowForm(false) : openCreate()}>
               {showForm && !editId ? "Cancel" : "Add Device"}

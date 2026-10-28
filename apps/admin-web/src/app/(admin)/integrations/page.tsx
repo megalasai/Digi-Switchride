@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ComingSoonBadge, DisabledAction, DisabledField, DisabledSelect, ProvisionPanel } from "@/components/ui/Provision";
 import { Card } from "@/components/ui/Card";
+import { GpsIntegrationForm } from "@/components/GpsIntegrationForm";
 import { PaymentGatewayForm } from "@/components/PaymentGatewayForm";
 
 const integrations = [
@@ -29,11 +30,6 @@ const integrations = [
     detail: "Aadhaar, PAN and DL verification against a licensed provider.",
   },
   {
-    name: "Track360 telematics",
-    status: "Connected",
-    detail: "Live device pull from prod-s1.track360.net.in. Devices appear on IoT Devices and refresh every 30 seconds.",
-  },
-  {
     name: "Maps geofence",
     status: "Not connected",
     detail: "OpenStreetMap is used to pick hub, station, workshop and breakdown locations. Live geofence radius and fleet tracking can still be added later.",
@@ -49,7 +45,7 @@ export default function IntegrationsPage() {
     <div>
       <PageHeader
         title="Integrations"
-        description="Connect each tenant's payment gateway below. SMS, push, vault and KYC vendors remain provisioned until credentials are wired."
+        description="Connect each tenant's GPS telematics account and payment gateway. SMS, push, vault and KYC vendors remain provisioned until credentials are wired."
       />
       <Card className="mb-6 p-5">
         <p className="font-semibold text-text-primary">India location API</p>
@@ -75,6 +71,10 @@ export default function IntegrationsPage() {
             <p className="mt-3 text-xs font-medium text-text-muted">{item.status}</p>
           </Card>
         ))}
+      </div>
+
+      <div className="mb-8">
+        <GpsIntegrationForm />
       </div>
 
       <div className="mb-8">

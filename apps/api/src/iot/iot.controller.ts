@@ -1,13 +1,17 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AdminGuard, RolesGuard } from '../auth/admin.guard';
 import { Roles } from '../auth/roles.decorator';
+import { GpsIntegrationService } from './gps-integration.service';
 import { IoTService } from './iot.service';
 
 @Controller('v1/admin/iot')
 @UseGuards(AuthGuard('jwt'), AdminGuard, RolesGuard)
 export class IoTController {
-  constructor(private iotService: IoTService) {}
+  constructor(
+    private iotService: IoTService,
+    private gps: GpsIntegrationService,
+  ) {}
 
   @Get('devices')
   listDevices() {
@@ -18,6 +22,36 @@ export class IoTController {
   @Roles('SuperAdmin', 'Administrator', 'Operations')
   syncDevices() {
     return this.iotService.syncTrack360();
+  }
+
+  @Get('gps-integrations')
+  @Roles('SuperAdmin', 'Administrator')
+  listGpsIntegrations(@Req() req: { user?: { role?: string } }) {
+    return this.gps.listOverview(req.user?.role === 'SuperAdmin');
+  }
+
+  @Get('gps-integration')
+  @Roles('SuperAdmin', 'Administrator')
+  getGpsIntegration(@Req() req: { user?: { role?: string } }, @Query('tenantId') tenantId?: string) {
+    return this.gps.getAdmin(tenantId, req.user?.role === 'SuperAdmin');
+  }
+
+  @Put('gps-integration')
+  @Roles('SuperAdmin', 'Administrator')
+  saveGpsIntegration(
+    @Req() req: { user?: { role?: string } },
+    @Body()
+    body: {
+      tenantId?: string;
+      provider: string;
+      enabled?: boolean;
+      displayName?: string;
+      username?: string;
+      password?: string;
+      pullUrl?: string;
+    },
+  ) {
+    return this.gps.upsert(body, req.user?.role === 'SuperAdmin');
   }
 
   @Post('devices')

@@ -182,6 +182,27 @@ export const api = {
     ),
   savePaymentGateway: (data: Partial<PaymentGatewayConfig> & { provider: string; tenantId?: string; keySecret?: string; webhookSecret?: string }) =>
     request<PaymentGatewayConfig>("/admin/payments/gateway", { method: "PUT", body: JSON.stringify(data) }),
+  gpsIntegration: (tenantId?: string) =>
+    request<{ tenantId: string; tenantName?: string; tenantSlug?: string; providers: string[]; config: GpsIntegrationConfig }>(
+      `/admin/iot/gps-integration${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ""}`,
+    ),
+  gpsIntegrations: () =>
+    request<{
+      items: {
+        tenantId: string;
+        tenantName: string;
+        tenantSlug: string;
+        provider: string | null;
+        enabled: boolean;
+        usernameSet?: boolean;
+        lastSyncAt?: string;
+        lastSyncOk?: boolean;
+        lastSyncMessage?: string;
+        lastSyncedCount?: number;
+      }[];
+    }>("/admin/iot/gps-integrations"),
+  saveGpsIntegration: (data: Partial<GpsIntegrationConfig> & { provider: string; tenantId?: string; password?: string }) =>
+    request<GpsIntegrationConfig>("/admin/iot/gps-integration", { method: "PUT", body: JSON.stringify(data) }),
   wallets: (search?: string) =>
     request<{ items: Rider[] }>(`/admin/wallets${search ? `?search=${encodeURIComponent(search)}` : ""}`),
   adjustWallet: (riderId: string, data: { type: "Credit" | "Debit"; amount: number; note: string; reference?: string }) =>
@@ -271,6 +292,21 @@ export interface TenantOrg {
   kind?: "Parent" | "Tenant";
   notes?: string;
   logoUrl?: string | null;
+}
+
+export interface GpsIntegrationConfig {
+  tenantId: string;
+  provider: string;
+  enabled: boolean;
+  displayName?: string;
+  username?: string;
+  passwordSet?: boolean;
+  passwordMasked?: string | null;
+  pullUrl?: string;
+  lastSyncAt?: string;
+  lastSyncOk?: boolean;
+  lastSyncMessage?: string;
+  lastSyncedCount?: number;
 }
 
 export interface PaymentGatewayConfig {

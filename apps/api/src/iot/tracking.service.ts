@@ -64,9 +64,9 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     });
     this.track360Timer = setInterval(() => {
       void this.iotService.syncTrack360().catch((error) => {
-        this.logger.warn(`Track360 sync skipped: ${error instanceof Error ? error.message : error}`);
+        this.logger.warn(`GPS sync skipped: ${error instanceof Error ? error.message : error}`);
       });
-    }, 10000);
+    }, 30000);
   }
 
   onModuleDestroy() {
