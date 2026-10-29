@@ -79,12 +79,21 @@ export class KycService {
   ) {}
 
   async submit(customerId: string, documentType: string, documentNumber?: string, blobUrl?: string) {
+    const allowed = ['Aadhaar', 'PAN', 'DrivingLicence', 'Selfie'];
+    if (!allowed.includes(documentType)) {
+      throw new BadRequestException('Document type must be Aadhaar, PAN, Driving Licence or Selfie');
+    }
+    const customer = await this.customerModel.findById(customerId);
+    if (!customer) throw new NotFoundException('Customer not found');
+    if (blobUrl && blobUrl.length > 7_000_000) {
+      throw new BadRequestException('Document file is too large (max about 5 MB)');
+    }
     const masked = documentType === 'Aadhaar' && documentNumber ? maskAadhaar(documentNumber) : documentNumber;
     const submission = await this.kycModel.create({
       customerId,
       documentType,
       documentNumberMasked: masked,
-      blobUrl,
+      blobUrl: blobUrl?.trim() || undefined,
       status: 'Pending',
     });
     await this.customerModel.findByIdAndUpdate(customerId, { kycStatus: 'Pending' });
@@ -107,6 +116,8 @@ export class KycService {
         id: s._id.toString(),
         documentType: s.documentType,
         status: s.status,
+        documentNumberMasked: s.documentNumberMasked,
+        blobUrl: s.blobUrl,
         submittedAt: (s as any).createdAt,
       })),
       rejectionReason,

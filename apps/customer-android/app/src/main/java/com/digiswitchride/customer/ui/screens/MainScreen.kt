@@ -124,7 +124,18 @@ private fun VehicleTab(vm: RiderAppViewModel) {
     LaunchedEffect(Unit) { vm.refreshService() }
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         val v = s.vehicle?.vehicle
-        if (v == null) item { EmptyState(Icons.Default.TwoWheeler, "No vehicle", "Admin will assign a vehicle to your account.") }
+        if (v == null) {
+            item { EmptyState(Icons.Default.TwoWheeler, "No vehicle", "Select an available vehicle or wait for admin assignment.") }
+            items(s.availableVehicles) { option ->
+                OutlinedCard(Modifier.clickable { vm.assignVehicle(option.id) }) {
+                    ListItem(
+                        headlineContent = { Text(option.registrationNumber) },
+                        supportingContent = { Text("${option.model} · battery ${option.batteryPercent}% · tap to assign") },
+                        leadingContent = { Icon(vehicleIcon(option.type, option.wheelClass), null) },
+                    )
+                }
+            }
+        }
         else item {
             ListItem(
                 headlineContent = { Text(v.registrationNumber) },

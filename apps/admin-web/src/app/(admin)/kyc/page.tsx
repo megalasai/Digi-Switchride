@@ -11,7 +11,7 @@ import { Field, Input, Select } from "@/components/ui/Input";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { IconShield } from "@/components/icons";
 import { ACCESS, canAccess } from "@/lib/access";
-import { api, KycDocument } from "@/lib/api";
+import { api, KycDocument, Rider } from "@/lib/api";
 import { ProvisionPanel, DisabledField, DisabledSelect, DisabledAction } from "@/components/ui/Provision";
 import { useAuth } from "@/lib/auth-context";
 
@@ -25,6 +25,12 @@ export default function KycReviewPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(true);
+  const [riders, setRiders] = useState<Rider[]>([]);
+  const [uploadRiderId, setUploadRiderId] = useState("");
+  const [uploadType, setUploadType] = useState("Aadhaar");
+  const [uploadNumber, setUploadNumber] = useState("");
+  const [uploadFile, setUploadFile] = useState("");
+  const [uploading, setUploading] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -35,6 +41,9 @@ export default function KycReviewPage() {
   };
 
   useEffect(() => { load(); }, [status]);
+  useEffect(() => {
+    api.riders().then((r) => setRiders(r.items)).catch(() => {});
+  }, []);
 
   const approve = async (id: string) => {
     if (!window.confirm("Approve this document?")) return;
@@ -77,6 +86,77 @@ export default function KycReviewPage() {
           <DisabledAction label="Run vendor check" />
         </div>
       </ProvisionPanel>
+      {canWrite && (
+        <Card className="mb-6 space-y-3 p-5">
+          <p className="font-semibold text-text-primary">Upload KYC for a customer</p>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <Field label="Customer">
+              <Select value={uploadRiderId} onChange={(e) => setUploadRiderId(e.target.value)}>
+                <option value="">Select rider</option>
+                {riders.map((r) => (
+                  <option key={r.id} value={r.id}>{r.fullName ?? r.phone}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Document type">
+              <Select value={uploadType} onChange={(e) => setUploadType(e.target.value)}>
+                <option value="Aadhaar">Aadhaar</option>
+                <option value="PAN">PAN</option>
+                <option value="DrivingLicence">Driving licence</option>
+                <option value="Selfie">Selfie / photograph</option>
+              </Select>
+            </Field>
+            <Field label="Document number" hint="Optional">
+              <Input value={uploadNumber} onChange={(e) => setUploadNumber(e.target.value)} />
+            </Field>
+            <Field label="File">
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) {
+                    setUploadFile("");
+                    return;
+                  }
+                  if (file.size > 5_000_000) {
+                    setError("KYC file must be 5 MB or smaller");
+                    return;
+                  }
+                  const reader = new FileReader();
+                  reader.onload = () => setUploadFile(String(reader.result ?? ""));
+                  reader.readAsDataURL(file);
+                }}
+              />
+            </Field>
+          </div>
+          <Button
+            type="button"
+            disabled={!uploadRiderId || !uploadFile || uploading}
+            onClick={async () => {
+              setUploading(true);
+              setError("");
+              try {
+                await api.uploadRiderKyc(uploadRiderId, {
+                  documentType: uploadType,
+                  documentNumber: uploadNumber.trim() || undefined,
+                  blobUrl: uploadFile,
+                });
+                setSuccess("Document uploaded");
+                setUploadFile("");
+                setUploadNumber("");
+                load();
+              } catch (e) {
+                setError(e instanceof Error ? e.message : "Upload failed");
+              } finally {
+                setUploading(false);
+              }
+            }}
+          >
+            {uploading ? "Uploading…" : "Upload document"}
+          </Button>
+        </Card>
+      )}
       {error && <div className="mb-4"><Alert message={error} /></div>}
       {success && <div className="mb-4"><Alert variant="success" message={success} /></div>}
       <div className="mb-4">

@@ -5,11 +5,15 @@ import { Roles } from '../auth/roles.decorator';
 import { AssignRiderPlanDto, CreateCustomerDto, CreateRentalPlanDto, UpdateCustomerDto, UpdateRentalPlanDto, WalletAdjustDto } from '../auth/dto/admin-auth.dto';
 import { actorFromRequest } from '../common/actor';
 import { RidersService } from './riders.service';
+import { KycService } from './customers.service';
 
 @Controller('v1/admin/riders')
 @UseGuards(AuthGuard('jwt'), AdminGuard, RolesGuard)
 export class RidersAdminController {
-  constructor(private ridersService: RidersService) {}
+  constructor(
+    private ridersService: RidersService,
+    private kyc: KycService,
+  ) {}
 
   @Get()
   @Roles('SuperAdmin', 'Administrator', 'CommandCenter', 'Operations', 'KycTeam', 'Finance')
@@ -71,6 +75,15 @@ export class RidersAdminController {
     @Body() body: AssignRiderPlanDto,
   ) {
     return this.ridersService.assignPlan(id, body.rentalPlanId, actorFromRequest(req));
+  }
+
+  @Post(':id/kyc')
+  @Roles('SuperAdmin', 'Administrator', 'Operations', 'KycTeam')
+  uploadKyc(
+    @Param('id') id: string,
+    @Body() body: { documentType: string; documentNumber?: string; blobUrl?: string },
+  ) {
+    return this.kyc.submit(id, body.documentType, body.documentNumber, body.blobUrl);
   }
 }
 

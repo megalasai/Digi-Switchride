@@ -14,7 +14,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { IconScooter } from "@/components/icons";
 import { ACCESS, canAccess } from "@/lib/access";
 import { useAuth } from "@/lib/auth-context";
-import { api, Hub, Vehicle } from "@/lib/api";
+import { api, Hub, Rider, Vehicle } from "@/lib/api";
 import { CompanyCell, CompanyField } from "@/lib/companies";
 import { wheelClassFromType } from "@/lib/vehicleIcons";
 import { normalizeRegistration, validateRegistration, validateRequired } from "@/lib/validation";
@@ -39,6 +39,8 @@ export default function VehiclesPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(emptyForm);
+  const [riders, setRiders] = useState<Rider[]>([]);
+  const [assignRiderId, setAssignRiderId] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const t = setTimeout(() => setSearch(searchInput.trim()), 300);
@@ -61,6 +63,7 @@ export default function VehiclesPage() {
 
   useEffect(() => {
     api.hubs().then((r) => setHubs(r.items)).catch(() => {});
+    api.riders({ accountStatus: "Active" }).then((r) => setRiders(r.items)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -243,7 +246,46 @@ export default function VehiclesPage() {
                   <TableCell>{v.wheelClass ?? v.type}</TableCell>
                   <TableCell><Badge status={v.status} /></TableCell>
                   <TableCell>{v.batteryPercent}%</TableCell>
-                  <TableCell>{v.assignedRiderName ?? v.assignedRiderPhone ?? "—"}</TableCell>
+                  <TableCell>
+                    {v.assignedRiderName ?? v.assignedRiderPhone ? (
+                      v.assignedRiderName ?? v.assignedRiderPhone
+                    ) : canWrite ? (
+                      <div className="flex min-w-[180px] gap-2">
+                        <Select
+                          className="flex-1"
+                          value={assignRiderId[v.id] ?? ""}
+                          onChange={(e) => setAssignRiderId((s) => ({ ...s, [v.id]: e.target.value }))}
+                        >
+                          <option value="">Assign rider…</option>
+                          {riders.map((r) => (
+                            <option key={r.id} value={r.id}>{r.fullName ?? r.phone}</option>
+                          ))}
+                        </Select>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="shrink-0"
+                          disabled={!assignRiderId[v.id]}
+                          onClick={() => {
+                            const riderId = assignRiderId[v.id];
+                            if (!riderId) return;
+                            api
+                              .assignVehicle(v.id, { riderId })
+                              .then(() => {
+                                setSuccess("Rider assigned");
+                                setAssignRiderId((s) => ({ ...s, [v.id]: "" }));
+                                load();
+                              })
+                              .catch((err) => setError(err instanceof Error ? err.message : "Assign failed"));
+                          }}
+                        >
+                          Assign
+                        </Button>
+                      </div>
+                    ) : (
+                      "—"
+                    )}
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       {canWrite && (

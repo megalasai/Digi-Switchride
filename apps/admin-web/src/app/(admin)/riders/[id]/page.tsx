@@ -9,11 +9,11 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { DataTable, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/DataTable";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Field, Select } from "@/components/ui/Input";
+import { Field, Input, Select } from "@/components/ui/Input";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { IconUsers } from "@/components/icons";
 import { ACCESS, canAccess } from "@/lib/access";
-import { api, RentalPlan, RiderProfile } from "@/lib/api";
+import { api, RentalPlan, RiderProfile, Vehicle } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 const tabs = ["Overview", "Vehicle", "Plan", "Wallet", "Payments", "Service history", "KYC"] as const;
@@ -26,6 +26,11 @@ export default function RiderProfilePage() {
   const [profile, setProfile] = useState<RiderProfile | null>(null);
   const [plans, setPlans] = useState<RentalPlan[]>([]);
   const [planId, setPlanId] = useState("");
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [assignVehicleId, setAssignVehicleId] = useState("");
+  const [kycType, setKycType] = useState("Aadhaar");
+  const [kycNumber, setKycNumber] = useState("");
+  const [kycFile, setKycFile] = useState<string>("");
   const [tab, setTab] = useState<Tab>("Overview");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -33,11 +38,12 @@ export default function RiderProfilePage() {
 
   const load = () => {
     setLoading(true);
-    Promise.all([api.riderProfile(params.id), api.rentalPlans()])
-      .then(([p, planRes]) => {
+    Promise.all([api.riderProfile(params.id), api.rentalPlans(), api.vehicles({ availability: "unassigned" }).catch(() => ({ items: [] as Vehicle[] }))])
+      .then(([p, planRes, vehicleRes]) => {
         setProfile(p);
         setPlans(planRes.items);
         setPlanId(p.rentalPlan?.id ?? "");
+        setVehicles(vehicleRes.items);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load rider"))
       .finally(() => setLoading(false));
@@ -115,16 +121,68 @@ export default function RiderProfilePage() {
       )}
 
       {tab === "Vehicle" && (
-        profile.assignedVehicle ? (
-          <Card className="p-6">
-            <p className="font-semibold">{profile.assignedVehicle.registrationNumber}</p>
-            <p className="mt-1 text-sm text-text-secondary">{profile.assignedVehicle.model} · {profile.assignedVehicle.type}</p>
-            <p className="mt-2"><Badge status={profile.assignedVehicle.status} /> · Battery {profile.assignedVehicle.batteryPercent}%</p>
-            <Link className="mt-3 inline-block text-sm font-semibold text-brand" href={`/vehicles/${profile.assignedVehicle.id}`}>Open vehicle</Link>
-          </Card>
-        ) : (
-          <EmptyState icon={<IconUsers className="h-7 w-7" />} title="No assigned vehicle" description="Assign a vehicle from the vehicle detail screen." />
-        )
+        <div className="space-y-4">
+          {profile.assignedVehicle ? (
+            <Card className="p-6">
+              <p className="font-semibold">{profile.assignedVehicle.registrationNumber}</p>
+              <p className="mt-1 text-sm text-text-secondary">{profile.assignedVehicle.model} · {profile.assignedVehicle.type}</p>
+              <p className="mt-2"><Badge status={profile.assignedVehicle.status} /> · Battery {profile.assignedVehicle.batteryPercent}%</p>
+              <Link className="mt-3 inline-block text-sm font-semibold text-brand" href={`/vehicles/${profile.assignedVehicle.id}`}>Open vehicle</Link>
+              {canWrite && (
+                <div className="mt-4">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={async () => {
+                      if (!window.confirm("Unassign this vehicle from the rider?")) return;
+                      setError("");
+                      try {
+                        await api.unassignVehicle(profile.assignedVehicle!.id);
+                        setSuccess("Vehicle unassigned");
+                        load();
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : "Unassign failed");
+                      }
+                    }}
+                  >
+                    Unassign vehicle
+                  </Button>
+                </div>
+              )}
+            </Card>
+          ) : (
+            <EmptyState icon={<IconUsers className="h-7 w-7" />} title="No assigned vehicle" description="Pick an available vehicle below to assign this rider." />
+          )}
+          {canWrite && !profile.assignedVehicle && (
+            <Card className="flex flex-wrap items-end gap-3 p-6">
+              <Field label="Available vehicle">
+                <Select value={assignVehicleId} onChange={(e) => setAssignVehicleId(e.target.value)}>
+                  <option value="">Select vehicle</option>
+                  {vehicles.map((v) => (
+                    <option key={v.id} value={v.id}>{v.registrationNumber} · {v.model}</option>
+                  ))}
+                </Select>
+              </Field>
+              <Button
+                type="button"
+                disabled={!assignVehicleId}
+                onClick={async () => {
+                  setError("");
+                  try {
+                    await api.assignVehicle(assignVehicleId, { riderId: params.id });
+                    setSuccess("Vehicle assigned to this rider");
+                    setAssignVehicleId("");
+                    load();
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "Assignment failed");
+                  }
+                }}
+              >
+                Assign vehicle
+              </Button>
+            </Card>
+          )}
+        </div>
       )}
 
       {tab === "Plan" && (
@@ -215,28 +273,98 @@ export default function RiderProfilePage() {
       )}
 
       {tab === "KYC" && (
-        profile.kyc.submissions.length === 0 ? (
-          <EmptyState icon={<IconUsers className="h-7 w-7" />} title="No KYC documents" description={`Current status: ${profile.kyc.status}. Submissions from the rider app appear here.`} />
-        ) : (
-          <DataTable>
-            <Table>
-              <TableHead>
-                <TableHeaderCell>Document</TableHeaderCell>
-                <TableHeaderCell>Status</TableHeaderCell>
-                <TableHeaderCell>Reason</TableHeaderCell>
-              </TableHead>
-              <TableBody>
-                {profile.kyc.submissions.map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell>{s.documentType}</TableCell>
-                    <TableCell><Badge status={s.status} /></TableCell>
-                    <TableCell>{s.rejectionReason ?? "—"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </DataTable>
-        )
+        <div className="space-y-4">
+          {canWrite && (
+            <Card className="space-y-3 p-6">
+              <p className="font-semibold">Upload KYC document for this customer</p>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <Field label="Document type">
+                  <Select value={kycType} onChange={(e) => setKycType(e.target.value)}>
+                    <option value="Aadhaar">Aadhaar</option>
+                    <option value="PAN">PAN</option>
+                    <option value="DrivingLicence">Driving licence</option>
+                    <option value="Selfie">Selfie / photograph</option>
+                  </Select>
+                </Field>
+                <Field label="Document number" hint="Optional">
+                  <Input value={kycNumber} onChange={(e) => setKycNumber(e.target.value)} />
+                </Field>
+                <div className="md:col-span-2">
+                  <Field label="File" hint="JPG, PNG or PDF, about 5 MB max">
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) {
+                          setKycFile("");
+                          return;
+                        }
+                        if (file.size > 5_000_000) {
+                          setError("KYC file must be 5 MB or smaller");
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onload = () => setKycFile(String(reader.result ?? ""));
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                  </Field>
+                </div>
+              </div>
+              <Button
+                type="button"
+                disabled={!kycFile}
+                onClick={async () => {
+                  setError("");
+                  try {
+                    await api.uploadRiderKyc(params.id, {
+                      documentType: kycType,
+                      documentNumber: kycNumber.trim() || undefined,
+                      blobUrl: kycFile,
+                    });
+                    setSuccess("KYC document uploaded for review");
+                    setKycNumber("");
+                    setKycFile("");
+                    load();
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "Upload failed");
+                  }
+                }}
+              >
+                Upload document
+              </Button>
+            </Card>
+          )}
+          {profile.kyc.submissions.length === 0 ? (
+            <EmptyState icon={<IconUsers className="h-7 w-7" />} title="No KYC documents" description={`Current status: ${profile.kyc.status}. Upload a file above or wait for the rider app.`} />
+          ) : (
+            <DataTable>
+              <Table>
+                <TableHead>
+                  <TableHeaderCell>Document</TableHeaderCell>
+                  <TableHeaderCell>Status</TableHeaderCell>
+                  <TableHeaderCell>File</TableHeaderCell>
+                  <TableHeaderCell>Reason</TableHeaderCell>
+                </TableHead>
+                <TableBody>
+                  {profile.kyc.submissions.map((s) => (
+                    <TableRow key={s.id}>
+                      <TableCell>{s.documentType}{s.documentNumberMasked ? ` · ${s.documentNumberMasked}` : ""}</TableCell>
+                      <TableCell><Badge status={s.status} /></TableCell>
+                      <TableCell>
+                        {s.blobUrl ? (
+                          <a className="text-sm font-semibold text-brand" href={s.blobUrl} target="_blank" rel="noreferrer">Open</a>
+                        ) : "—"}
+                      </TableCell>
+                      <TableCell>{s.rejectionReason ?? "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </DataTable>
+          )}
+        </div>
       )}
     </div>
   );

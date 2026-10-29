@@ -17,6 +17,16 @@ export class RiderAppController {
     return this.rider.vehicle(req.user.customerId);
   }
 
+  @Get('vehicles/available')
+  availableVehicles() {
+    return this.rider.availableVehicles();
+  }
+
+  @Post('vehicle/assign')
+  assignVehicle(@Req() req: { user: { customerId: string } }, @Body() body: { vehicleId: string }) {
+    return this.rider.assignOwnVehicle(req.user.customerId, body.vehicleId);
+  }
+
   @Post('breakdowns')
   breakdown(
     @Req() req: { user: { customerId: string } },

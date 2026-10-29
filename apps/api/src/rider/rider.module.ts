@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '../auth/auth.module';
 import { CustomersModule } from '../customers/customers.module';
+import { FleetModule } from '../fleet/fleet.module';
 import { OperationsModule } from '../operations/operations.module';
 import { EngagementModule } from '../engagement/engagement.module';
 import { PaymentsModule } from '../payments/payments.module';
@@ -17,6 +18,7 @@ import { RiderAppService } from './rider.service';
   imports: [
     AuthModule,
     CustomersModule,
+    FleetModule,
     OperationsModule,
     EngagementModule,
     PaymentsModule,

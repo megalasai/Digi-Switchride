@@ -252,6 +252,7 @@ export class RidersService implements OnModuleInit {
           documentType: s.documentType,
           status: s.status,
           documentNumberMasked: s.documentNumberMasked,
+          blobUrl: s.blobUrl,
           rejectionReason: s.rejectionReason,
           submittedAt: (s as { createdAt?: Date }).createdAt,
           reviewedAt: s.reviewedAt,

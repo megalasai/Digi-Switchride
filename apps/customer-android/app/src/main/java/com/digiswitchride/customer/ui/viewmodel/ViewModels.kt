@@ -176,6 +176,7 @@ data class RiderUiState(
     val loading: Boolean = false,
     val home: HomeResponse? = null,
     val vehicle: VehicleResponse? = null,
+    val availableVehicles: List<VehicleSummary> = emptyList(),
     val payments: List<PaymentItem> = emptyList(),
     val wallet: List<WalletItem> = emptyList(),
     val plans: PlansResponse? = null,
@@ -217,7 +218,20 @@ class RiderAppViewModel @Inject constructor(
     fun refreshDocs() = launch { _state.value = _state.value.copy(agreements = api.agreements().items) }
     fun refreshStations() = launch { _state.value = _state.value.copy(stations = api.stations().items) }
     fun refreshService() = launch {
-        _state.value = _state.value.copy(centres = api.centres().items, slots = api.slots().items, appointments = api.appointments().items, vehicle = api.vehicle())
+        val assigned = api.vehicle()
+        val available = if (assigned.vehicle == null) api.availableVehicles().items else emptyList()
+        _state.value = _state.value.copy(
+            centres = api.centres().items,
+            slots = api.slots().items,
+            appointments = api.appointments().items,
+            vehicle = assigned,
+            availableVehicles = available,
+        )
+    }
+    fun assignVehicle(vehicleId: String) = launch {
+        api.assignVehicle(AssignVehicleRequest(vehicleId))
+        _state.value = _state.value.copy(message = "Vehicle assigned to you")
+        refreshService(); refreshHome()
     }
     fun refreshSupport() = launch { _state.value = _state.value.copy(tickets = api.tickets().items) }
     fun refreshReferral() = launch { _state.value = _state.value.copy(referral = api.referral()) }

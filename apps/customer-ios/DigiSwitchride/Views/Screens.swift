@@ -76,6 +76,7 @@ struct HomeView: View {
 
 struct VehicleView: View {
     @State private var data: VehicleResponse?
+    @State private var available: [RiderVehicle] = []
     @State private var slots: [SlotItem] = []
     @State private var appointments: [AppointmentItem] = []
     @State private var issue = "Battery"
@@ -89,7 +90,16 @@ struct VehicleView: View {
                     if let v = data?.vehicle {
                         InfoCard(title: v.registrationNumber, subtitle: "\(v.model) · \(v.type)", extra: "\(v.status) · battery \(v.batteryPercent)%")
                     } else {
-                        Text("No vehicle assigned yet.").foregroundStyle(AppColors.textSecondary)
+                        Text("No vehicle assigned yet. Choose one below or wait for admin.").foregroundStyle(AppColors.textSecondary)
+                        ForEach(available) { option in
+                            Button("Assign \(option.registrationNumber) · \(option.model)") {
+                                Task {
+                                    data = try? await APIService.shared.assignVehicle(id: option.id)
+                                    await load()
+                                }
+                            }
+                            .buttonStyle(PrimaryButtonStyle())
+                        }
                     }
                     Text("Report breakdown").font(.headline)
                     TextField("Issue type", text: $issue).textFieldStyle(.roundedBorder)
@@ -129,6 +139,11 @@ struct VehicleView: View {
     }
     private func load() async {
         data = try? await APIService.shared.vehicle()
+        if data?.vehicle == nil {
+            available = (try? await APIService.shared.availableVehicles().items) ?? []
+        } else {
+            available = []
+        }
         slots = (try? await APIService.shared.slots().items) ?? []
         appointments = (try? await APIService.shared.appointments().items) ?? []
     }

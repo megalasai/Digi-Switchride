@@ -11,6 +11,7 @@ import { PaymentsService } from '../payments/payments.service';
 import { PaymentGatewayService } from '../payments/gateway.service';
 import { KycService, ProfileService } from '../customers/customers.service';
 import { RidersService } from '../customers/riders.service';
+import { FleetService } from '../fleet/fleet.service';
 import { SupportService } from '../support/support.service';
 
 @Injectable()
@@ -29,6 +30,7 @@ export class RiderAppService {
     private kycSvc: KycService,
     private riders: RidersService,
     private support: SupportService,
+    private fleet: FleetService,
   ) {}
 
   async home(riderId: string) {
@@ -59,6 +61,24 @@ export class RiderAppService {
       service: openService ?? null,
       paymentGateway,
     };
+  }
+
+  async availableVehicles() {
+    const items = await this.vehicleModel
+      .find({
+        status: 'Available',
+        $or: [{ assignedRiderId: { $exists: false } }, { assignedRiderId: null }, { assignedRiderId: '' }],
+      })
+      .sort({ registrationNumber: 1 })
+      .limit(100);
+    return { items: items.map((v) => this.toVehicle(v)) };
+  }
+
+  async assignOwnVehicle(riderId: string, vehicleId: string) {
+    if (!vehicleId?.trim()) throw new BadRequestException('Select a vehicle');
+    await this.requireRider(riderId);
+    await this.fleet.assignVehicle(vehicleId.trim(), riderId, {});
+    return this.vehicle(riderId);
   }
 
   async vehicle(riderId: string) {

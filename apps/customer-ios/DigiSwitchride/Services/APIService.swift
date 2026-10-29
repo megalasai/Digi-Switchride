@@ -44,6 +44,8 @@ struct HomeResponse: Codable {
     let service: ServiceItem?
 }
 struct VehicleResponse: Codable { let vehicle: RiderVehicle?; let breakdowns: [BreakdownItem]; let requests: [ServiceItem] }
+struct VehiclesListResponse: Codable { let items: [RiderVehicle] }
+struct AssignVehicleRequest: Codable { let vehicleId: String }
 struct PaymentItem: Codable, Identifiable { let id: String; let amount: Double; let status: String; let method: String?; let reference: String? }
 struct PaymentsResponse: Codable { let items: [PaymentItem] }
 struct WalletItem: Codable, Identifiable { let id: String; let type: String; let amount: Double; let note: String? }
@@ -101,6 +103,10 @@ class APIService {
     }
     func home() async throws -> HomeResponse { try await request("GET", "/rider/home") }
     func vehicle() async throws -> VehicleResponse { try await request("GET", "/rider/vehicle") }
+    func availableVehicles() async throws -> VehiclesListResponse { try await request("GET", "/rider/vehicles/available") }
+    func assignVehicle(id: String) async throws -> VehicleResponse {
+        try await request("POST", "/rider/vehicle/assign", body: AssignVehicleRequest(vehicleId: id))
+    }
     func reportBreakdown(issue: String, description: String) async throws -> BreakdownItem {
         try await request("POST", "/rider/breakdowns", body: BreakdownRequest(issueType: issue, description: description))
     }

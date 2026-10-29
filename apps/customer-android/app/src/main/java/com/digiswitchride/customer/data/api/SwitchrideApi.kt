@@ -131,6 +131,12 @@ interface SwitchrideApi {
     @GET("rider/vehicle")
     suspend fun vehicle(): VehicleResponse
 
+    @GET("rider/vehicles/available")
+    suspend fun availableVehicles(): VehiclesResponse
+
+    @POST("rider/vehicle/assign")
+    suspend fun assignVehicle(@Body body: AssignVehicleRequest): VehicleResponse
+
     @POST("rider/breakdowns")
     suspend fun reportBreakdown(@Body body: BreakdownRequest): BreakdownItem
 
@@ -243,3 +249,4 @@ data class BrandingResponse(
     val optionalLogoUrl: String? = null,
 )
 data class EmptyBody(val empty: String? = null)
+data class AssignVehicleRequest(val vehicleId: String)

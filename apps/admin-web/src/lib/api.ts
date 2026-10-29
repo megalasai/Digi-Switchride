@@ -82,6 +82,11 @@ export const api = {
   deleteRider: (id: string) => request<{ deleted: boolean }>(`/admin/riders/${id}`, { method: "DELETE" }),
   assignRiderPlan: (id: string, rentalPlanId: string) =>
     request<RiderProfile>(`/admin/riders/${id}/plan`, { method: "POST", body: JSON.stringify({ rentalPlanId }) }),
+  uploadRiderKyc: (id: string, data: { documentType: string; documentNumber?: string; blobUrl?: string }) =>
+    request<{ id: string; documentType: string; status: string }>(`/admin/riders/${id}/kyc`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   rentalPlans: () => request<{ items: RentalPlan[] }>("/admin/riders/plans"),
   auditLogs: (params?: { entityType?: string; from?: string; to?: string; page?: number }) => {
     const q = new URLSearchParams();
@@ -494,7 +499,7 @@ export interface RiderProfile {
   };
   kyc: {
     status: string;
-    submissions: { id: string; documentType: string; status: string; documentNumberMasked?: string; rejectionReason?: string; submittedAt?: string; reviewedAt?: string }[];
+    submissions: { id: string; documentType: string; status: string; documentNumberMasked?: string; blobUrl?: string; rejectionReason?: string; submittedAt?: string; reviewedAt?: string }[];
   };
 }
 
