@@ -1,35 +1,8 @@
-# Build from repository root:
-#   docker build -f apps/telemetry/Dockerfile -t digi-switchride-telemetry .
-FROM node:22-bookworm-slim AS build
-WORKDIR /app
-COPY package.json package-lock.json ./
-COPY apps/api/package.json apps/api/package.json
-COPY apps/admin-web/package.json apps/admin-web/package.json
-COPY apps/location/package.json apps/location/package.json
-COPY apps/telemetry/package.json apps/telemetry/package.json
-COPY apps/telemetry/tsconfig.json apps/telemetry/tsconfig.json
-COPY libs/shared/package.json libs/shared/package.json
-COPY apps/telemetry/src apps/telemetry/src
-RUN npm ci -w @digi-switchride/telemetry && npm run build -w @digi-switchride/telemetry
-
-FROM node:22-bookworm-slim
-WORKDIR /app
-COPY package.json package-lock.json ./
-COPY apps/api/package.json apps/api/package.json
-COPY apps/admin-web/package.json apps/admin-web/package.json
-COPY apps/location/package.json apps/location/package.json
-COPY apps/telemetry/package.json apps/telemetry/package.json
-COPY libs/shared/package.json libs/shared/package.json
-RUN npm ci -w @digi-switchride/telemetry --omit=dev
-COPY --from=build /app/apps/telemetry/dist apps/telemetry/dist
-WORKDIR /app/apps/telemetry
-ENV NODE_ENV=production
-ENV TELEMETRY_HTTP_HOST=0.0.0.0
-ENV TELEMETRY_HTTP_PORT=4200
-ENV TELEMETRY_TCP_HOST=0.0.0.0
-ENV TELEMETRY_SQLITE=/data/telemetry.sqlite
-VOLUME ["/data"]
-EXPOSE 4200 4210 21100 5001 8821
-HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=5 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.TELEMETRY_HTTP_PORT||4200)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["node", "dist/entrypoint.js"]
+# Telemetry is a separate GitHub repo. Do not build this file from Digi-Switchride
+# (npm workspaces will OOM on a 2 GB droplet).
+#
+#   git clone https://github.com/megalasai/Telemetry.git
+#   cd Telemetry && cp .env.example .env && docker compose up -d --build
+#
+FROM alpine:3.20
+RUN echo "Build telemetry from https://github.com/megalasai/Telemetry.git — not Digi-Switchride." && exit 1

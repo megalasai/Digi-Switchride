@@ -1,6 +1,6 @@
 # GPS Telemetry Service
 
-Canonical deploy repo (droplet): **https://github.com/megalasai/Telemetry**. This folder stays as the in-tree copy used by local `npm run dev:telemetry`.
+Canonical deploy repo (droplet): **https://github.com/megalasai/Telemetry**. Clone **that** repo on the droplet and `docker compose up -d --build`. This folder is only the in-tree copy for local `npm run dev:telemetry`. Do not `docker build` telemetry from Digi-Switchride.
 
 Standalone GPS ingest process. Deploy this on a **droplet or VM with a public IP** — not on DigitalOcean App Platform (HTTP only). The Nest API stays on App Platform; this service writes to the **same MongoDB**.
 
@@ -34,12 +34,10 @@ Listens on `http://localhost:4200`.
 Minimum droplet: **2 GB / 1 vCPU, Ubuntu 24.04, BLR1**. Put `MONGODB_URI` in `/opt/telemetry/.env` (not in git). Full steps: [docs/deployment/telemetry-droplet.md](../../docs/deployment/telemetry-droplet.md).
 
 ```bash
-docker build -f apps/telemetry/Dockerfile -t fleetel-telemetry .
-docker run -d --name telemetry --restart unless-stopped \
-  --env-file /opt/telemetry/.env \
-  -p 4200:4200 -p 4210:4210 -p 21100:21100 -p 5001:5001 -p 8821:8821 \
-  -v telemetry-data:/data \
-  fleetel-telemetry
+git clone https://github.com/megalasai/Telemetry.git
+cd Telemetry
+cp .env.example .env
+docker compose up -d --build
 ```
 
 Open those TCP ports on the firewall. Health: `http://<droplet-ip>:4200/health`.
