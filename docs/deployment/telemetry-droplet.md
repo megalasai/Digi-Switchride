@@ -33,7 +33,15 @@ In **Databases → db-mdb-blr1-25924 → Trusted sources**, add the App Platform
 
 ## Deploy
 
+On 2 GB RAM, create swap first. Without it, `npm` is killed and Docker reports `Exit handler never called`.
+
 ```bash
+fallocate -l 2G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' | tee -a /etc/fstab
+
 apt-get update
 apt-get install -y ca-certificates curl git
 curl -fsSL https://get.docker.com | sh
