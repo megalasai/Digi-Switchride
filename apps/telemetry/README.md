@@ -15,7 +15,7 @@ When a coordinate is inside a configured hub geofence the stored name is the **h
 ## Requirements
 
 - Node.js 22.13 or newer (built-in `node:sqlite`)
-- MongoDB (`mongodb://localhost:27017/switchride`) for GPS
+- MongoDB for GPS — local `mongodb://localhost:27017/switchride`, or DigitalOcean Managed Mongo via `MONGODB_URI` (see `docs/deployment/telemetry-droplet.md`)
 - Optional: location service on port 4100 for place names
 
 ## Run locally
@@ -31,14 +31,13 @@ Listens on `http://localhost:4200`.
 
 ## Droplet / VM
 
+Minimum droplet: **2 GB / 1 vCPU, Ubuntu 24.04, BLR1**. Put `MONGODB_URI` in `/opt/telemetry/.env` (not in git). Full steps: [docs/deployment/telemetry-droplet.md](../../docs/deployment/telemetry-droplet.md).
+
 ```bash
 docker build -f apps/telemetry/Dockerfile -t fleetel-telemetry .
 docker run -d --name telemetry --restart unless-stopped \
+  --env-file /opt/telemetry/.env \
   -p 4200:4200 -p 4210:4210 -p 21100:21100 -p 5001:5001 -p 8821:8821 \
-  -e MONGODB_URI="mongodb+srv://..." \
-  -e LOCATION_API_URL="https://fleetel-switchride-pmxt5.ondigitalocean.app/geo" \
-  -e PLATFORM_API_URL="https://fleetel-switchride-pmxt5.ondigitalocean.app" \
-  -e WANWAY_TCP_PORTS="21100,5001,8821" \
   -v telemetry-data:/data \
   fleetel-telemetry
 ```
@@ -46,7 +45,7 @@ docker run -d --name telemetry --restart unless-stopped \
 Open those TCP ports on the firewall. Health: `http://<droplet-ip>:4200/health`.
 
 - SQLite config: `apps/telemetry/data/telemetry.sqlite`
-- MongoDB GPS: `mongodb://localhost:27017/switchride` collections `gps_positions`, `vehicles`, `iot_devices`
+- MongoDB GPS: `MONGODB_URI` (Managed Mongo `switchride`) collections `gps_positions`, `vehicles`, `iot_devices`
 
 ```bash
 curl -X POST http://localhost:4200/v1/gps ^
