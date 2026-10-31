@@ -65,4 +65,7 @@ Point WanWay devices at this droplet’s public IP, port `21100` (or `5001` / `8
 cd Telemetry
 git pull
 docker compose up -d --build
+docker compose logs --tail=80
 ```
+
+Confirm logs contain `WanWay GPS TCP listening on 0.0.0.0:21100` (and 5001 / 8821). `GET /health` on port 4200 is not enough — that HTTP port can be up while GPS TCP is not.
