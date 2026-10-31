@@ -433,7 +433,7 @@ export class FleetService {
   }
 
   async unassignVehicle(vehicleId: string, reason?: string, actor?: AuditActor | null) {
-    const vehicle = await this.vehicleModel.findById(vehicleId);
+    const vehicle = await findByEitherId(this.vehicleModel, vehicleId);
     if (!vehicle) throw new NotFoundException('Vehicle not found');
     const previousRiderId = vehicle.assignedRiderId;
     if (!previousRiderId) throw new BadRequestException('Vehicle is not assigned');
@@ -444,7 +444,17 @@ export class FleetService {
     vehicle.assignedRiderId = undefined;
     if (vehicle.status === 'Reserved') vehicle.status = 'Available';
     await vehicle.save();
-    await this.customerModel.findByIdAndUpdate(previousRiderId, { $unset: { assignedVehicleId: 1 } });
+    const riderId = String(previousRiderId);
+    const rider = await findByEitherId(this.customerModel, riderId);
+    if (rider) {
+      rider.assignedVehicleId = undefined;
+      await rider.save();
+    } else {
+      await this.customerModel.collection.updateMany(
+        { $expr: { $eq: [{ $toString: '$_id' }, riderId] } },
+        { $unset: { assignedVehicleId: 1 } },
+      );
+    }
     await this.addEvent(vehicleId, 'Unassignment', 'Vehicle unassigned from rider', reason, actor, { riderId: previousRiderId });
     await this.auditService.record({
       actor,

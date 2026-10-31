@@ -19,6 +19,7 @@ import com.digiswitchride.customer.ui.components.EmptyState
 import com.digiswitchride.customer.ui.components.StatusChip
 import com.digiswitchride.customer.ui.components.TenantLogo
 import com.digiswitchride.customer.ui.components.vehicleIcon
+import com.digiswitchride.customer.ui.util.formatInr
 import com.digiswitchride.customer.ui.viewmodel.ProfileViewModel
 import com.digiswitchride.customer.ui.viewmodel.RiderAppViewModel
 
@@ -46,7 +47,7 @@ fun MainScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             NavigationBar {
-                NavigationBarItem(selected = tab == 0, onClick = { tab = 0; morePage = null }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("Home") })
+                NavigationBarItem(selected = tab == 0, onClick = { tab = 0; morePage = null; vm.refreshHome() }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("Home") })
                 NavigationBarItem(selected = tab == 1, onClick = { tab = 1; morePage = null; vm.refreshVehicle() }, icon = { Icon(Icons.Default.TwoWheeler, null) }, label = { Text("Vehicle") })
                 NavigationBarItem(selected = tab == 2, onClick = { tab = 2; morePage = null; vm.refreshPay() }, icon = { Icon(Icons.Default.AccountBalanceWallet, null) }, label = { Text("Pay") })
                 NavigationBarItem(selected = tab == 3, onClick = { tab = 3; morePage = null; vm.refreshPlans() }, icon = { Icon(Icons.Default.Assignment, null) }, label = { Text("Plan") })
@@ -85,15 +86,15 @@ private fun HomeTab(vm: RiderAppViewModel, onKyc: () -> Unit) {
         }
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatMini("Wallet", "₹${home?.walletBalance?.toInt() ?: 0}", Modifier.weight(1f))
-                StatMini("Due", "₹${home?.outstanding?.amount?.toInt() ?: 0}", Modifier.weight(1f))
+                StatMini("Wallet", formatInr(home?.walletBalance), Modifier.weight(1f))
+                StatMini("Due", formatInr(home?.outstanding?.amount), Modifier.weight(1f))
             }
         }
         item {
-            InfoCard("Rental plan", home?.plan?.name ?: "No plan assigned", home?.plan?.let { "₹${it.charges.toInt()} · ${it.billingFrequency}" })
+            InfoCard("Rental plan", home?.plan?.name ?: "No plan assigned", home?.plan?.let { "${formatInr(it.charges)} · ${it.billingFrequency}" })
         }
         item {
-            InfoCard("Vehicle", home?.vehicle?.registrationNumber ?: "No vehicle assigned", home?.vehicle?.let { "${it.model} · ${it.status} · ${it.batteryPercent}%" })
+            InfoCard("Vehicle", home?.vehicle?.registrationNumber ?: "No vehicle assigned", home?.vehicle?.let { "${it.model} · ${it.status} · ${it.batteryPercent}%" } ?: "Unassigned — check Vehicle tab")
         }
         home?.breakdown?.let { item { InfoCard("Breakdown", it.issueType, it.status) } }
         home?.service?.let { item { InfoCard("Service", it.category, it.status) } }
@@ -117,62 +118,92 @@ private fun HomeTab(vm: RiderAppViewModel, onKyc: () -> Unit) {
 @Composable
 private fun VehicleTab(vm: RiderAppViewModel) {
     val s = vm.state.collectAsState().value
+    var screen by remember { mutableStateOf("hub") }
     var issue by remember { mutableStateOf("Battery") }
     var desc by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("General service") }
     var svcDesc by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) { vm.refreshService() }
-    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        val v = s.vehicle?.vehicle
-        if (v == null) {
-            item { EmptyState(Icons.Default.TwoWheeler, "No vehicle", "Select an available vehicle or wait for admin assignment.") }
-            items(s.availableVehicles) { option ->
-                OutlinedCard(Modifier.clickable { vm.assignVehicle(option.id) }) {
-                    ListItem(
-                        headlineContent = { Text(option.registrationNumber) },
-                        supportingContent = { Text("${option.model} · battery ${option.batteryPercent}% · tap to assign") },
-                        leadingContent = { Icon(vehicleIcon(option.type, option.wheelClass), null) },
-                    )
+    LaunchedEffect(Unit) { vm.refreshVehicle() }
+
+    when (screen) {
+        "breakdown_form" -> VehicleFormScaffold("Report breakdown", { screen = "hub" }) {
+            OutlinedTextField(issue, { issue = it }, label = { Text("Issue type") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(desc, { desc = it }, label = { Text("What happened?") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+            Button(onClick = { vm.reportBreakdown(issue, desc); screen = "hub" }, modifier = Modifier.fillMaxWidth(), enabled = desc.length >= 10) {
+                Text("Send to Command Center")
+            }
+        }
+        "service_form" -> VehicleFormScaffold("Service request", { screen = "hub" }) {
+            OutlinedTextField(category, { category = it }, label = { Text("Requirement") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(svcDesc, { svcDesc = it }, label = { Text("Details") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+            Button(onClick = { vm.raiseService(category, svcDesc); screen = "hub" }, modifier = Modifier.fillMaxWidth(), enabled = svcDesc.length >= 10) {
+                Text("Raise request")
+            }
+        }
+        "breakdown_list" -> VehicleFormScaffold("Breakdown history", { screen = "hub" }) {
+            val items = s.vehicle?.breakdowns ?: emptyList()
+            if (items.isEmpty()) EmptyState(Icons.Default.Warning, "No breakdowns", "Your reports will appear here.")
+            else items.forEach { b -> InfoCard(b.issueType, b.description, b.status) }
+        }
+        "service_list" -> VehicleFormScaffold("Service history", { screen = "hub" }) {
+            val items = s.vehicle?.requests ?: emptyList()
+            if (items.isEmpty()) EmptyState(Icons.Default.Build, "No service requests", "Your workshop requests will appear here.")
+            else items.forEach { r -> InfoCard(r.category, r.description, r.status) }
+        }
+        else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item { Text("My vehicle", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+            val v = s.vehicle?.vehicle
+            if (v == null) {
+                item { EmptyState(Icons.Default.TwoWheeler, "No vehicle assigned", "Your operator will assign a vehicle, or pick one below if available.") }
+                items(s.availableVehicles) { option ->
+                    OutlinedCard(Modifier.clickable { vm.assignVehicle(option.id) }) {
+                        ListItem(
+                            headlineContent = { Text(option.registrationNumber) },
+                            supportingContent = { Text("${option.model} · battery ${option.batteryPercent}% · tap to assign") },
+                            leadingContent = { Icon(vehicleIcon(option.type, option.wheelClass), null) },
+                        )
+                    }
+                }
+            } else {
+                item {
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(MaterialTheme.colorScheme.primaryContainer)) {
+                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(vehicleIcon(v.type, v.wheelClass), null, Modifier.size(40.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(v.registrationNumber, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                                Text("${v.model} · ${v.status}", style = MaterialTheme.typography.bodyMedium)
+                                Text("Battery ${v.batteryPercent}%", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+                item {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { screen = "breakdown_form" }, modifier = Modifier.weight(1f)) { Text("Report breakdown") }
+                        OutlinedButton(onClick = { screen = "service_form" }, modifier = Modifier.weight(1f)) { Text("Service request") }
+                    }
+                }
+                item {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { screen = "breakdown_list" }, modifier = Modifier.weight(1f)) { Text("View breakdowns") }
+                        TextButton(onClick = { screen = "service_list" }, modifier = Modifier.weight(1f)) { Text("View service") }
+                    }
                 }
             }
+            if (s.loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         }
-        else item {
-            ListItem(
-                headlineContent = { Text(v.registrationNumber) },
-                supportingContent = { Text("${v.model} · ${v.type} · ${v.status} · battery ${v.batteryPercent}%") },
-                leadingContent = { Icon(vehicleIcon(v.type, v.wheelClass), null) },
-            )
+    }
+}
+
+@Composable
+private fun VehicleFormScaffold(title: String, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
-        item { Text("Report breakdown", fontWeight = FontWeight.SemiBold) }
-        item { OutlinedTextField(issue, { issue = it }, label = { Text("Issue type") }, modifier = Modifier.fillMaxWidth()) }
-        item { OutlinedTextField(desc, { desc = it }, label = { Text("What happened?") }, modifier = Modifier.fillMaxWidth()) }
-        item { Button(onClick = { vm.reportBreakdown(issue, desc) }, modifier = Modifier.fillMaxWidth(), enabled = desc.length >= 10) { Text("Send to Command Center") } }
-        item { Text("Service request", fontWeight = FontWeight.SemiBold) }
-        item { OutlinedTextField(category, { category = it }, label = { Text("Requirement") }, modifier = Modifier.fillMaxWidth()) }
-        item { OutlinedTextField(svcDesc, { svcDesc = it }, label = { Text("Details") }, modifier = Modifier.fillMaxWidth()) }
-        item { Button(onClick = { vm.raiseService(category, svcDesc) }, modifier = Modifier.fillMaxWidth(), enabled = svcDesc.length >= 10) { Text("Raise request") } }
-        items(s.vehicle?.breakdowns ?: emptyList()) { b -> InfoCard("Breakdown", b.issueType, b.status) }
-        items(s.vehicle?.requests ?: emptyList()) { r -> InfoCard("Service", r.category, r.status) }
-        item { Text("Appointments", fontWeight = FontWeight.SemiBold) }
-        items(s.appointments) { a ->
-            OutlinedCard {
-                ListItem(headlineContent = { Text(a.centreName ?: "Workshop") }, supportingContent = { Text(a.status) }, trailingContent = {
-                    Row {
-                        val next = s.slots.firstOrNull { it.remaining > 0 }
-                        if (next != null && a.status != "Cancelled" && a.status != "Completed") {
-                            TextButton(onClick = { vm.reschedule(a.id, next.id) }) { Text("Reschedule") }
-                        }
-                        if (a.status != "Cancelled" && a.status != "Completed") TextButton(onClick = { vm.cancelAppt(a.id, "Rider cancelled from app") }) { Text("Cancel") }
-                    }
-                })
-            }
-        }
-        item { Text("Available slots", fontWeight = FontWeight.SemiBold) }
-        items(s.slots.filter { it.remaining > 0 }) { slot ->
-            OutlinedCard(Modifier.clickable { vm.schedule(slot.centreId, slot.id) }) {
-                ListItem(headlineContent = { Text("${slot.date} ${slot.startTime}") }, supportingContent = { Text("${slot.remaining} left") })
-            }
-        }
+        content()
     }
 }
 
@@ -182,33 +213,50 @@ private fun PayTab(vm: RiderAppViewModel) {
     val methods = s.home?.paymentGateway?.methods?.takeIf { it.isNotEmpty() }
         ?: listOf("Wallet", "UPI", "QR", "NetBanking", "DebitCard", "CreditCard")
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item { InfoCard("Outstanding", "₹${s.home?.outstanding?.amount?.toInt() ?: 0}", "${s.home?.outstanding?.count ?: 0} dues") }
-        item { InfoCard("Wallet", "₹${s.home?.walletBalance?.toInt() ?: 0}", "Credits and debits below") }
+        item { InfoCard("Outstanding", formatInr(s.home?.outstanding?.amount), "${s.home?.outstanding?.count ?: 0} dues") }
+        item { InfoCard("Wallet", formatInr(s.home?.walletBalance), "Credits and debits below") }
         item { Text("Pay now", fontWeight = FontWeight.SemiBold) }
         items(methods) { method ->
             OutlinedButton(onClick = { vm.pay(method) }, modifier = Modifier.fillMaxWidth()) { Text(method) }
         }
         item { Text("Payment history", fontWeight = FontWeight.SemiBold) }
-        items(s.payments) { p -> InfoCard("₹${p.amount.toInt()}", p.method ?: "—", "${p.status} · ${p.reference ?: "—"}") }
+        items(s.payments) { p -> InfoCard(formatInr(p.amount), p.method ?: "—", "${p.status} · ${p.reference ?: "—"}") }
         item { Text("Wallet ledger", fontWeight = FontWeight.SemiBold) }
-        items(s.wallet) { w -> InfoCard(w.type, "₹${w.amount.toInt()}", w.note) }
+        items(s.wallet) { w -> InfoCard(w.type, formatInr(w.amount), w.note) }
     }
 }
 
 @Composable
 private fun PlanTab(vm: RiderAppViewModel) {
-    val plans = vm.state.collectAsState().value.plans
+    val ui = vm.state.collectAsState().value
+    val plans = ui.plans
+    LaunchedEffect(Unit) { vm.refreshPlans() }
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item { Text("My plan", fontWeight = FontWeight.SemiBold) }
-        items(plans?.items ?: emptyList()) { plan: RiderPlan ->
-            val current = plan.id == plans?.currentPlanId
-            Card(Modifier.fillMaxWidth(), colors = if (current) CardDefaults.cardColors(MaterialTheme.colorScheme.primaryContainer) else CardDefaults.cardColors()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(plan.name, fontWeight = FontWeight.Bold)
-                    Text("₹${plan.charges.toInt()} · ${plan.durationDays} days · ${plan.billingFrequency}")
-                    plan.terms?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                    if (!current) TextButton(onClick = { vm.changePlan(plan.id) }) { Text("Select this plan") }
-                    else StatusChip("Current", MaterialTheme.colorScheme.primary)
+        item { Text("Rental plans", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (ui.loading && plans == null) {
+            item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+        } else if (plans?.items.isNullOrEmpty()) {
+            item { EmptyState(Icons.Default.Assignment, "No plans yet", "Your operator has not published rental plans. Contact support.") }
+        } else {
+            items(plans!!.items) { plan: RiderPlan ->
+                val current = plan.id == plans.currentPlanId
+                Card(
+                    Modifier.fillMaxWidth(),
+                    colors = if (current) CardDefaults.cardColors(MaterialTheme.colorScheme.primaryContainer) else CardDefaults.cardColors(),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(plan.name, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                            if (current) StatusChip("Current", MaterialTheme.colorScheme.primary)
+                        }
+                        Text("${formatInr(plan.charges)} · ${plan.durationDays} days · ${plan.billingFrequency}")
+                        plan.eligibility?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        plan.terms?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                        if (!current) {
+                            Button(onClick = { vm.changePlan(plan.id) }, modifier = Modifier.fillMaxWidth()) { Text("Select this plan") }
+                        }
+                    }
                 }
             }
         }
@@ -225,6 +273,7 @@ private fun MoreMenu(onOpen: (String) -> Unit, vm: RiderAppViewModel) {
         "support" to "Help & support",
         "feedback" to "Feedback & rating",
         "refer" to "Refer & earn",
+        "workshop" to "Workshop & appointments",
     )
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(items) { (key, label) ->
@@ -234,6 +283,7 @@ private fun MoreMenu(onOpen: (String) -> Unit, vm: RiderAppViewModel) {
                     "stations" -> vm.refreshStations()
                     "support" -> vm.refreshSupport()
                     "refer" -> vm.refreshReferral()
+                    "workshop" -> vm.refreshService()
                 }
                 onOpen(key)
             }) { ListItem(headlineContent = { Text(label) }, trailingContent = { Icon(Icons.Default.ChevronRight, null) }) }
@@ -256,6 +306,42 @@ private fun MoreDetail(page: String, onBack: () -> Unit, onKyc: () -> Unit, onLo
             "support" -> SupportMore(vm)
             "feedback" -> FeedbackMore(vm)
             "refer" -> ReferMore(vm)
+            "workshop" -> WorkshopMore(vm)
+        }
+    }
+}
+
+@Composable
+private fun WorkshopMore(vm: RiderAppViewModel) {
+    val s = vm.state.collectAsState().value
+    LaunchedEffect(Unit) { vm.refreshService() }
+    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item { Text("Book a workshop slot", fontWeight = FontWeight.SemiBold) }
+        if (s.slots.filter { it.remaining > 0 }.isEmpty()) {
+            item { EmptyState(Icons.Default.Build, "No slots open", "Check back later or contact support.") }
+        }
+        items(s.slots.filter { it.remaining > 0 }) { slot ->
+            OutlinedCard(Modifier.clickable { vm.schedule(slot.centreId, slot.id) }) {
+                ListItem(
+                    headlineContent = { Text("${slot.date} · ${slot.startTime}") },
+                    supportingContent = { Text("${slot.remaining} seats left") },
+                )
+            }
+        }
+        item { Text("Your appointments", fontWeight = FontWeight.SemiBold) }
+        if (s.appointments.isEmpty()) item { Text("No appointments yet", style = MaterialTheme.typography.bodyMedium) }
+        items(s.appointments) { a ->
+            OutlinedCard {
+                ListItem(
+                    headlineContent = { Text(a.centreName ?: "Workshop") },
+                    supportingContent = { Text(a.status) },
+                    trailingContent = {
+                        if (a.status != "Cancelled" && a.status != "Completed") {
+                            TextButton(onClick = { vm.cancelAppt(a.id, "Rider cancelled from app") }) { Text("Cancel") }
+                        }
+                    },
+                )
+            }
         }
     }
 }

@@ -12,6 +12,9 @@ import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
+import com.digiswitchride.customer.data.LenientDoubleAdapter
+import com.digiswitchride.customer.data.LenientIntAdapter
+import com.google.gson.GsonBuilder
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import javax.inject.Singleton
@@ -44,11 +47,20 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideRetrofit(client: OkHttpClient): Retrofit =
+    fun provideGson() = GsonBuilder()
+        .registerTypeAdapter(Double::class.javaObjectType, LenientDoubleAdapter())
+        .registerTypeAdapter(Double::class.javaPrimitiveType, LenientDoubleAdapter())
+        .registerTypeAdapter(Int::class.javaObjectType, LenientIntAdapter())
+        .registerTypeAdapter(Int::class.javaPrimitiveType, LenientIntAdapter())
+        .create()
+
+    @Provides
+    @Singleton
+    fun provideRetrofit(client: OkHttpClient, gson: com.google.gson.Gson): Retrofit =
         Retrofit.Builder()
             .baseUrl(BuildConfig.API_BASE_URL.trimEnd('/') + "/")
             .client(client)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
 
     @Provides

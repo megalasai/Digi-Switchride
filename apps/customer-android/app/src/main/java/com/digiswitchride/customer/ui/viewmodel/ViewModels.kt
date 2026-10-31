@@ -17,7 +17,7 @@ data class AuthState(
     val isLoading: Boolean = false,
     val isAuthenticated: Boolean = false,
     val error: String? = null,
-    val productName: String = "Fleetel-Switchride",
+    val productName: String = "Fleetel Switchride",
     val optionalLogoUrl: String? = null,
     val organizations: List<PublicTenantOption> = emptyList(),
     val organizationsLoading: Boolean = true,
@@ -57,7 +57,7 @@ class AuthViewModel @Inject constructor(
                     apiSettings.setTenantSlug(pick)
                 }
                 _state.value = _state.value.copy(
-                    productName = branding.productName ?: "Fleetel-Switchride",
+                    productName = branding.productName?.replace("-", " ") ?: "Fleetel Switchride",
                     optionalLogoUrl = if (branding.hasOptionalLogo) apiSettings.brandingLogoUrl(_tenantSlug.value) else null,
                     organizations = orgs,
                     organizationsLoading = false,
@@ -75,7 +75,7 @@ class AuthViewModel @Inject constructor(
             try {
                 val branding = api.branding()
                 _state.value = _state.value.copy(
-                    productName = branding.productName ?: "Fleetel-Switchride",
+                    productName = branding.productName?.replace("-", " ") ?: "Fleetel Switchride",
                     optionalLogoUrl = if (branding.hasOptionalLogo) apiSettings.brandingLogoUrl(slug) else null,
                 )
             } catch (_: Exception) { }
@@ -233,7 +233,7 @@ class RiderAppViewModel @Inject constructor(
     }
     fun clearMessage() { _state.value = _state.value.copy(message = null, error = null) }
     fun refreshHome() = launch { _state.value = _state.value.copy(home = api.home()) }
-    fun refreshVehicle() = launch { _state.value = _state.value.copy(vehicle = api.vehicle()) }
+    fun refreshVehicle() = refreshService()
     fun refreshPay() = launch {
         _state.value = _state.value.copy(payments = api.payments().items, wallet = api.wallet().items, home = api.home())
     }

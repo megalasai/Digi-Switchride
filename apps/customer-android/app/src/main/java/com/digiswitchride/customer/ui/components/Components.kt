@@ -18,7 +18,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.painterResource
 import coil.compose.AsyncImage
+import com.digiswitchride.customer.R
 import com.digiswitchride.customer.ui.theme.*
 
 fun vehicleIcon(type: String?, wheelClass: String?): ImageVector {
@@ -36,11 +38,10 @@ fun vehicleIcon(type: String?, wheelClass: String?): ImageVector {
 
 @Composable
 fun TenantLogo(url: String?, modifier: Modifier = Modifier, showLabel: Boolean = true) {
-    if (url.isNullOrBlank()) return
     Column(modifier) {
         if (showLabel) {
             Text(
-                "OPERATOR",
+                "FLEETEL",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.SemiBold,
@@ -48,30 +49,47 @@ fun TenantLogo(url: String?, modifier: Modifier = Modifier, showLabel: Boolean =
             Spacer(Modifier.height(6.dp))
         }
         Surface(shape = RoundedCornerShape(12.dp), color = Color.White, shadowElevation = 1.dp) {
-            AsyncImage(
-                model = url,
-                contentDescription = "Organization logo",
-                modifier = Modifier.height(48.dp).widthIn(max = 180.dp).padding(8.dp),
-                contentScale = ContentScale.Fit,
-            )
+            if (url.isNullOrBlank()) {
+                androidx.compose.foundation.Image(
+                    painter = painterResource(R.drawable.fleetel_logo),
+                    contentDescription = "Fleetel logo",
+                    modifier = Modifier.height(48.dp).widthIn(max = 180.dp).padding(8.dp),
+                    contentScale = ContentScale.Fit,
+                )
+            } else {
+                AsyncImage(
+                    model = url,
+                    contentDescription = "Organization logo",
+                    modifier = Modifier.height(48.dp).widthIn(max = 180.dp).padding(8.dp),
+                    contentScale = ContentScale.Fit,
+                )
+            }
         }
     }
 }
 
 @Composable
-fun BrandHeader(title: String, subtitle: String) {
+fun BrandHeader(title: String, subtitle: String, logoUrl: String? = null) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .clip(CircleShape)
-                .background(Brush.linearGradient(listOf(GradientStart, GradientEnd))),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Default.TwoWheeler, contentDescription = null, tint = Color.White, modifier = Modifier.size(36.dp))
+        Surface(shape = RoundedCornerShape(16.dp), color = Color.White, shadowElevation = 2.dp) {
+            if (logoUrl.isNullOrBlank()) {
+                androidx.compose.foundation.Image(
+                    painter = painterResource(R.drawable.fleetel_logo),
+                    contentDescription = "Fleetel Switchride",
+                    modifier = Modifier.height(72.dp).widthIn(min = 120.dp, max = 200.dp).padding(12.dp),
+                    contentScale = ContentScale.Fit,
+                )
+            } else {
+                AsyncImage(
+                    model = logoUrl,
+                    contentDescription = "Fleetel Switchride",
+                    modifier = Modifier.height(72.dp).widthIn(min = 120.dp, max = 200.dp).padding(12.dp),
+                    contentScale = ContentScale.Fit,
+                )
+            }
         }
         Spacer(Modifier.height(16.dp))
-        Text(title, style = MaterialTheme.typography.displayLarge, color = MaterialTheme.colorScheme.onSurface)
+        Text(title, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         Spacer(Modifier.height(4.dp))
         Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }

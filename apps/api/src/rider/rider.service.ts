@@ -13,6 +13,8 @@ import { KycService, ProfileService } from '../customers/customers.service';
 import { RidersService } from '../customers/riders.service';
 import { FleetService } from '../fleet/fleet.service';
 import { SupportService } from '../support/support.service';
+import { coerceInt, coerceNumber, idString } from '../common/coerce';
+import { runWithoutTenant } from '../common/tenant-als';
 
 @Injectable()
 export class RiderAppService {
@@ -36,8 +38,9 @@ export class RiderAppService {
   async home(riderId: string) {
     const rider = await this.requireRider(riderId);
     const tenantId = (rider as { tenantId?: string }).tenantId;
-    const [vehicle, plan, outstanding, breakdowns, requests, notices, paymentGateway] = await Promise.all([
-      rider.assignedVehicleId ? this.vehicleModel.findById(rider.assignedVehicleId) : null,
+    const assignedId = idString(rider.assignedVehicleId);
+    const [vehicleDoc, plan, outstanding, breakdowns, requests, notices, paymentGateway] = await Promise.all([
+      assignedId ? this.vehicleModel.findById(assignedId) : null,
       rider.rentalPlanId ? this.planModel.findById(rider.rentalPlanId) : null,
       this.paymentModel.find({ customerId: riderId, status: { $in: ['Created', 'Failed'] } }),
       this.operations.listBreakdowns(undefined, riderId),
@@ -45,16 +48,21 @@ export class RiderAppService {
       this.engagement.listNotifications(),
       this.gateways.publicForTenant(tenantId),
     ]);
+    let vehicle = vehicleDoc;
+    if (assignedId && !vehicle) {
+      rider.assignedVehicleId = undefined;
+      await rider.save();
+    }
     const openBreakdown = breakdowns.items.find((b) => b.status !== 'Closed');
     const openService = requests.items.find((r) => !['Completed', 'Cancelled'].includes(r.status));
     return {
       rider: this.profileSvc.toProfile(rider),
       plan: plan ? this.toPlan(plan) : null,
       vehicle: vehicle ? this.toVehicle(vehicle) : null,
-      walletBalance: rider.walletBalance ?? 0,
+      walletBalance: coerceNumber(rider.walletBalance, 0),
       outstanding: {
         count: outstanding.length,
-        amount: outstanding.reduce((s, p) => s + p.amount, 0),
+        amount: outstanding.reduce((s, p) => s + coerceNumber(p.amount, 0), 0),
       },
       alerts: notices.items.slice(0, 5),
       breakdown: openBreakdown ?? null,
@@ -155,17 +163,24 @@ export class RiderAppService {
       items: items.map((t) => ({
         id: t._id.toString(),
         type: t.type,
-        amount: t.amount,
+        amount: coerceNumber(t.amount, 0),
         note: t.note,
         reference: t.reference,
-        balanceAfter: t.balanceAfter,
+        balanceAfter: coerceNumber(t.balanceAfter, 0),
         createdAt: (t as { createdAt?: Date }).createdAt,
       })),
     }));
   }
 
-  payments(riderId: string) {
-    return this.paymentsSvc.getHistory(riderId, 1, 50);
+  async payments(riderId: string) {
+    const res = await this.paymentsSvc.getHistory(riderId, 1, 50);
+    return {
+      ...res,
+      items: res.items.map((p) => ({
+        ...p,
+        amount: coerceNumber(p.amount, 0),
+      })),
+    };
   }
 
   async pay(riderId: string, method: string) {
@@ -201,8 +216,21 @@ export class RiderAppService {
 
   async plans(riderId: string) {
     const rider = await this.requireRider(riderId);
-    const all = await this.riders.listPlans(false);
-    return { currentPlanId: rider.rentalPlanId, items: all.items };
+    const tenantId = idString((rider as { tenantId?: unknown }).tenantId);
+    const filter: Record<string, unknown> = { isActive: true };
+    if (tenantId) {
+      filter.$or = [
+        { tenantId },
+        { tenantId: { $exists: false } },
+        { tenantId: null },
+        { tenantId: '' },
+      ];
+    }
+    const plans = await runWithoutTenant(() => this.planModel.find(filter).sort({ name: 1 }));
+    return {
+      currentPlanId: idString(rider.rentalPlanId) ?? null,
+      items: plans.map((p) => this.toPlan(p)),
+    };
   }
 
   changePlan(riderId: string, rentalPlanId: string) {
@@ -274,8 +302,8 @@ export class RiderAppService {
     return {
       id: p._id.toString(),
       name: p.name,
-      charges: p.charges,
-      durationDays: p.durationDays,
+      charges: coerceNumber(p.charges, 0),
+      durationDays: coerceInt(p.durationDays, 30),
       billingFrequency: p.billingFrequency,
       eligibility: p.eligibility,
       terms: p.terms,
@@ -291,9 +319,9 @@ export class RiderAppService {
       wheelClass: v.wheelClass ?? (v.type === 'ERickshaw' ? 'ThreeWheeler' : v.type === 'ECar' ? 'FourWheeler' : 'TwoWheeler'),
       model: v.model,
       status: v.status,
-      batteryPercent: v.batteryPercent,
-      lastLat: v.lastLat,
-      lastLng: v.lastLng,
+      batteryPercent: coerceInt(v.batteryPercent, 0),
+      lastLat: v.lastLat != null ? coerceNumber(v.lastLat) : null,
+      lastLng: v.lastLng != null ? coerceNumber(v.lastLng) : null,
       hubId: v.hubId,
     };
   }
