@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '../auth/auth.module';
 import { IoTModule } from '../iot/iot.module';
+import { TenantsModule } from '../tenants/tenants.module';
 import {
   GpsTrackPoint,
   GpsTrackPointSchema,
@@ -23,6 +24,7 @@ import { FleetService } from './fleet.service';
   imports: [
     AuthModule,
     AuditModule,
+    TenantsModule,
     MongooseModule.forFeature([
       { name: RentalHub.name, schema: RentalHubSchema },
       { name: Vehicle.name, schema: VehicleSchema },

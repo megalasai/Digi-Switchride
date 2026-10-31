@@ -1,12 +1,73 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import { readSecret } from '../config/secrets';
+import { GeoPlace, GeoPlaceDocument } from '../schemas/geo-place.schema';
+import { findByEitherId, removeByEitherId } from '../common/mongo-id';
+import type { CreateGeoPlaceDto, UpdateGeoPlaceDto } from './geo.dto';
 
 @Injectable()
 export class GeoService {
   private readonly logger = new Logger(GeoService.name);
 
-  constructor(private config: ConfigService) {}
+  constructor(
+    private config: ConfigService,
+    @InjectModel(GeoPlace.name) private placeModel: Model<GeoPlaceDocument>,
+  ) {}
+
+  async listPlaces() {
+    const items = await this.placeModel.find().sort({ kind: 1, name: 1 }).limit(400);
+    return items.map((item) => this.toPlace(item));
+  }
+
+  async createPlace(data: CreateGeoPlaceDto) {
+    const radiusM = data.kind === 'geofence' ? data.radiusM ?? 200 : undefined;
+    const created = await this.placeModel.create({
+      kind: data.kind,
+      name: data.name.trim(),
+      lat: data.lat,
+      lng: data.lng,
+      radiusM,
+      notes: data.notes?.trim(),
+    });
+    return this.toPlace(created);
+  }
+
+  async updatePlace(id: string, data: UpdateGeoPlaceDto) {
+    const item = await findByEitherId(this.placeModel, id);
+    if (!item) throw new NotFoundException('Place not found');
+    if (data.name != null) item.name = data.name.trim();
+    if (data.lat != null) item.lat = data.lat;
+    if (data.lng != null) item.lng = data.lng;
+    if (data.radiusM != null) {
+      if (item.kind !== 'geofence') throw new BadRequestException('Radius applies only to geofences');
+      item.radiusM = data.radiusM;
+    }
+    if (data.notes != null) item.notes = data.notes.trim();
+    await item.save();
+    return this.toPlace(item);
+  }
+
+  async removePlace(id: string) {
+    const item = await findByEitherId(this.placeModel, id);
+    if (!item) throw new NotFoundException('Place not found');
+    const deleted = await removeByEitherId(this.placeModel.collection, item._id.toString());
+    if (!deleted) throw new NotFoundException('Place not found');
+    return { deleted: true };
+  }
+
+  private toPlace(item: GeoPlaceDocument) {
+    return {
+      id: item._id.toString(),
+      kind: item.kind,
+      name: item.name,
+      lat: item.lat,
+      lng: item.lng,
+      radiusM: item.radiusM,
+      notes: item.notes,
+    };
+  }
 
   locationBase() {
     return (

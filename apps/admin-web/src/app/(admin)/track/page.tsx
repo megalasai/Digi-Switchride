@@ -4,13 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Field, Input } from "@/components/ui/Input";
 import { LiveVehicleMap } from "@/components/ui/LocationMap";
 import { ImmobiliseButton, immobiliserHint } from "@/components/ImmobiliseButton";
 import { ACCESS, canAccess } from "@/lib/access";
-import { api, TrackPoint, TrackVehicle } from "@/lib/api";
+import { api, GeoPlace, TrackPoint, TrackVehicle } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { assetTypeLabel, FleetMotionLegend, resolveMotion, VehicleGlyph } from "@/lib/vehicleIcons";
+import { assetTypeLabel, FleetMotionLegend, isIgnitionOn, resolveMotion, VehicleGlyph } from "@/lib/vehicleIcons";
 
 type Mode = "live" | "history";
 
@@ -47,6 +47,10 @@ export default function TrackVehiclePage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [places, setPlaces] = useState<GeoPlace[]>([]);
+  const [drawKind, setDrawKind] = useState<"geofence" | "poi" | null>(null);
+  const [placeForm, setPlaceForm] = useState({ name: "", radiusM: "200", lat: "", lng: "" });
+  const [editingPlaceId, setEditingPlaceId] = useState<string | null>(null);
 
   const load = () => {
     api
@@ -58,8 +62,13 @@ export default function TrackVehiclePage() {
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load fleet"));
   };
 
+  const loadPlaces = () => {
+    api.geoPlaces().then((r) => setPlaces(r.items)).catch(() => setPlaces([]));
+  };
+
   useEffect(() => {
     load();
+    loadPlaces();
     const t = setInterval(() => {
       if (mode === "live") load();
     }, 8000);
@@ -209,15 +218,106 @@ export default function TrackVehiclePage() {
           alignToRoads={mode === "history"}
           focusId={mode === "live" ? selectedId : null}
           vehicles={mapVehicles}
+          places={places}
+          drawing={Boolean(drawKind)}
+          onMapClick={(lat, lng) => {
+            if (!drawKind) return;
+            setPlaceForm((s) => ({ ...s, lat: lat.toFixed(6), lng: lng.toFixed(6) }));
+          }}
           onSelect={(id) => {
             setSelectedId(id);
             setMode("live");
           }}
         />
 
-        <div className="absolute left-4 top-4 z-[400] flex flex-wrap items-center gap-2">
+        <div className="absolute left-4 top-4 z-[400] rounded-full border border-border bg-white/95 px-3 py-1.5 shadow-sm">
+          <FleetMotionLegend className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-text-muted" />
+        </div>
+
+        <div className="absolute right-4 top-4 z-[400] w-[280px] rounded-2xl border border-border bg-white/95 p-3 shadow-xl">
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Geofences & POI</p>
+          <div className="mt-2 flex gap-2">
+            <Button type="button" variant={drawKind === "geofence" ? "primary" : "secondary"} className="flex-1 text-xs" onClick={() => setDrawKind(drawKind === "geofence" ? null : "geofence")}>
+              Geofence
+            </Button>
+            <Button type="button" variant={drawKind === "poi" ? "primary" : "secondary"} className="flex-1 text-xs" onClick={() => setDrawKind(drawKind === "poi" ? null : "poi")}>
+              POI
+            </Button>
+          </div>
+          {drawKind && (
+            <form
+              className="mt-3 space-y-2"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!placeForm.name.trim() || !placeForm.lat || !placeForm.lng) {
+                  setError("Click the map to set a point, then enter a name.");
+                  return;
+                }
+                try {
+                  const payload = {
+                    name: placeForm.name.trim(),
+                    lat: Number(placeForm.lat),
+                    lng: Number(placeForm.lng),
+                    radiusM: drawKind === "geofence" ? Number(placeForm.radiusM) || 200 : undefined,
+                  };
+                  if (editingPlaceId) {
+                    await api.updateGeoPlace(editingPlaceId, payload);
+                  } else {
+                    await api.createGeoPlace({ kind: drawKind, ...payload });
+                  }
+                  setPlaceForm({ name: "", radiusM: "200", lat: "", lng: "" });
+                  setDrawKind(null);
+                  setEditingPlaceId(null);
+                  setSuccess(drawKind === "geofence" ? "Geofence saved" : "POI saved");
+                  loadPlaces();
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Save failed");
+                }
+              }}
+            >
+              <p className="text-[11px] text-text-muted">Click the map to place the {drawKind === "geofence" ? "circle" : "pin"}.</p>
+              <Field label="Name"><Input value={placeForm.name} onChange={(e) => setPlaceForm({ ...placeForm, name: e.target.value })} required /></Field>
+              {drawKind === "geofence" && (
+                <Field label="Radius (m)"><Input type="number" min={20} value={placeForm.radiusM} onChange={(e) => setPlaceForm({ ...placeForm, radiusM: e.target.value })} /></Field>
+              )}
+              <p className="text-[11px] text-text-muted">{placeForm.lat && placeForm.lng ? `${placeForm.lat}, ${placeForm.lng}` : "No point yet"}</p>
+              <Button type="submit" className="w-full">Save</Button>
+            </form>
+          )}
+          <div className="mt-3 max-h-40 space-y-1 overflow-y-auto">
+            {places.map((p) => (
+              <div key={p.id} className="flex items-center justify-between gap-2 text-xs">
+                <span className="truncate">{p.kind === "geofence" ? "Circle" : "POI"} · {p.name}</span>
+                <span className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    className="text-brand"
+                    onClick={() => {
+                      setDrawKind(p.kind);
+                      setEditingPlaceId(p.id);
+                      setPlaceForm({ name: p.name, radiusM: String(p.radiusM ?? 200), lat: String(p.lat), lng: String(p.lng) });
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="text-red-700"
+                    onClick={() => {
+                      api.deleteGeoPlace(p.id).then(loadPlaces).catch((err) => setError(err instanceof Error ? err.message : "Delete failed"));
+                    }}
+                  >
+                    Delete
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="absolute bottom-36 right-4 z-[400] flex flex-col gap-2">
           <Button type="button" variant={mode === "live" ? "primary" : "secondary"} onClick={() => { setMode("live"); setPlaying(false); }}>
-            Live
+            Live tracking
           </Button>
           <Button
             type="button"
@@ -231,9 +331,6 @@ export default function TrackVehiclePage() {
           >
             History playback
           </Button>
-          <div className="rounded-full border border-border bg-white/95 px-3 py-1.5 shadow-sm">
-            <FleetMotionLegend className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-text-muted" />
-          </div>
         </div>
 
         {error && (
@@ -257,8 +354,11 @@ export default function TrackVehiclePage() {
                 </p>
                 <div className="mt-2 flex flex-wrap gap-3 text-xs text-text-secondary">
                   <span>Speed {selected.speedKmh != null ? `${Math.round(selected.speedKmh)} km/h` : "—"}</span>
+                  <span>Ignition {isIgnitionOn(selected.ignition) ? "ON" : selected.ignition ? "OFF" : "—"}</span>
+                  <span>Status {resolveMotion(selected).label}</span>
                   <span>Odo {selected.odometerKm != null ? `${Math.round(selected.odometerKm)} km` : "—"}</span>
-                  <span>Ign {selected.ignition ?? "—"}</span>
+                  <span>Battery {selected.batteryPercent != null ? `${Math.round(selected.batteryPercent)}%` : "—"}</span>
+                  <span>Voltage {selected.batteryVoltage != null ? `${selected.batteryVoltage.toFixed(1)} V` : "—"}</span>
                   <span>Last {fmtTime(selected.lastTelemetryAt)}</span>
                 </div>
               </div>

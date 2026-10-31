@@ -25,7 +25,7 @@ export class TenantsController {
   @Roles('SuperAdmin')
   update(
     @Param('id') id: string,
-    @Body() body: { name?: string; contactEmail?: string; status?: 'Active' | 'Suspended'; notes?: string },
+    @Body() body: { name?: string; contactEmail?: string; status?: 'Active' | 'Suspended' | 'Archived'; notes?: string },
   ) {
     return this.tenants.update(id, body);
   }

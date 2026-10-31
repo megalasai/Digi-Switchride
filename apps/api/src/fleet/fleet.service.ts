@@ -23,6 +23,8 @@ import { VEHICLE_STATUSES, resolveWheelClass } from '@digi-switchride/shared';
 import { applyHubScope, assignedHubIds, hubAllowed } from '../common/hub-scope';
 import { runInWriteTenant } from '../common/tenant-write';
 import { runWithoutTenant } from '../common/tenant-als';
+import { TenantsService } from '../tenants/tenants.service';
+import { parseDay } from '../common/dates';
 
 const BLOCKED_ASSIGN_STATUSES = ['Maintenance', 'Offline', 'InRide'];
 
@@ -37,6 +39,7 @@ export class FleetService {
     @InjectModel(IoTDevice.name) private deviceModel: Model<IoTDeviceDocument>,
     private iotService: IoTService,
     private auditService: AuditService,
+    private tenants: TenantsService,
   ) {}
 
   async getNearbyHubs(lat: number, lng: number, radiusKm: number) {
@@ -138,7 +141,18 @@ export class FleetService {
   }
 
   async createVehicle(
-    data: { registrationNumber: string; type: string; wheelClass?: string; hubId: string; model: string; iotDeviceId?: string; notes?: string; tenantId?: string },
+    data: {
+      registrationNumber: string;
+      type: string;
+      wheelClass?: string;
+      hubId: string;
+      model: string;
+      iotDeviceId?: string;
+      notes?: string;
+      tenantId?: string;
+      installationDate?: string;
+      activationDate?: string;
+    },
     actor?: AuditActor | null,
   ) {
     return runInWriteTenant(data.tenantId, async () => {
@@ -149,13 +163,15 @@ export class FleetService {
     if (!hub) throw new NotFoundException('Hub not found');
     if (!hubAllowed(data.hubId)) throw new BadRequestException('You can only add vehicles to an assigned hub');
 
-    const { iotDeviceId, tenantId: _tenantId, ...vehicleData } = data;
+    const { iotDeviceId, tenantId: _tenantId, installationDate, activationDate, ...vehicleData } = data;
     const vehicle = await this.vehicleModel.create({
       ...vehicleData,
       registrationNumber,
       wheelClass: resolveWheelClass(data.type, data.wheelClass),
       notes: data.notes,
       statusChangedAt: new Date(),
+      installationDate: parseDay(installationDate),
+      activationDate: parseDay(activationDate),
     });
 
     if (iotDeviceId) {
@@ -177,7 +193,19 @@ export class FleetService {
 
   async updateVehicle(
     vehicleId: string,
-    data: { registrationNumber?: string; type?: string; wheelClass?: string; hubId?: string; model?: string; iotDeviceId?: string | null; status?: string; notes?: string; tenantId?: string },
+    data: {
+      registrationNumber?: string;
+      type?: string;
+      wheelClass?: string;
+      hubId?: string;
+      model?: string;
+      iotDeviceId?: string | null;
+      status?: string;
+      notes?: string;
+      tenantId?: string;
+      installationDate?: string;
+      activationDate?: string;
+    },
     actor?: AuditActor | null,
     allowTenantAssign = false,
   ) {
@@ -200,6 +228,8 @@ export class FleetService {
     }
     if (data.model != null) vehicle.set('model', data.model);
     if (data.notes != null) vehicle.notes = data.notes;
+    if (data.installationDate !== undefined) vehicle.installationDate = parseDay(data.installationDate);
+    if (data.activationDate !== undefined) vehicle.activationDate = parseDay(data.activationDate);
     if (data.hubId != null && data.hubId !== vehicle.hubId) {
       const hub = await findByEitherId(this.hubModel, data.hubId);
       if (!hub) throw new NotFoundException('Hub not found');
@@ -344,13 +374,16 @@ export class FleetService {
       ? await this.customerModel.find({ _id: { $in: riderIds } })
       : [];
     const riderMap = Object.fromEntries(riders.map((r) => [r._id.toString(), r]));
+    const names = await this.tenants.namesByIds(vehicles.map((v) => String((v as { tenantId?: string }).tenantId ?? '')));
     return {
       items: vehicles.map((v) => {
         const rider = v.assignedRiderId ? riderMap[v.assignedRiderId] : undefined;
+        const tenantId = String((v as { tenantId?: string }).tenantId ?? '');
         return {
           ...this.toVehicle(v),
           assignedRiderName: rider?.fullName,
           assignedRiderPhone: rider?.phone,
+          tenantName: names[tenantId],
         };
       }),
       page,
@@ -394,6 +427,9 @@ export class FleetService {
     if (!rider) throw new NotFoundException('Rider not found');
     if (rider.accountStatus !== 'Active') {
       throw new BadRequestException('Only active riders can be assigned a vehicle');
+    }
+    if (rider.kycStatus !== 'Approved') {
+      throw new BadRequestException('Assign a vehicle only after KYC is approved');
     }
     if (vehicle.assignedRiderId && vehicle.assignedRiderId !== riderId) {
       throw new BadRequestException('Vehicle is already assigned. Unassign it first.');
@@ -534,6 +570,9 @@ export class FleetService {
       ignition: v.ignition,
       immobilised: Boolean(v.immobilised),
       immobilisedAt: v.immobilisedAt,
+      installationDate: v.installationDate,
+      activationDate: v.activationDate,
+      batteryVoltage: v.batteryVoltage,
     };
   }
 
@@ -555,6 +594,11 @@ export class FleetService {
           vendorType: device?.vendorType ?? null,
           connectionStatus: device?.connectionStatus ?? null,
           canImmobilise: Boolean(v.iotDeviceId),
+          batteryVoltage: v.batteryVoltage ?? device?.batteryVoltage,
+          batteryPercent: v.batteryPercent ?? device?.batteryPercent,
+          speedKmh: v.speedKmh ?? device?.speedKmh,
+          ignition: v.ignition ?? device?.ignition,
+          odometerKm: v.odometerKm ?? device?.odometerKm,
         };
       }),
     };
@@ -570,7 +614,7 @@ export class FleetService {
     const points = await this.trackPointModel
       .find({ vehicleId: { $in: [...new Set(ids)] }, at: { $gte: start, $lte: end } })
       .sort({ at: 1 })
-      .limit(8000)
+      .limit(15000)
       .lean();
     const fallback = (vehicle.locationTrail ?? [])
       .filter((p: LocationPing) => {

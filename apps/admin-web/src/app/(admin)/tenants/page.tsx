@@ -91,11 +91,11 @@ export default function TenantsPage() {
                       variant="ghost"
                       className="text-xs text-red-700"
                       onClick={() => {
-                        if (!window.confirm(`Delete ${t.name} and its tenant data? This cannot be undone.`)) return;
-                        api.deleteTenant(t.id).then(load).catch((e) => setError(e instanceof Error ? e.message : "Delete failed"));
+                        if (!window.confirm(`Archive ${t.name}? Vehicles, IoT devices and GPS history stay for billing and reports. The company is hidden from live login.`)) return;
+                        api.deleteTenant(t.id).then(load).catch((e) => setError(e instanceof Error ? e.message : "Archive failed"));
                       }}
                     >
-                      Delete
+                      Archive
                     </Button>
                   )}
                   {t.kind !== "Parent" && (

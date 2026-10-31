@@ -55,19 +55,19 @@ export function CompanyField({
   }, [isSuper, workingId]);
   if (!isSuper) return null;
   return (
-    <Field label="Organization" hint="Tenant this rider belongs to">
+    <Field label="Organization">
       <Select value={value} onChange={(e) => onChange(e.target.value)}>
         <option value="">Select organization</option>
         {companies.filter((c) => c.kind !== "Parent").map((c) => (
-          <option key={c.id} value={c.id}>{c.name}</option>
+          <option key={c.id} value={c.id}>{c.name}{c.status === "Archived" ? " (archived)" : ""}</option>
         ))}
       </Select>
     </Field>
   );
 }
 
-export function CompanyCell({ tenantId }: { tenantId?: string }) {
+export function CompanyCell({ tenantId, name }: { tenantId?: string; name?: string }) {
   const { isSuper, nameOf } = useCompanies();
   if (!isSuper) return null;
-  return <span className="text-xs text-text-muted">{nameOf(tenantId) || "—"}</span>;
+  return <span className="text-xs text-text-muted">{name || nameOf(tenantId) || "Unassigned"}</span>;
 }

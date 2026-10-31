@@ -14,8 +14,8 @@ export class Tenant {
   @Prop({ trim: true, lowercase: true })
   contactEmail?: string;
 
-  @Prop({ required: true, enum: ['Active', 'Suspended'], default: 'Active' })
-  status!: 'Active' | 'Suspended';
+  @Prop({ required: true, enum: ['Active', 'Suspended', 'Archived'], default: 'Active' })
+  status!: 'Active' | 'Suspended' | 'Archived';
 
   @Prop({ default: false })
   isDefault!: boolean;

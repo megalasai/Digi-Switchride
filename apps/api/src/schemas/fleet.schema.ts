@@ -134,6 +134,15 @@ export class Vehicle {
 
   @Prop()
   immobilisedAt?: Date;
+
+  @Prop()
+  installationDate?: Date;
+
+  @Prop()
+  activationDate?: Date;
+
+  @Prop()
+  batteryVoltage?: number;
 }
 
 export const VehicleSchema = SchemaFactory.createForClass(Vehicle);
@@ -236,6 +245,15 @@ export class IoTDevice {
 
   @Prop({ default: false })
   immobilised?: boolean;
+
+  @Prop()
+  installationDate?: Date;
+
+  @Prop()
+  activationDate?: Date;
+
+  @Prop()
+  batteryVoltage?: number;
 }
 
 export type GpsTrackPointDocument = HydratedDocument<GpsTrackPoint>;
@@ -267,7 +285,7 @@ export class GpsTrackPoint {
 export const GpsTrackPointSchema = SchemaFactory.createForClass(GpsTrackPoint);
 GpsTrackPointSchema.plugin(tenantPlugin);
 GpsTrackPointSchema.index({ vehicleId: 1, at: -1 });
-GpsTrackPointSchema.index({ at: 1 }, { expireAfterSeconds: 14 * 24 * 60 * 60 });
+GpsTrackPointSchema.index({ at: 1 }, { expireAfterSeconds: 180 * 24 * 60 * 60 });
 
 export const IoTDeviceSchema = SchemaFactory.createForClass(IoTDevice);
 IoTDeviceSchema.index({ vehicleId: 1 }, { sparse: true });

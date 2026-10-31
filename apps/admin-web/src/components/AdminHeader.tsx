@@ -95,7 +95,7 @@ export function AdminHeader() {
           >
             <option value="">All tenants</option>
             {tenants.filter((t) => t.kind !== "Parent").map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
+              <option key={t.id} value={t.id}>{t.name}{t.status === "Archived" ? " (archived)" : ""}</option>
             ))}
           </select>
           </label>

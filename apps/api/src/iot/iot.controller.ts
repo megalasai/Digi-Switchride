@@ -76,6 +76,8 @@ export class IoTController {
       imei?: string;
       lat?: number;
       lng?: number;
+      installationDate?: string;
+      activationDate?: string;
     },
   ) {
     return this.iotService.registerDevice(body.deviceId, body.vendorType, body.vehicleId, body.tenantId, {
@@ -83,6 +85,8 @@ export class IoTController {
       imei: body.imei,
       lat: body.lat,
       lng: body.lng,
+      installationDate: body.installationDate,
+      activationDate: body.activationDate,
     });
   }
 

@@ -18,12 +18,20 @@ function handleUnauthorized() {
 async function request<T>(path: string, options: RequestInit = {}, opts?: { public?: boolean }): Promise<T> {
   const token = typeof window !== "undefined" ? localStorage.getItem("adminToken") : null;
   const tenantId = typeof window !== "undefined" ? localStorage.getItem("adminTenantId") : null;
+  let isSuper = false;
+  if (typeof window !== "undefined") {
+    try {
+      isSuper = JSON.parse(localStorage.getItem("adminUser") ?? "{}")?.role === "SuperAdmin";
+    } catch {
+      isSuper = false;
+    }
+  }
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
       ...(token && !opts?.public ? { Authorization: `Bearer ${token}` } : {}),
-      ...(!opts?.public && tenantId ? { "X-Tenant-Id": tenantId } : {}),
+      ...(!opts?.public && isSuper && tenantId ? { "X-Tenant-Id": tenantId } : {}),
       ...options.headers,
     },
   });
@@ -118,13 +126,14 @@ export const api = {
   deleteHub: (id: string) => request<{ deleted: boolean }>(`/admin/hubs/${id}`, { method: "DELETE" }),
   updateHub: (id: string, data: UpdateHub) =>
     request<Hub>(`/admin/hubs/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-  vehicles: (params?: { status?: string; hubId?: string; search?: string; availability?: string; page?: number }) => {
+  vehicles: (params?: { status?: string; hubId?: string; search?: string; availability?: string; page?: number; pageSize?: number }) => {
     const q = new URLSearchParams();
     if (params?.status) q.set("status", params.status);
     if (params?.hubId) q.set("hubId", params.hubId);
     if (params?.search) q.set("search", params.search);
     if (params?.availability) q.set("availability", params.availability);
     if (params?.page) q.set("page", String(params.page));
+    if (params?.pageSize) q.set("pageSize", String(params.pageSize));
     return request<{ items: Vehicle[]; totalCount: number }>(`/admin/vehicles?${q}`);
   },
   vehicleDetail: (id: string) => request<VehicleDetail>(`/admin/vehicles/${id}`),
@@ -171,6 +180,12 @@ export const api = {
   geoReverse: (lat: number, lng: number) =>
     request<{ display_name?: string; source?: string } | null>(`/geo/reverse?lat=${lat}&lng=${lng}`),
   geoStatus: () => request<{ ok: boolean; url: string; error?: string; status?: string }>("/geo/status"),
+  geoPlaces: () => request<{ items: GeoPlace[] }>("/admin/geo/places"),
+  createGeoPlace: (data: { kind: "geofence" | "poi"; name: string; lat: number; lng: number; radiusM?: number; notes?: string }) =>
+    request<GeoPlace>("/admin/geo/places", { method: "POST", body: JSON.stringify(data) }),
+  updateGeoPlace: (id: string, data: { name?: string; lat?: number; lng?: number; radiusM?: number; notes?: string }) =>
+    request<GeoPlace>(`/admin/geo/places/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteGeoPlace: (id: string) => request<{ deleted: boolean }>(`/admin/geo/places/${id}`, { method: "DELETE" }),
   iotDevices: () => request<{ items: IoTDevice[]; sync?: { at: string; ok: boolean; synced: number; message: string } | null }>("/admin/iot/devices"),
   syncIotDevices: (tenantId?: string) =>
     request<{ synced: number; linked: number; created?: number; message: string }>(
@@ -335,6 +350,16 @@ export const api = {
     request<{ csv: string; fileName: string }>(`/admin/reports/export?from=${from}&to=${to}`),
 };
 
+export interface GeoPlace {
+  id: string;
+  kind: "geofence" | "poi";
+  name: string;
+  lat: number;
+  lng: number;
+  radiusM?: number;
+  notes?: string;
+}
+
 export interface TenantOrg {
   id: string;
   slug: string;
@@ -443,12 +468,16 @@ export interface UpdateVehicle {
   status?: string;
   notes?: string;
   tenantId?: string;
+  installationDate?: string;
+  activationDate?: string;
 }
 
 export interface UpdateIoTDevice {
   vendorType?: string;
   vehicleId?: string | null;
   tenantId?: string;
+  installationDate?: string;
+  activationDate?: string;
 }
 
 export interface UpdatePromotion {
@@ -656,6 +685,10 @@ export interface Vehicle {
   assignedRiderPhone?: string;
   notes?: string;
   tenantId?: string;
+  tenantName?: string;
+  installationDate?: string;
+  activationDate?: string;
+  batteryVoltage?: number;
   speedKmh?: number;
   ignition?: string;
   immobilised?: boolean;
@@ -685,6 +718,8 @@ export interface CreateVehicle {
   iotDeviceId?: string;
   notes?: string;
   tenantId?: string;
+  installationDate?: string;
+  activationDate?: string;
 }
 
 export interface CreateIoTDevice {
@@ -694,6 +729,8 @@ export interface CreateIoTDevice {
   tenantId?: string;
   vehicleNumber?: string;
   imei?: string;
+  installationDate?: string;
+  activationDate?: string;
 }
 
 export interface Booking {
@@ -782,6 +819,7 @@ export interface IoTDevice {
   connectionStatus: string;
   lastSeenAt?: string;
   batteryPercent?: number;
+  batteryVoltage?: number;
   odometerKm?: number;
   lastLocation?: { lat: number; lng: number };
   lastPlace?: string;
@@ -793,6 +831,9 @@ export interface IoTDevice {
   vendorStatus?: string;
   vehicleStatus?: string;
   tenantId?: string;
+  tenantName?: string;
+  installationDate?: string;
+  activationDate?: string;
 }
 
 export interface AdminPayment {

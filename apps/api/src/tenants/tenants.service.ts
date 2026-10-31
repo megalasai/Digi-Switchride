@@ -6,7 +6,6 @@ import { AdminUser, AdminUserDocument } from '../schemas/admin.schema';
 import { runWithoutTenant } from '../common/tenant-als';
 import { displayProductName, PARENT_COMPANY_NAME, PARENT_COMPANY_SLUG, PRODUCT_NAME } from '@digi-switchride/shared';
 import { findByEitherId } from '../common/mongo-id';
-import { tenantIdValues } from '../common/tenant.plugin';
 
 export const DEFAULT_TENANT_SLUG = 'digi-switchride';
 export { PARENT_COMPANY_SLUG };
@@ -141,8 +140,22 @@ export class TenantsService implements OnModuleInit {
   }
 
   async listCustomers() {
-    const items = await this.tenantModel.find({ kind: { $ne: 'Parent' } }).sort({ isDefault: -1, name: 1 });
+    const items = await this.tenantModel
+      .find({ kind: { $ne: 'Parent' }, status: 'Active' })
+      .sort({ isDefault: -1, name: 1 });
     return items.map((t) => this.toTenant(t));
+  }
+
+  async namesByIds(ids: string[]) {
+    const unique = [...new Set(ids.filter(Boolean))];
+    const map: Record<string, string> = {};
+    if (!unique.length) return map;
+    const items = await this.tenantModel.find();
+    for (const tenant of items) {
+      const row = this.toTenant(tenant);
+      map[row.id] = row.name;
+    }
+    return map;
   }
 
   async findCustomerMatching(hints: string[]) {
@@ -189,7 +202,7 @@ export class TenantsService implements OnModuleInit {
 
   async update(
     id: string,
-    data: { name?: string; contactEmail?: string; status?: 'Active' | 'Suspended'; notes?: string },
+    data: { name?: string; contactEmail?: string; status?: 'Active' | 'Suspended' | 'Archived'; notes?: string },
   ) {
     const tenant = await this.findById(id);
     if (data.name != null) tenant.name = data.name.trim();
@@ -225,18 +238,15 @@ export class TenantsService implements OnModuleInit {
   async remove(id: string) {
     const tenant = await this.findById(id);
     if (this.isParent(tenant)) throw new BadRequestException('The parent company cannot be deleted');
-    const tenantId = tenant._id.toString();
-    await runWithoutTenant(async () => {
-      for (const name of TENANT_COLLECTIONS) {
-        try {
-          await this.connection.collection(name).deleteMany({ tenantId: { $in: tenantIdValues(tenantId) } });
-        } catch {
-          /* collection may not exist */
-        }
-      }
-      await this.tenantModel.collection.deleteOne({ $or: [{ _id: tenant._id }, { slug: tenant.slug }] });
-    });
-    return { deleted: true, id: tenantId };
+    if (tenant.isDefault) throw new BadRequestException('The default tenant cannot be archived');
+    tenant.status = 'Archived';
+    try {
+      await tenant.save();
+    } catch (err) {
+      if (!err || typeof err !== 'object' || (err as { name?: string }).name !== 'DocumentNotFoundError') throw err;
+      await this.tenantModel.collection.updateOne({ slug: tenant.slug }, { $set: { status: 'Archived' } });
+    }
+    return { archived: true, id: tenant._id.toString(), status: 'Archived' as const };
   }
 
   toTenant(tenant: TenantDocument) {

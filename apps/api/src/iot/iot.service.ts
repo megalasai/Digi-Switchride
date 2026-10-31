@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
 import { Model } from 'mongoose';
@@ -27,9 +27,11 @@ import { findByEitherId, mongoIdCandidates, persistById, removeByEitherId } from
 import { TenantsService } from '../tenants/tenants.service';
 import { readSecret } from '../config/secrets';
 import { DEFAULT_TRACK360_URL, GpsIntegrationService, type GpsPullConfig } from './gps-integration.service';
+import { ensureGpsHistoryTtl } from '../common/gps-history';
+import { parseDay } from '../common/dates';
 
 @Injectable()
-export class IoTService {
+export class IoTService implements OnModuleInit {
   private readonly logger = new Logger(IoTService.name);
   lastSync: { at: string; ok: boolean; synced: number; message: string } | null = null;
   private autoSynced = new Set<string>();
@@ -45,12 +47,23 @@ export class IoTService {
     private gps: GpsIntegrationService,
   ) {}
 
+  async onModuleInit() {
+    await ensureGpsHistoryTtl(this.trackPointModel.collection);
+  }
+
   async registerDevice(
     deviceId: string,
     vendorType = 'Simulator',
     vehicleId?: string,
     tenantId?: string,
-    extras?: { vehicleNumber?: string; imei?: string; lat?: number; lng?: number },
+    extras?: {
+      vehicleNumber?: string;
+      imei?: string;
+      lat?: number;
+      lng?: number;
+      installationDate?: string;
+      activationDate?: string;
+    },
   ) {
     const write = async () => {
     await this.clearIgnoredKeys(deviceKeys(deviceId, extras?.imei));
@@ -67,6 +80,8 @@ export class IoTService {
       displayName: vehicleNumber || deviceId,
       lastLat: extras?.lat,
       lastLng: extras?.lng,
+      installationDate: parseDay(extras?.installationDate),
+      activationDate: parseDay(extras?.activationDate),
     });
     if (vehicleId) {
       await this.linkDeviceToVehicle(deviceId, vehicleId, vendorType);
@@ -254,6 +269,7 @@ export class IoTService {
       devices.map(async (d) => {
         const vehicle = await this.resolveVehicle(d.deviceId).catch(() => null);
         if (allowedVehicleIds && vehicle && !allowedVehicleIds.has(vehicle._id.toString())) return null;
+        const tenantId = String((d as { tenantId?: string }).tenantId ?? (vehicle as { tenantId?: string } | null)?.tenantId ?? '');
         return {
           id: d.deviceId,
           vehicleId: vehicle?._id.toString() ?? d.vehicleId,
@@ -262,6 +278,7 @@ export class IoTService {
           connectionStatus: d.connectionStatus,
           lastSeenAt: d.lastSeenAt,
           batteryPercent: d.batteryPercent,
+          batteryVoltage: d.batteryVoltage,
           odometerKm: d.odometerKm,
           lastLocation: d.lastLat != null && d.lastLng != null ? { lat: d.lastLat, lng: d.lastLng } : null,
           lastPlace: vehicle?.lastPlace,
@@ -272,11 +289,15 @@ export class IoTService {
           ignition: d.ignition,
           vendorStatus: d.vendorStatus,
           vehicleStatus: d.vehicleStatus,
-          tenantId: String((d as { tenantId?: string }).tenantId ?? (vehicle as { tenantId?: string } | null)?.tenantId ?? ''),
+          tenantId,
+          installationDate: d.installationDate,
+          activationDate: d.activationDate,
         };
       }),
     );
-    return rows.filter((row): row is NonNullable<typeof row> => row != null);
+    const items = rows.filter((row): row is NonNullable<typeof row> => row != null);
+    const names = await this.tenants.namesByIds(items.map((row) => row.tenantId));
+    return items.map((row) => ({ ...row, tenantName: names[row.tenantId] }));
   }
 
   async syncTrack360(opts?: { tenantId?: string; allTenants?: boolean }) {
@@ -504,13 +525,21 @@ export class IoTService {
 
   async updateDevice(
     deviceId: string,
-    data: { vendorType?: string; vehicleId?: string | null; tenantId?: string },
+    data: {
+      vendorType?: string;
+      vehicleId?: string | null;
+      tenantId?: string;
+      installationDate?: string;
+      activationDate?: string;
+    },
     allowTenantAssign = false,
   ) {
     const device = await runWithoutTenant(() => this.deviceModel.findOne({ deviceId }));
     if (!device) throw new NotFoundException('Device not found');
 
     if (data.vendorType != null) device.vendorType = data.vendorType;
+    if (data.installationDate !== undefined) device.installationDate = parseDay(data.installationDate);
+    if (data.activationDate !== undefined) device.activationDate = parseDay(data.activationDate);
 
     if (data.vehicleId !== undefined) {
       if (data.vehicleId) {
@@ -518,9 +547,8 @@ export class IoTService {
       } else {
         await this.unlinkDevice(deviceId);
       }
-    } else if (data.vendorType != null) {
-      await device.save();
     }
+    await device.save();
 
     if (allowTenantAssign && data.tenantId) {
       await this.assignDeviceToTenant(deviceId, data.tenantId);

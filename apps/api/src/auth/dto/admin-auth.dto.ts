@@ -1,6 +1,7 @@
 import {
   IsArray,
   IsBoolean,
+  IsDateString,
   IsEmail,
   IsIn,
   IsMongoId,
@@ -189,6 +190,16 @@ export class CreateVehicleDto {
   @IsOptional()
   @IsMongoId()
   tenantId?: string;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v != null && v !== '')
+  @IsDateString()
+  installationDate?: string;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v != null && v !== '')
+  @IsDateString()
+  activationDate?: string;
 }
 
 export class UpdateVehicleDto {
@@ -233,6 +244,16 @@ export class UpdateVehicleDto {
   @ValidateIf((_, v) => v != null && v !== '')
   @IsMongoId()
   tenantId?: string;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v != null && v !== '')
+  @IsDateString()
+  installationDate?: string;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v != null && v !== '')
+  @IsDateString()
+  activationDate?: string;
 }
 
 export class UpdateIoTDeviceDto {
@@ -250,6 +271,16 @@ export class UpdateIoTDeviceDto {
   @ValidateIf((_, v) => v != null && v !== '')
   @IsMongoId()
   tenantId?: string;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v != null && v !== '')
+  @IsDateString()
+  installationDate?: string;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v != null && v !== '')
+  @IsDateString()
+  activationDate?: string;
 }
 
 export class UpdateVehicleStatusDto {

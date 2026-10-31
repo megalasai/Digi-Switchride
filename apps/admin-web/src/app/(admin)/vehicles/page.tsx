@@ -15,12 +15,19 @@ import { IconScooter } from "@/components/icons";
 import { ACCESS, canAccess } from "@/lib/access";
 import { useAuth } from "@/lib/auth-context";
 import { api, Hub, Rider, Vehicle } from "@/lib/api";
+import { downloadCsv, downloadPdf } from "@/lib/export";
 import { CompanyCell, CompanyField } from "@/lib/companies";
 import { ImmobiliseButton } from "@/components/ImmobiliseButton";
 import { assetTypeLabel, FleetMotionLegend, resolveMotion, VehicleGlyph, wheelClassFromType } from "@/lib/vehicleIcons";
 import { normalizeRegistration, validateRegistration, validateRequired } from "@/lib/validation";
 
-const emptyForm = { registrationNumber: "", type: "EScooter", wheelClass: "TwoWheeler", hubId: "", model: "", iotDeviceId: "", notes: "", tenantId: "" };
+const emptyForm = { registrationNumber: "", type: "EScooter", wheelClass: "TwoWheeler", hubId: "", model: "", iotDeviceId: "", notes: "", tenantId: "", installationDate: "", activationDate: "" };
+
+function dayValue(value?: string) {
+  if (!value) return "";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+}
 
 export default function VehiclesPage() {
   const { user } = useAuth();
@@ -57,6 +64,7 @@ export default function VehiclesPage() {
         status: status || undefined,
         availability: availability || undefined,
         hubId: hubId || undefined,
+        pageSize: 100,
       })
       .then((r) => setVehicles(r.items))
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load vehicles"))
@@ -65,7 +73,7 @@ export default function VehiclesPage() {
 
   useEffect(() => {
     api.hubs().then((r) => setHubs(r.items)).catch(() => {});
-    api.riders({ accountStatus: "Active" }).then((r) => setRiders(r.items)).catch(() => {});
+    api.riders({ accountStatus: "Active", kycStatus: "Approved" }).then((r) => setRiders(r.items)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -98,6 +106,8 @@ export default function VehiclesPage() {
         iotDeviceId: form.iotDeviceId.trim() || undefined,
         notes: form.notes.trim() || undefined,
         tenantId: form.tenantId || undefined,
+        installationDate: form.installationDate || undefined,
+        activationDate: form.activationDate || undefined,
       };
       if (editId) {
         await api.updateVehicle(editId, payload);
@@ -125,6 +135,51 @@ export default function VehiclesPage() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Input className="w-48" placeholder="Registration" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={() => {
+                const headers = ["Registration", "Company", "Model", "Type", "Status", "Speed", "Odometer", "Battery", "Installed", "Activated", "IMEI"];
+                const rows = vehicles.map((v) => [
+                  v.registrationNumber,
+                  v.tenantName ?? "",
+                  v.model,
+                  v.type,
+                  v.status,
+                  v.speedKmh ?? "",
+                  v.odometerKm ?? "",
+                  v.batteryPercent,
+                  dayValue(v.installationDate),
+                  dayValue(v.activationDate),
+                  v.iotDeviceId ?? "",
+                ]);
+                downloadCsv("vehicles.csv", headers, rows);
+              }}
+            >
+              Export CSV
+            </Button>
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={() => {
+                const headers = ["Registration", "Company", "Model", "Type", "Status", "Speed", "Odometer", "Battery", "Installed", "Activated"];
+                const rows = vehicles.map((v) => [
+                  v.registrationNumber,
+                  v.tenantName ?? "",
+                  v.model,
+                  v.type,
+                  v.status,
+                  v.speedKmh ?? "",
+                  v.odometerKm ?? "",
+                  v.batteryPercent,
+                  dayValue(v.installationDate),
+                  dayValue(v.activationDate),
+                ]);
+                downloadPdf("Vehicles", headers, rows);
+              }}
+            >
+              Export PDF
+            </Button>
             {canWrite && (
               <Button
                 variant={showForm ? "secondary" : "primary"}
@@ -212,6 +267,12 @@ export default function VehiclesPage() {
             <Field label="IoT device ID" hint="Optional">
               <Input value={form.iotDeviceId} onChange={(e) => setForm({ ...form, iotDeviceId: e.target.value })} />
             </Field>
+            <Field label="Installation date" hint="For billing">
+              <Input type="date" value={form.installationDate} onChange={(e) => setForm({ ...form, installationDate: e.target.value })} />
+            </Field>
+            <Field label="Activation date" hint="Billing start (per vehicle per year)">
+              <Input type="date" value={form.activationDate} onChange={(e) => setForm({ ...form, activationDate: e.target.value })} />
+            </Field>
             <Field label="Operational notes" hint="Optional">
               <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </Field>
@@ -259,7 +320,7 @@ export default function VehiclesPage() {
                       {v.registrationNumber}
                     </span>
                   </TableCell>
-                  <TableCell><CompanyCell tenantId={v.tenantId} /></TableCell>
+                  <TableCell><CompanyCell tenantId={v.tenantId} name={v.tenantName} /></TableCell>
                   <TableCell>{v.model}</TableCell>
                   <TableCell>
                     <div>
@@ -330,6 +391,8 @@ export default function VehiclesPage() {
                               iotDeviceId: v.iotDeviceId ?? "",
                               notes: v.notes ?? "",
                               tenantId: v.tenantId ?? "",
+                              installationDate: dayValue(v.installationDate),
+                              activationDate: dayValue(v.activationDate),
                             });
                             setShowForm(true);
                             setError("");

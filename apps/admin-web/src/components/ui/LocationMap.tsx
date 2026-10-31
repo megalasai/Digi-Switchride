@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Map as LeafletMap, Marker as LeafletMarker, Polyline as LeafletPolyline } from "leaflet";
+import type { Circle as LeafletCircle, Map as LeafletMap, Marker as LeafletMarker, Polyline as LeafletPolyline } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Input";
@@ -329,6 +329,9 @@ export function LiveVehicleMap({
   showTrail = true,
   alignToRoads = true,
   focusId,
+  places = [],
+  onMapClick,
+  drawing = false,
 }: {
   vehicles: {
     id: string;
@@ -350,20 +353,28 @@ export function LiveVehicleMap({
   showTrail?: boolean;
   alignToRoads?: boolean;
   focusId?: string | null;
+  places?: { id: string; kind: "geofence" | "poi"; name: string; lat: number; lng: number; radiusM?: number }[];
+  onMapClick?: (lat: number, lng: number) => void;
+  drawing?: boolean;
 }) {
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<Map<string, LeafletMarker>>(new Map());
   const trailsRef = useRef<Map<string, LeafletPolyline>>(new Map());
+  const placeLayersRef = useRef<Map<string, LeafletMarker | LeafletCircle>>(new Map());
   const fittedRef = useRef(false);
   const vehiclesRef = useRef(vehicles);
   const showTrailRef = useRef(showTrail);
   const alignToRoadsRef = useRef(alignToRoads);
   const onSelectRef = useRef(onSelect);
+  const placesRef = useRef(places);
+  const onMapClickRef = useRef(onMapClick);
   vehiclesRef.current = vehicles;
   showTrailRef.current = showTrail;
   alignToRoadsRef.current = alignToRoads;
   onSelectRef.current = onSelect;
+  placesRef.current = places;
+  onMapClickRef.current = onMapClick;
 
   const signature = vehicles
     .map((v) => {
@@ -380,9 +391,11 @@ export function LiveVehicleMap({
       if (cancelled || !mapEl.current) return;
       const map = L.map(mapEl.current, { scrollWheelZoom: true }).setView([INDIA.lat, INDIA.lng], 5);
       L.tileLayer(TILES, { attribution: ATTRIBUTION, maxZoom: 19 }).addTo(map);
+      map.on("click", (event) => onMapClickRef.current?.(event.latlng.lat, event.latlng.lng));
       mapRef.current = map;
       watchSize(mapEl.current, map);
       await syncLiveMarkers(L);
+      syncPlaces(L);
     })();
     return () => {
       cancelled = true;
@@ -390,6 +403,7 @@ export function LiveVehicleMap({
       mapRef.current = null;
       markersRef.current.clear();
       trailsRef.current.clear();
+      placeLayersRef.current.clear();
       fittedRef.current = false;
     };
     // Map instance is created once per page load so polling does not reset zoom.
@@ -403,6 +417,20 @@ export function LiveVehicleMap({
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature]);
+
+  useEffect(() => {
+    void (async () => {
+      const L = await loadLeaflet();
+      syncPlaces(L);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [places.map((p) => `${p.id}:${p.lat}:${p.lng}:${p.radiusM}:${p.name}:${p.kind}`).join("|")]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.getContainer().style.cursor = drawing ? "crosshair" : "";
+  }, [drawing]);
 
   async function syncLiveMarkers(L: Awaited<ReturnType<typeof loadLeaflet>>) {
     const map = mapRef.current;
@@ -467,6 +495,45 @@ export function LiveVehicleMap({
       const bounds = L.latLngBounds(current.map((v) => [v.lat, v.lng] as [number, number]));
       map.fitBounds(bounds.pad(0.25));
       fittedRef.current = true;
+    }
+  }
+
+  function syncPlaces(L: Awaited<ReturnType<typeof loadLeaflet>>) {
+    const map = mapRef.current;
+    if (!map) return;
+    const current = placesRef.current;
+    const seen = new Set<string>();
+    for (const place of current) {
+      seen.add(place.id);
+      const existing = placeLayersRef.current.get(place.id);
+      if (existing) {
+        map.removeLayer(existing);
+        placeLayersRef.current.delete(place.id);
+      }
+      if (place.kind === "geofence") {
+        const circle = L.circle([place.lat, place.lng], {
+          radius: place.radiusM ?? 200,
+          color: "#2563eb",
+          weight: 2,
+          fillOpacity: 0.12,
+        }).addTo(map);
+        circle.bindPopup(place.name);
+        placeLayersRef.current.set(place.id, circle);
+      } else {
+        const marker = L.circleMarker([place.lat, place.lng], {
+          radius: 8,
+          color: "#7c3aed",
+          fillColor: "#7c3aed",
+          fillOpacity: 0.9,
+        }).addTo(map);
+        marker.bindPopup(place.name);
+        placeLayersRef.current.set(place.id, marker as unknown as LeafletMarker);
+      }
+    }
+    for (const [id, layer] of [...placeLayersRef.current.entries()]) {
+      if (seen.has(id)) continue;
+      map.removeLayer(layer);
+      placeLayersRef.current.delete(id);
     }
   }
 

@@ -153,7 +153,12 @@ export default function RiderProfilePage() {
           ) : (
             <EmptyState icon={<IconUsers className="h-7 w-7" />} title="No assigned vehicle" description="Pick an available vehicle below to assign this rider." />
           )}
-          {canWrite && !profile.assignedVehicle && (
+          {canWrite && !profile.assignedVehicle && profile.kyc.status !== "Approved" && (
+            <Card className="p-6">
+              <p className="text-sm text-text-secondary">Assign a vehicle after KYC is approved (Aadhaar, PAN and driving licence).</p>
+            </Card>
+          )}
+          {canWrite && !profile.assignedVehicle && profile.kyc.status === "Approved" && (
             <Card className="flex flex-wrap items-end gap-3 p-6">
               <Field label="Available vehicle">
                 <Select value={assignVehicleId} onChange={(e) => setAssignVehicleId(e.target.value)}>
