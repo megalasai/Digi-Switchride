@@ -8,7 +8,7 @@ import { normalizeAdminRole, type AdminRole } from '@digi-switchride/shared';
 import { AuditService, type AuditActor } from '../audit/audit.service';
 import { Customer, CustomerDocument, OtpRecord, OtpRecordDocument, RefreshToken, RefreshTokenDocument } from '../schemas/customer.schema';
 import { AdminUser, AdminUserDocument } from '../schemas/admin.schema';
-import { generateOtp, hashOtp, hashPassword } from '../common/helpers';
+import { generateOtp, hashOtp, hashPassword, normalizeIndiaPhone } from '../common/helpers';
 import { AdminLoginDto, CreateAdminUserDto } from './dto/admin-auth.dto';
 import { SendOtpDto, VerifyOtpDto, CustomerRegisterDto, CustomerLoginDto } from './dto/auth.dto';
 import { TenantsService } from '../tenants/tenants.service';
@@ -99,10 +99,18 @@ export class AuthService implements OnModuleInit {
       const existing = await this.customerModel.findOne({ username });
       if (existing) throw new ConflictException('Username already taken');
 
+      let phone: string | undefined;
+      if (dto.phone?.trim()) {
+        phone = normalizeIndiaPhone(dto.phone);
+        const phoneTaken = await this.customerModel.findOne({ phone });
+        if (phoneTaken) throw new ConflictException('Mobile number already registered for this organization');
+      }
+
       const customer = await this.customerModel.create({
         username,
         passwordHash: hashPassword(dto.password, salt),
         fullName: dto.fullName?.trim(),
+        phone,
         kycStatus: 'NotSubmitted',
         accountStatus: 'Active',
       });

@@ -98,17 +98,19 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    fun register(username: String, password: String, fullName: String?) {
+    fun register(username: String, password: String, fullName: String?, phone: String?) {
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
             try {
                 apiSettings.setTenantSlug(_tenantSlug.value)
                 val slug = _tenantSlug.value.trim().lowercase()
+                val normalizedPhone = phone?.trim()?.filter { it.isDigit() }?.takeLast(10)?.takeIf { it.length == 10 }
                 val tokens = api.register(
                     RegisterRequest(
                         username.trim(),
                         password,
                         fullName?.trim()?.takeIf { it.isNotEmpty() },
+                        normalizedPhone,
                         slug,
                     ),
                 )
@@ -163,34 +165,75 @@ class ProfileViewModel @Inject constructor(private val api: SwitchrideApi) : Vie
     }
 }
 
-data class KycState(val isLoading: Boolean = false, val uploaded: Set<String> = emptySet(), val error: String? = null, val submitted: Boolean = false)
+data class KycState(
+    val isLoading: Boolean = false,
+    val uploaded: Set<String> = emptySet(),
+    val previews: Map<String, String> = emptyMap(),
+    val overallStatus: String = "NotSubmitted",
+    val rejectionReason: String? = null,
+    val error: String? = null,
+    val submitted: Boolean = false,
+)
 
 @HiltViewModel
 class KycViewModel @Inject constructor(private val api: SwitchrideApi) : ViewModel() {
     private val _state = MutableStateFlow(KycState())
     val state: StateFlow<KycState> = _state
-    fun markUploaded(documentType: String) {
-        _state.value = _state.value.copy(uploaded = _state.value.uploaded + documentType, error = null)
+
+    init {
+        refreshStatus()
     }
-    fun submitAll(onComplete: () -> Unit) {
-        val required = listOf("Aadhaar", "PAN", "DrivingLicence", "Selfie")
-        val missing = required.filter { it !in _state.value.uploaded }
-        if (missing.isNotEmpty()) {
-            _state.value = _state.value.copy(error = "Mark all documents as uploaded first (tap each row).")
-            return
+
+    fun refreshStatus() {
+        viewModelScope.launch {
+            runCatching {
+                val kyc = api.getKycStatus()
+                val uploaded = kyc.submissions.map { it.documentType }.toSet()
+                _state.value = _state.value.copy(
+                    uploaded = uploaded,
+                    overallStatus = kyc.status,
+                    rejectionReason = kyc.rejectionReason,
+                )
+            }
         }
+    }
+
+    fun uploadDocument(documentType: String, dataUrl: String, documentNumber: String?) {
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
             try {
-                required.forEach { type ->
-                    api.submitKyc(KycSubmissionRequest(documentType = type, documentNumber = "MOBILE-DEV-$type"))
-                }
-                _state.value = _state.value.copy(isLoading = false, submitted = true)
-                onComplete()
+                api.submitKyc(
+                    KycSubmissionRequest(
+                        documentType = documentType,
+                        documentNumber = documentNumber?.trim()?.takeIf { it.isNotEmpty() },
+                        blobUrl = dataUrl,
+                    ),
+                )
+                _state.value = _state.value.copy(
+                    isLoading = false,
+                    uploaded = _state.value.uploaded + documentType,
+                    previews = _state.value.previews + (documentType to dataUrl),
+                    overallStatus = "Pending",
+                )
             } catch (e: Exception) {
                 _state.value = _state.value.copy(isLoading = false, error = ApiErrorParser.message(e))
             }
         }
+    }
+
+    fun reportError(message: String) {
+        _state.value = _state.value.copy(error = message, isLoading = false)
+    }
+
+    fun submitAll(onComplete: () -> Unit) {
+        val required = listOf("Aadhaar", "PAN", "DrivingLicence", "Selfie")
+        val missing = required.filter { it !in _state.value.uploaded }
+        if (missing.isNotEmpty()) {
+            _state.value = _state.value.copy(error = "Upload all documents: ${missing.joinToString(", ")}")
+            return
+        }
+        _state.value = _state.value.copy(submitted = true)
+        onComplete()
     }
 }
 

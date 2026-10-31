@@ -6,6 +6,7 @@ data class RegisterRequest(
     val username: String,
     val password: String,
     val fullName: String? = null,
+    val phone: String? = null,
     val tenantSlug: String? = null,
 )
 data class LoginRequest(val username: String, val password: String, val tenantSlug: String? = null)
@@ -109,7 +110,18 @@ data class AppointmentItem(val id: String, val centreName: String? = null, val s
 data class AppointmentsResponse(val items: List<AppointmentItem> = emptyList())
 data class ReferralResponse(val code: String? = null, val referredCount: Int = 0, val referredBy: String? = null)
 data class ApplyReferralRequest(val code: String)
-data class KycStatusResponse(val status: String, val rejectionReason: String? = null)
+data class KycSubmissionItem(
+    val id: String,
+    val documentType: String,
+    val status: String,
+    val documentNumberMasked: String? = null,
+    val blobUrl: String? = null,
+)
+data class KycStatusResponse(
+    val status: String,
+    val rejectionReason: String? = null,
+    val submissions: List<KycSubmissionItem> = emptyList(),
+)
 data class KycSubmissionRequest(val documentType: String, val documentNumber: String? = null, val blobUrl: String? = null)
 data class PayRequest(val method: String)
 data class PlanChangeRequest(val rentalPlanId: String)

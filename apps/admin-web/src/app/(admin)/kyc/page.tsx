@@ -177,7 +177,17 @@ export default function KycReviewPage() {
                   <p className="font-semibold">{d.documentType}</p>
                   <p className="text-sm text-text-secondary">{d.riderName ?? d.riderPhone} · {d.documentNumberMasked ?? "No number on file"}</p>
                   <div className="mt-2 flex gap-2"><Badge status={d.status} />{d.riderKycStatus && <Badge status={d.riderKycStatus} />}</div>
-                  {d.blobUrl && <a className="mt-2 inline-block text-sm font-semibold text-brand" href={d.blobUrl} target="_blank" rel="noreferrer">Open document</a>}
+                  {d.blobUrl && (
+                    d.blobUrl.startsWith("data:") ? (
+                      <img
+                        src={d.blobUrl}
+                        alt={`${d.documentType} preview`}
+                        className="mt-3 max-h-64 max-w-full rounded-lg border border-border object-contain"
+                      />
+                    ) : (
+                      <a className="mt-2 inline-block text-sm font-semibold text-brand" href={d.blobUrl} target="_blank" rel="noreferrer">Open document</a>
+                    )
+                  )}
                   <div className="mt-2"><Link className="text-sm text-brand" href={`/riders/${d.riderId}`}>Rider profile</Link></div>
                 </div>
                 {canWrite && (d.status === "Pending" || d.status === "UnderReview") && (

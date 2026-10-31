@@ -85,16 +85,21 @@ export class KycService {
     }
     const customer = await this.customerModel.findById(customerId);
     if (!customer) throw new NotFoundException('Customer not found');
-    if (blobUrl && blobUrl.length > 7_000_000) {
+    if (!blobUrl?.trim()) {
+      throw new BadRequestException('Document image is required');
+    }
+    if (blobUrl.length > 7_000_000) {
       throw new BadRequestException('Document file is too large (max about 5 MB)');
     }
     const masked = documentType === 'Aadhaar' && documentNumber ? maskAadhaar(documentNumber) : documentNumber;
+    const tenantId = (customer as { tenantId?: string }).tenantId;
     const submission = await this.kycModel.create({
       customerId,
       documentType,
       documentNumberMasked: masked,
-      blobUrl: blobUrl?.trim() || undefined,
+      blobUrl: blobUrl.trim(),
       status: 'Pending',
+      ...(tenantId ? { tenantId } : {}),
     });
     await this.customerModel.findByIdAndUpdate(customerId, { kycStatus: 'Pending' });
     return {

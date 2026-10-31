@@ -30,6 +30,11 @@ export class CustomerRegisterDto {
 
   @IsOptional()
   @IsString()
+  @Matches(/^(\+91)?[0-9]{10}$/, { message: 'Enter a valid 10-digit Indian mobile number' })
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
   tenantSlug?: string;
 }
 

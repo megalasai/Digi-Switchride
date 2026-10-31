@@ -28,6 +28,7 @@ fun LoginScreen(onAuthenticated: () -> Unit, viewModel: AuthViewModel = hiltView
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var fullName by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
     val state by viewModel.state.collectAsState()
     val tenantSlug by viewModel.tenantSlug.collectAsState()
 
@@ -90,6 +91,16 @@ fun LoginScreen(onAuthenticated: () -> Unit, viewModel: AuthViewModel = hiltView
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
                         )
+                        Spacer(Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = phone,
+                            onValueChange = { phone = it.filter { ch -> ch.isDigit() }.take(10) },
+                            label = { Text("Mobile (optional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                            shape = RoundedCornerShape(12.dp),
+                        )
                     }
                     if (state.organizationsLoading) {
                         Spacer(Modifier.height(12.dp))
@@ -132,7 +143,7 @@ fun LoginScreen(onAuthenticated: () -> Unit, viewModel: AuthViewModel = hiltView
                     PrimaryButton(
                         text = if (isRegister) "Create account" else "Sign in",
                         onClick = {
-                            if (isRegister) viewModel.register(username, password, fullName)
+                            if (isRegister) viewModel.register(username, password, fullName, phone)
                             else viewModel.login(username, password)
                         },
                         loading = state.isLoading,
