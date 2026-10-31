@@ -11,7 +11,7 @@ import { Booking, BookingDocument, Payment, PaymentDocument, Ride, RideDocument 
 import { RentalPlan, RentalPlanDocument, WalletTransaction, WalletTransactionDocument } from '../schemas/rental.schema';
 import { normalizeIndiaPhone } from '../common/helpers';
 import { ProfileService } from './customers.service';
-import { findByEitherId } from '../common/mongo-id';
+import { findByEitherId, removeByEitherId } from '../common/mongo-id';
 
 @Injectable()
 export class RidersService implements OnModuleInit {
@@ -166,7 +166,8 @@ export class RidersService implements OnModuleInit {
     const customer = await findByEitherId(this.customerModel, riderId);
     if (!customer) throw new NotFoundException('Rider not found');
     await this.vehicleModel.updateMany({ assignedRiderId: riderId }, { $unset: { assignedRiderId: 1 } });
-    await this.customerModel.deleteOne({ _id: customer._id });
+    const deleted = await removeByEitherId(this.customerModel.collection, customer._id.toString());
+    if (!deleted) throw new BadRequestException('Could not delete rider');
     await this.auditService.record({
       actor,
       action: 'rider.delete',
@@ -326,7 +327,8 @@ export class RidersService implements OnModuleInit {
   async deletePlan(id: string, actor?: AuditActor | null) {
     const plan = await findByEitherId(this.planModel, id);
     if (!plan) throw new NotFoundException('Rental plan not found');
-    await this.planModel.deleteOne({ _id: plan._id });
+    const deleted = await removeByEitherId(this.planModel.collection, plan._id.toString());
+    if (!deleted) throw new BadRequestException('Could not delete rental plan');
     await this.auditService.record({
       actor,
       action: 'plan.delete',

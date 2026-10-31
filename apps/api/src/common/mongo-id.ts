@@ -66,6 +66,21 @@ export function patchMongooseRestoredIds() {
   };
 }
 
+export async function removeByEitherId(
+  collection: { deleteOne: (filter: object) => Promise<{ deletedCount?: number }> },
+  id: string,
+) {
+  const filters = [
+    { $expr: { $eq: [{ $toString: '$_id' }, id] } },
+    ...mongoIdCandidates(id).map((value) => ({ _id: value })),
+  ];
+  for (const filter of filters) {
+    const res = await collection.deleteOne(filter as never);
+    if (res.deletedCount) return res.deletedCount;
+  }
+  return 0;
+}
+
 export async function persistById(
   collection: { updateOne: (filter: object, update: object) => Promise<{ matchedCount: number }> },
   id: string,

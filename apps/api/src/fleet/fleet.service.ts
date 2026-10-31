@@ -16,7 +16,7 @@ import {
 } from '../schemas/fleet.schema';
 import { Customer, CustomerDocument } from '../schemas/customer.schema';
 import { haversineDistanceKm, normalizeVehicleRegistration, readLatLng, toGeoLocation } from '../common/helpers';
-import { findByEitherId, mongoIdCandidates } from '../common/mongo-id';
+import { findByEitherId, mongoIdCandidates, removeByEitherId } from '../common/mongo-id';
 import { IoTService } from '../iot/iot.service';
 import { AuditService, type AuditActor } from '../audit/audit.service';
 import { VEHICLE_STATUSES, resolveWheelClass } from '@digi-switchride/shared';
@@ -250,7 +250,8 @@ export class FleetService {
     if (!hub) throw new NotFoundException('Hub not found');
     const inUse = await this.vehicleModel.countDocuments({ hubId: hub._id.toString() });
     if (inUse) throw new BadRequestException('Move or delete vehicles at this hub first');
-    await this.hubModel.deleteOne({ _id: hub._id });
+    const deleted = await removeByEitherId(this.hubModel.collection, hub._id.toString());
+    if (!deleted) throw new BadRequestException('Could not delete hub');
     return { deleted: true, id: hub._id.toString() };
   }
 
@@ -260,7 +261,14 @@ export class FleetService {
     if (vehicle.iotDeviceId) {
       await this.iotService.unlinkDevice(vehicle.iotDeviceId).catch(() => undefined);
     }
-    await this.vehicleModel.deleteOne({ _id: vehicle._id });
+    await runWithoutTenant(async () => {
+      await this.deviceModel.collection.updateMany(
+        { vehicleId: { $in: [vehicle._id.toString(), vehicleId] } },
+        { $unset: { vehicleId: 1 } },
+      );
+      const deleted = await removeByEitherId(this.vehicleModel.collection, vehicle._id.toString());
+      if (!deleted) throw new BadRequestException('Could not delete vehicle');
+    });
     await this.auditService.record({
       actor,
       action: 'vehicle.delete',

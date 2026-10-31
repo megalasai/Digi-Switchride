@@ -83,13 +83,19 @@ export default function EngagementPage() {
           </FormPanel>
           <DataTable>
             <Table>
-              <TableHead><TableHeaderCell>Title</TableHeaderCell><TableHeaderCell>Audience</TableHeaderCell><TableHeaderCell>Status</TableHeaderCell></TableHead>
+              <TableHead><TableHeaderCell>Title</TableHeaderCell><TableHeaderCell>Audience</TableHeaderCell><TableHeaderCell>Status</TableHeaderCell><TableHeaderCell /></TableHead>
               <TableBody>
                 {notices.map((n) => (
                   <TableRow key={n.id}>
                     <TableCell>{n.title}<div className="text-xs text-text-muted">{n.body}</div></TableCell>
                     <TableCell>{n.audience}</TableCell>
                     <TableCell><Badge status={n.status} /></TableCell>
+                    <TableCell>
+                      <Button variant="ghost" className="text-xs text-red-700" type="button" onClick={() => {
+                        if (!window.confirm("Delete this notice?")) return;
+                        api.deleteNotification(n.id).then(reload).catch((err) => setError(err instanceof Error ? err.message : "Delete failed"));
+                      }}>Delete</Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -169,13 +175,19 @@ export default function EngagementPage() {
           </FormPanel>
           <DataTable>
             <Table>
-              <TableHead><TableHeaderCell>Rider</TableHeaderCell><TableHeaderCell>Rating</TableHeaderCell><TableHeaderCell>Comment</TableHeaderCell></TableHead>
+              <TableHead><TableHeaderCell>Rider</TableHeaderCell><TableHeaderCell>Rating</TableHeaderCell><TableHeaderCell>Comment</TableHeaderCell><TableHeaderCell /></TableHead>
               <TableBody>
                 {feedback.map((f) => (
                   <TableRow key={f.id}>
                     <TableCell>{f.riderName ?? f.riderPhone}</TableCell>
                     <TableCell>{f.rating}/5 · {f.category}</TableCell>
                     <TableCell>{f.comment}</TableCell>
+                    <TableCell>
+                      <Button variant="ghost" className="text-xs text-red-700" type="button" onClick={() => {
+                        if (!window.confirm("Delete this feedback?")) return;
+                        api.deleteFeedback(f.id).then(reload).catch((err) => setError(err instanceof Error ? err.message : "Delete failed"));
+                      }}>Delete</Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -229,9 +241,15 @@ export default function EngagementPage() {
                     <TableCell>{a.type}</TableCell>
                     <TableCell><Badge status={a.status} /></TableCell>
                     <TableCell>
-                      {a.status !== "Signed" && (
-                        <Button variant="ghost" className="text-xs" type="button" onClick={async () => { await api.signAgreement(a.id); reload(); }}>Mark signed</Button>
-                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {a.status !== "Signed" && (
+                          <Button variant="ghost" className="text-xs" type="button" onClick={async () => { await api.signAgreement(a.id); reload(); }}>Mark signed</Button>
+                        )}
+                        <Button variant="ghost" className="text-xs text-red-700" type="button" onClick={() => {
+                          if (!window.confirm("Delete this agreement?")) return;
+                          api.deleteAgreement(a.id).then(reload).catch((err) => setError(err instanceof Error ? err.message : "Delete failed"));
+                        }}>Delete</Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

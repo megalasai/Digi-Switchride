@@ -59,6 +59,12 @@ export class NotificationsAdminController {
   send(@Req() req: Parameters<typeof actorFromRequest>[0], @Body() body: CreateNotificationDto) {
     return this.engagement.sendNotification(body, actorFromRequest(req));
   }
+
+  @Delete(':id')
+  @Roles('SuperAdmin', 'Administrator', 'CommandCenter')
+  remove(@Param('id') id: string) {
+    return this.engagement.deleteNotification(id);
+  }
 }
 
 @Controller('v1/admin/feedback')
@@ -76,6 +82,12 @@ export class FeedbackAdminController {
   @Roles('SuperAdmin', 'Administrator', 'CommandCenter')
   create(@Body() body: CreateFeedbackDto) {
     return this.engagement.createFeedback(body);
+  }
+
+  @Delete(':id')
+  @Roles('SuperAdmin', 'Administrator', 'CommandCenter')
+  remove(@Param('id') id: string) {
+    return this.engagement.deleteFeedback(id);
   }
 }
 
@@ -100,6 +112,12 @@ export class AgreementsAdminController {
   @Roles('SuperAdmin', 'Administrator', 'Operations')
   sign(@Param('id') id: string) {
     return this.engagement.signAgreement(id);
+  }
+
+  @Delete(':id')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  remove(@Param('id') id: string) {
+    return this.engagement.deleteAgreement(id);
   }
 }
 

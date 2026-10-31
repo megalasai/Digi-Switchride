@@ -5,7 +5,7 @@ import type { AuditActor } from '../audit/audit.service';
 import { AuditService } from '../audit/audit.service';
 import { applyHubScope, hubAllowed } from '../common/hub-scope';
 import { runInWriteTenant } from '../common/tenant-write';
-import { findByEitherId } from '../common/mongo-id';
+import { findByEitherId, removeByEitherId } from '../common/mongo-id';
 import { Customer, CustomerDocument } from '../schemas/customer.schema';
 import {
   Agreement,
@@ -63,7 +63,8 @@ export class EngagementService {
   async deleteStation(id: string) {
     const station = await findByEitherId(this.stationModel, id);
     if (!station) throw new NotFoundException('Charging station not found');
-    await this.stationModel.deleteOne({ _id: station._id });
+    const deleted = await removeByEitherId(this.stationModel.collection, station._id.toString());
+    if (!deleted) throw new BadRequestException('Could not delete charging station');
     return { deleted: true, id };
   }
 
@@ -174,6 +175,30 @@ export class EngagementService {
         referredCount: referred.filter((x) => x.referredBy === r._id.toString()).length,
       })),
     };
+  }
+
+  async deleteNotification(id: string) {
+    const item = await findByEitherId(this.notificationModel, id);
+    if (!item) throw new NotFoundException('Notice not found');
+    const deleted = await removeByEitherId(this.notificationModel.collection, item._id.toString());
+    if (!deleted) throw new BadRequestException('Could not delete notice');
+    return { deleted: true, id };
+  }
+
+  async deleteFeedback(id: string) {
+    const item = await findByEitherId(this.feedbackModel, id);
+    if (!item) throw new NotFoundException('Feedback not found');
+    const deleted = await removeByEitherId(this.feedbackModel.collection, item._id.toString());
+    if (!deleted) throw new BadRequestException('Could not delete feedback');
+    return { deleted: true, id };
+  }
+
+  async deleteAgreement(id: string) {
+    const item = await findByEitherId(this.agreementModel, id);
+    if (!item) throw new NotFoundException('Agreement not found');
+    const deleted = await removeByEitherId(this.agreementModel.collection, item._id.toString());
+    if (!deleted) throw new BadRequestException('Could not delete agreement');
+    return { deleted: true, id };
   }
 
   async applyReferral(riderId: string, code: string) {

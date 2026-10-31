@@ -273,3 +273,14 @@ export const IoTDeviceSchema = SchemaFactory.createForClass(IoTDevice);
 IoTDeviceSchema.index({ vehicleId: 1 }, { sparse: true });
 IoTDeviceSchema.index({ tenantId: 1, deviceId: 1 }, { unique: true });
 IoTDeviceSchema.plugin(tenantPlugin);
+
+export type IgnoredIotDeviceDocument = HydratedDocument<IgnoredIotDevice>;
+
+@Schema({ timestamps: true, collection: 'iot_ignored_devices' })
+export class IgnoredIotDevice {
+  @Prop({ required: true })
+  deviceKey!: string;
+}
+
+export const IgnoredIotDeviceSchema = SchemaFactory.createForClass(IgnoredIotDevice);
+IgnoredIotDeviceSchema.index({ deviceKey: 1 }, { unique: true });

@@ -19,7 +19,7 @@ import {
   ServiceSlotDocument,
 } from '../schemas/operations.schema';
 import { normalizeIndiaPhone } from '../common/helpers';
-import { findByEitherId } from '../common/mongo-id';
+import { findByEitherId, removeByEitherId } from '../common/mongo-id';
 
 @Injectable()
 export class OperationsService {
@@ -145,7 +145,8 @@ export class OperationsService {
   async deleteCentre(id: string) {
     const centre = await findByEitherId(this.centreModel, id);
     if (!centre) throw new NotFoundException('Service centre not found');
-    await this.centreModel.deleteOne({ _id: centre._id });
+    const deleted = await removeByEitherId(this.centreModel.collection, centre._id.toString());
+    if (!deleted) throw new BadRequestException('Could not delete service centre');
     return { deleted: true, id };
   }
 

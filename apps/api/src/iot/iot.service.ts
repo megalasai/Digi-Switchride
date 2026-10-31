@@ -6,6 +6,8 @@ import { randomUUID } from 'crypto';
 import {
   GpsTrackPoint,
   GpsTrackPointDocument,
+  IgnoredIotDevice,
+  IgnoredIotDeviceDocument,
   IoTDevice,
   IoTDeviceDocument,
   RentalHub,
@@ -21,7 +23,7 @@ import { applyHubScope, assignedHubIds } from '../common/hub-scope';
 import { runInWriteTenant } from '../common/tenant-write';
 import { currentTenantId, runWithoutTenant, tenantAls } from '../common/tenant-als';
 import { tenantIdClause } from '../common/tenant.plugin';
-import { findByEitherId, mongoIdCandidates, persistById } from '../common/mongo-id';
+import { findByEitherId, mongoIdCandidates, persistById, removeByEitherId } from '../common/mongo-id';
 import { TenantsService } from '../tenants/tenants.service';
 import { readSecret } from '../config/secrets';
 import { DEFAULT_TRACK360_URL, GpsIntegrationService, type GpsPullConfig } from './gps-integration.service';
@@ -37,6 +39,7 @@ export class IoTService {
     @InjectModel(Vehicle.name) private vehicleModel: Model<VehicleDocument>,
     @InjectModel(RentalHub.name) private hubModel: Model<RentalHubDocument>,
     @InjectModel(GpsTrackPoint.name) private trackPointModel: Model<GpsTrackPointDocument>,
+    @InjectModel(IgnoredIotDevice.name) private ignoredDeviceModel: Model<IgnoredIotDeviceDocument>,
     private config: ConfigService,
     private tenants: TenantsService,
     private gps: GpsIntegrationService,
@@ -50,7 +53,8 @@ export class IoTService {
     extras?: { vehicleNumber?: string; imei?: string; lat?: number; lng?: number },
   ) {
     const write = async () => {
-    const existing = await this.deviceModel.findOne({ deviceId });
+    await this.clearIgnoredKeys(deviceKeys(deviceId, extras?.imei));
+    const existing = await this.findDeviceRecord(deviceId);
     if (existing) throw new ConflictException(`Device ${deviceId} already exists`);
     const imei = extras?.imei?.trim() || deviceId;
     const vehicleNumber = extras?.vehicleNumber?.trim();
@@ -594,24 +598,33 @@ export class IoTService {
   }
 
   async unlinkDevice(deviceId: string) {
-    const device = await this.deviceModel.findOne({ deviceId });
+    const device = await this.findDeviceRecord(deviceId);
     if (!device) throw new NotFoundException('Device not found');
-
-    await this.vehicleModel.updateMany({ iotDeviceId: deviceId }, { $unset: { iotDeviceId: 1 } });
-    if (device.vehicleId) {
-      await this.vehicleModel.updateOne({ _id: device.vehicleId, iotDeviceId: deviceId }, { $unset: { iotDeviceId: 1 } });
-    }
-    await this.deviceModel.updateOne({ deviceId }, { $unset: { vehicleId: 1 } });
-
-    return { deviceId, unlinked: true };
+    const keys = deviceKeys(device.deviceId, device.imei, deviceId);
+    await runWithoutTenant(async () => {
+      await this.vehicleModel.collection.updateMany({ iotDeviceId: { $in: keys } }, { $unset: { iotDeviceId: 1 } });
+      if (device.vehicleId) {
+        await this.vehicleModel.collection.updateMany(
+          { $or: mongoIdCandidates(device.vehicleId).map((value) => ({ _id: value })) } as never,
+          { $unset: { iotDeviceId: 1 } },
+        );
+      }
+      await this.deviceModel.collection.updateOne({ _id: device._id }, { $unset: { vehicleId: 1 } });
+    });
+    return { deviceId: device.deviceId, unlinked: true };
   }
 
   async deleteDevice(deviceId: string) {
-    const device = await this.deviceModel.findOne({ deviceId });
+    const device = await this.findDeviceRecord(deviceId);
     if (!device) throw new NotFoundException('Device not found');
-    await this.unlinkDevice(deviceId).catch(() => undefined);
-    await this.deviceModel.deleteOne({ deviceId });
-    return { deleted: true, deviceId };
+    const keys = deviceKeys(device.deviceId, device.imei, deviceId);
+    await this.ignoreDeviceKeys(keys);
+    await this.unlinkDevice(device.deviceId).catch(() => undefined);
+    const deleted = await runWithoutTenant(() => removeByEitherId(this.deviceModel.collection, String(device._id)));
+    if (!deleted) {
+      await runWithoutTenant(() => this.deviceModel.collection.deleteOne({ deviceId: device.deviceId }));
+    }
+    return { deleted: true, deviceId: device.deviceId };
   }
 
   async updateTelemetry(
@@ -734,6 +747,7 @@ export class IoTService {
   }
 
   private async upsertDeviceTelemetry(deviceId: string, patch: Record<string, unknown>) {
+    if (await this.isIgnoredDevice(deviceId)) return null;
     const tenantId = currentTenantId();
     const keys = deviceKeys(deviceId);
     const existing = await this.deviceModel.findOne({
@@ -762,6 +776,7 @@ export class IoTService {
     tenantId: string,
     gpsUsername?: string,
   ) {
+    if (await this.isIgnoredDevice(row.deviceId, row.imei)) return { linked: false, created: false };
     const vendorType = row.vendorType || 'Track360';
     await this.rehomeDeviceToTenant(row, tenantId);
     const connectionStatus =
@@ -992,6 +1007,37 @@ export class IoTService {
       status: 'Active',
       ...(currentTenantId() ? { tenantId: currentTenantId() } : {}),
     });
+  }
+
+  private async findDeviceRecord(deviceId: string) {
+    const raw = decodeURIComponent(String(deviceId ?? '').trim());
+    if (!raw) return null;
+    const keys = deviceKeys(raw);
+    return runWithoutTenant(() =>
+      this.deviceModel.findOne({
+        $or: [{ deviceId: { $in: keys } }, { imei: { $in: keys } }, ...mongoIdCandidates(raw).map((id) => ({ _id: id }))],
+      }),
+    );
+  }
+
+  private async isIgnoredDevice(...values: (string | undefined)[]) {
+    const keys = deviceKeys(...values);
+    if (!keys.length) return false;
+    const hit = await this.ignoredDeviceModel.findOne({ deviceKey: { $in: keys } }).lean();
+    return Boolean(hit);
+  }
+
+  private async ignoreDeviceKeys(keys: string[]) {
+    await Promise.all(
+      keys.map((deviceKey) =>
+        this.ignoredDeviceModel.updateOne({ deviceKey }, { $set: { deviceKey } }, { upsert: true }).catch(() => undefined),
+      ),
+    );
+  }
+
+  private async clearIgnoredKeys(keys: string[]) {
+    if (!keys.length) return;
+    await this.ignoredDeviceModel.deleteMany({ deviceKey: { $in: keys } });
   }
 
   private async recordTrackPoint(

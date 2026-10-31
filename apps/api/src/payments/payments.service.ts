@@ -12,6 +12,7 @@ import { applyHubScope } from '../common/hub-scope';
 import { currentTenantId } from '../common/tenant-als';
 import { runInWriteTenant } from '../common/tenant-write';
 import { PaymentGatewayService } from './gateway.service';
+import { findByEitherId, removeByEitherId } from '../common/mongo-id';
 
 @Injectable()
 export class PaymentsService {
@@ -272,9 +273,10 @@ export class PromotionsService {
   }
 
   async remove(id: string) {
-    const promo = await this.promotionModel.findById(id);
+    const promo = await findByEitherId(this.promotionModel, id);
     if (!promo) throw new NotFoundException('Promotion not found');
-    await this.promotionModel.deleteOne({ _id: promo._id });
+    const deleted = await removeByEitherId(this.promotionModel.collection, promo._id.toString());
+    if (!deleted) throw new BadRequestException('Could not delete promotion');
     return { deleted: true, id };
   }
 

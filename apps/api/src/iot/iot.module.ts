@@ -7,6 +7,8 @@ import { Customer, CustomerSchema } from '../schemas/customer.schema';
 import {
   GpsTrackPoint,
   GpsTrackPointSchema,
+  IgnoredIotDevice,
+  IgnoredIotDeviceSchema,
   IoTDevice,
   IoTDeviceSchema,
   RentalHub,
@@ -33,6 +35,7 @@ import { TrackingService } from './tracking.service';
       { name: Ride.name, schema: RideSchema },
       { name: GpsIntegration.name, schema: GpsIntegrationSchema },
       { name: GpsTrackPoint.name, schema: GpsTrackPointSchema },
+      { name: IgnoredIotDevice.name, schema: IgnoredIotDeviceSchema },
     ]),
   ],
   controllers: [IoTController, IoTIngestController, IoTInternalController],

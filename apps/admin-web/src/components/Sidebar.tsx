@@ -21,6 +21,8 @@ import {
 import { cn } from "@/lib/cn";
 import { ACCESS, canAccess } from "@/lib/access";
 import { useAuth } from "@/lib/auth-context";
+import { useSidebarUi } from "@/lib/sidebar-context";
+import { Button } from "@/components/ui/Button";
 
 const sections = [
   {
@@ -76,11 +78,15 @@ const sections = [
 export function Sidebar() {
   const pathname = usePathname();
   const { user } = useAuth();
+  const { setHidden } = useSidebarUi();
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-white">
-      <div className="border-b border-sidebar-border px-4 py-5">
+      <div className="flex items-center justify-between gap-2 border-b border-sidebar-border px-4 py-5">
         <ProductBrand variant="dark" size="sm" />
+        <Button type="button" variant="ghost" className="px-2 text-xs text-[#b7bdd0] hover:text-white" onClick={() => setHidden(true)}>
+          Hide
+        </Button>
       </div>
 
       <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5">

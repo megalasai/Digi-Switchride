@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException, OnModuleInit, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
@@ -13,7 +13,7 @@ import { AdminLoginDto, CreateAdminUserDto } from './dto/admin-auth.dto';
 import { SendOtpDto, VerifyOtpDto, CustomerRegisterDto, CustomerLoginDto } from './dto/auth.dto';
 import { TenantsService } from '../tenants/tenants.service';
 import { currentTenantId, runWithoutTenant, tenantAls } from '../common/tenant-als';
-import { findByEitherId } from '../common/mongo-id';
+import { findByEitherId, removeByEitherId } from '../common/mongo-id';
 import { readSecret } from '../config/secrets';
 
 @Injectable()
@@ -275,7 +275,8 @@ export class AuthService implements OnModuleInit {
       }
       if (admin.role === 'SuperAdmin') throw new ForbiddenException('You cannot delete a SuperAdmin');
     }
-    await runWithoutTenant(async () => this.adminModel.deleteOne({ _id: admin._id }));
+    const deleted = await runWithoutTenant(() => removeByEitherId(this.adminModel.collection, admin._id.toString()));
+    if (!deleted) throw new BadRequestException('Could not delete admin user');
     await this.auditService.record({
       actor,
       action: 'admin.user.delete',

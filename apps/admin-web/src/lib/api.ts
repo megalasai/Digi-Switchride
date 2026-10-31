@@ -132,7 +132,7 @@ export const api = {
     request<Vehicle>("/admin/vehicles", { method: "POST", body: JSON.stringify(data) }),
   updateVehicle: (id: string, data: UpdateVehicle) =>
     request<Vehicle>(`/admin/vehicles/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-  deleteVehicle: (id: string) => request<{ deleted: boolean }>(`/admin/vehicles/${id}`, { method: "DELETE" }),
+  deleteVehicle: (id: string) => request<{ deleted: boolean }>(`/admin/vehicles/${encodeURIComponent(id)}`, { method: "DELETE" }),
   trackVehicles: () => request<{ items: TrackVehicle[] }>("/admin/track/vehicles"),
   vehicleTrackHistory: (id: string, from?: string, to?: string) => {
     const q = new URLSearchParams();
@@ -185,21 +185,21 @@ export const api = {
       { method: "POST", body: JSON.stringify(data) },
     ),
   updateIoTDevice: (deviceId: string, data: UpdateIoTDevice) =>
-    request(`/admin/iot/devices/${deviceId}`, { method: "PUT", body: JSON.stringify(data) }),
+    request(`/admin/iot/devices/${encodeURIComponent(deviceId)}`, { method: "PUT", body: JSON.stringify(data) }),
   sendIoTCommand: (deviceId: string, command: string) =>
-    request(`/admin/iot/devices/${deviceId}/command`, {
+    request(`/admin/iot/devices/${encodeURIComponent(deviceId)}/command`, {
       method: "POST",
       body: JSON.stringify({ command }),
     }),
   linkIoTDevice: (deviceId: string, vehicleId: string) =>
-    request(`/admin/iot/devices/${deviceId}/link`, {
+    request(`/admin/iot/devices/${encodeURIComponent(deviceId)}/link`, {
       method: "POST",
       body: JSON.stringify({ vehicleId }),
     }),
   unlinkIoTDevice: (deviceId: string) =>
-    request(`/admin/iot/devices/${deviceId}/link`, { method: "DELETE" }),
+    request(`/admin/iot/devices/${encodeURIComponent(deviceId)}/link`, { method: "DELETE" }),
   deleteIoTDevice: (deviceId: string) =>
-    request<{ deleted: boolean }>(`/admin/iot/devices/${deviceId}`, { method: "DELETE" }),
+    request<{ deleted: boolean }>(`/admin/iot/devices/${encodeURIComponent(deviceId)}`, { method: "DELETE" }),
   payments: (params?: { status?: string; search?: string }) => {
     const q = new URLSearchParams();
     if (params?.status) q.set("status", params.status);
@@ -307,15 +307,21 @@ export const api = {
   notifications: () => request<{ items: AppNotice[] }>("/admin/notifications"),
   sendNotification: (data: { title: string; body: string; audience: string }) =>
     request("/admin/notifications", { method: "POST", body: JSON.stringify(data) }),
+  deleteNotification: (id: string) =>
+    request<{ deleted: boolean }>(`/admin/notifications/${encodeURIComponent(id)}`, { method: "DELETE" }),
   feedback: () => request<{ items: FeedbackItem[] }>("/admin/feedback"),
   createFeedback: (data: { riderId: string; rating: number; comment: string; category?: string }) =>
     request("/admin/feedback", { method: "POST", body: JSON.stringify(data) }),
+  deleteFeedback: (id: string) =>
+    request<{ deleted: boolean }>(`/admin/feedback/${encodeURIComponent(id)}`, { method: "DELETE" }),
   agreements: (riderId?: string) =>
     request<{ items: AgreementItem[] }>(`/admin/agreements${riderId ? `?riderId=${riderId}` : ""}`),
   issueAgreement: (data: { riderId: string; type: string; content: string; documentUrl?: string }) =>
     request("/admin/agreements", { method: "POST", body: JSON.stringify(data) }),
   signAgreement: (id: string) =>
     request(`/admin/agreements/${id}/sign`, { method: "POST" }),
+  deleteAgreement: (id: string) =>
+    request<{ deleted: boolean }>(`/admin/agreements/${encodeURIComponent(id)}`, { method: "DELETE" }),
   referrals: () => request<{ items: ReferralItem[] }>("/admin/referrals"),
   applyReferral: (riderId: string, code: string) =>
     request("/admin/referrals/apply", { method: "POST", body: JSON.stringify({ riderId, code }) }),

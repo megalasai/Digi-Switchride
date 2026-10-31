@@ -2,8 +2,10 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { TenantLogo } from "@/components/BrandLogos";
+import { IconMenu } from "@/components/icons";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/lib/auth-context";
+import { useSidebarUi } from "@/lib/sidebar-context";
 import { api, TenantOrg } from "@/lib/api";
 import { useEffect, useState } from "react";
 
@@ -38,6 +40,7 @@ export function AdminHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { hidden, toggle } = useSidebarUi();
   const title = Object.entries(titles).find(([path]) => pathname.startsWith(path))?.[1] ?? "Admin";
   const [tenants, setTenants] = useState<TenantOrg[]>([]);
   const [tenantId, setTenantId] = useState("");
@@ -51,6 +54,15 @@ export function AdminHeader() {
   return (
     <header className="sticky top-0 z-10 flex min-h-16 items-center justify-between gap-4 border-b border-border bg-white/90 px-4 py-2 backdrop-blur-md lg:px-8">
       <div className="flex min-w-0 items-center gap-4">
+        <Button
+          type="button"
+          variant="ghost"
+          className="px-2"
+          title={hidden ? "Show menu" : "Hide menu"}
+          onClick={toggle}
+        >
+          <IconMenu className="h-5 w-5" />
+        </Button>
         <div className="hidden min-w-0 sm:block">
           <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
             {user?.role === "SuperAdmin" ? "Fleetel" : user?.tenantName || "Company portal"}
