@@ -6,7 +6,7 @@ Standalone GPS ingest process. Deploy this on a **droplet or VM with a public IP
 
 **WanWay / GT06** TCP listens on `21100`, `5001`, and `8821`. Point trackers at this host. Register the IMEI in admin (vendor WanWay) and link a vehicle; positions show in the application.
 
-**Configuration** (HTTP ingest, JSON/CSV TCP 4210, MQTT, pull APIs) is stored in **SQLite**. **Received GPS** is stored in **MongoDB** (`gps_positions`, `vehicles`, `iot_devices`).
+**Configuration** (HTTP ingest, JSON/CSV TCP 4210, MQTT, pull APIs) is stored in **SQLite**. Incoming packets are also written under **`/opt/telemetry/YYYY-MM-DD/{port}/received.jsonl`** for 2 days, then those date folders are deleted. Parsed GPS is stored in **MongoDB** (`gps_positions`, `vehicles`, `iot_devices`).
 
 It does not share the platform API process. Other apps call it over HTTP. It can also pull vendor APIs and accept TCP and MQTT.
 
@@ -37,6 +37,7 @@ Minimum droplet: **2 GB / 1 vCPU, Ubuntu 24.04, BLR1**. Put `MONGODB_URI` in `/o
 git clone https://github.com/megalasai/Telemetry.git
 cd Telemetry
 cp .env.example .env
+mkdir -p /opt/telemetry
 docker compose up -d --build
 ```
 

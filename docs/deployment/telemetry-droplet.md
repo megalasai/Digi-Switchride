@@ -13,7 +13,7 @@ The Mongo password is **not** in GitHub. Set `MONGODB_URI` in `Telemetry/.env` o
 | Plan | **Basic, 2 GB RAM / 1 vCPU** (`s-1vcpu-2gb`) | Node 22 + mongoose + GT06. 1 GB often OOMs. |
 | Region | **Bangalore (BLR1)** | Same region as `db-mdb-blr1-25924`. |
 | Image | **Ubuntu 24.04 LTS** | Docker + Node 22. |
-| Disk | Default (~50 GB) | SQLite config is small; GPS lives in Mongo. |
+| Disk | Default (~50 GB) | SQLite is small; 2-day file logs in `/opt/telemetry`; GPS lives in Mongo. |
 | Networking | Public IPv4 | Trackers must reach this host. |
 
 ## Mongo trusted sources
@@ -49,10 +49,13 @@ nano .env
 Put the real password in `MONGODB_URI`. Keep `LOCATION_API_URL` and `PLATFORM_API_URL` pointing at the App Platform app.
 
 ```bash
+mkdir -p /opt/telemetry
 docker compose up -d --build
 curl -s http://127.0.0.1:4200/health
 docker compose logs -f
 ```
+
+Device packets are logged first as `/opt/telemetry/YYYY-MM-DD/{port}/received.jsonl` (kept 2 days), then written to MongoDB. Example: `/opt/telemetry/2026-10-31/21100/received.jsonl`.
 
 Point WanWay devices at this droplet’s public IP, port `21100` (or `5001` / `8821`). Register the IMEI in admin **IoT Devices** as vendor WanWay.
 
