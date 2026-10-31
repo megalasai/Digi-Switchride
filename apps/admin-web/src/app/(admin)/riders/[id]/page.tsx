@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -15,12 +15,14 @@ import { IconUsers } from "@/components/icons";
 import { ACCESS, canAccess } from "@/lib/access";
 import { api, RentalPlan, RiderProfile, Vehicle } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { KycDocView } from "@/components/KycDocView";
 
 const tabs = ["Overview", "Vehicle", "Plan", "Wallet", "Payments", "Service history", "KYC"] as const;
 type Tab = (typeof tabs)[number];
 
 export default function RiderProfilePage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const canWrite = canAccess(user?.role, ACCESS.ridersWrite);
   const [profile, setProfile] = useState<RiderProfile | null>(null);
@@ -31,7 +33,8 @@ export default function RiderProfilePage() {
   const [kycType, setKycType] = useState("Aadhaar");
   const [kycNumber, setKycNumber] = useState("");
   const [kycFile, setKycFile] = useState<string>("");
-  const [tab, setTab] = useState<Tab>("Overview");
+  const initialTab = tabs.includes((searchParams.get("tab") ?? "") as Tab) ? (searchParams.get("tab") as Tab) : "Overview";
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(true);
@@ -279,6 +282,20 @@ export default function RiderProfilePage() {
 
       {tab === "KYC" && (
         <div className="space-y-4">
+          {profile.kyc.submissions.some((s) => s.status === "Approved") && (
+            <Card className="space-y-4 p-6">
+              <p className="font-semibold text-text-primary">Approved documents</p>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {profile.kyc.submissions.filter((s) => s.status === "Approved").map((s) => (
+                  <div key={s.id} className="rounded-xl border border-border p-4">
+                    <p className="text-sm font-semibold">{s.documentType}</p>
+                    <p className="text-xs text-text-muted">{s.documentNumberMasked ?? "No number on file"}</p>
+                    <KycDocView blobUrl={s.blobUrl} title={`${s.documentType} · ${r.fullName ?? r.phone}`} />
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
           {canWrite && (
             <Card className="space-y-3 p-6">
               <p className="font-semibold">Upload KYC document for this customer</p>
@@ -358,9 +375,7 @@ export default function RiderProfilePage() {
                       <TableCell>{s.documentType}{s.documentNumberMasked ? ` · ${s.documentNumberMasked}` : ""}</TableCell>
                       <TableCell><Badge status={s.status} /></TableCell>
                       <TableCell>
-                        {s.blobUrl ? (
-                          <a className="text-sm font-semibold text-brand" href={s.blobUrl} target="_blank" rel="noreferrer">Open</a>
-                        ) : "—"}
+                        <KycDocView blobUrl={s.blobUrl} title={s.documentType} preview={false} />
                       </TableCell>
                       <TableCell>{s.rejectionReason ?? "—"}</TableCell>
                     </TableRow>

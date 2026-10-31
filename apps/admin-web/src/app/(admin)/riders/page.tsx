@@ -240,6 +240,9 @@ export default function RidersPage() {
                     <TableCell>
                       <div className="flex gap-2">
                         <Link href={`/riders/${r.id}`} className="text-xs font-semibold text-brand">Profile</Link>
+                        <Link href={`/riders/${r.id}?tab=KYC`} className="text-xs font-semibold text-brand">
+                          {r.kycStatus === "Approved" ? "View KYC" : "KYC"}
+                        </Link>
                         {canWrite && (
                           <>
                             <Button variant="ghost" className="px-2 py-1 text-xs" type="button" onClick={() => openEdit(r)}>

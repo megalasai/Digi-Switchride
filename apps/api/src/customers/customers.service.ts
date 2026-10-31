@@ -143,8 +143,8 @@ export class KycService {
 
   async listSubmissions(status?: string) {
     const filter: Record<string, unknown> = {};
-    if (status) filter.status = status;
-    else filter.status = { $in: ['Pending', 'UnderReview'] };
+    if (status && status !== 'all') filter.status = status;
+    else if (!status) filter.status = { $in: ['Pending', 'UnderReview'] };
     const items = await this.kycModel.find(filter).sort({ createdAt: -1 }).limit(100);
     const riderIds = [...new Set(items.map((s) => s.customerId))];
     const riders = riderIds.length ? await this.customerModel.find({ _id: { $in: riderIds } }) : [];

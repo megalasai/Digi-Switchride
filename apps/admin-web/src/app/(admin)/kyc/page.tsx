@@ -14,6 +14,7 @@ import { ACCESS, canAccess } from "@/lib/access";
 import { api, KycDocument, Rider } from "@/lib/api";
 import { ProvisionPanel, DisabledField, DisabledSelect, DisabledAction } from "@/components/ui/Provision";
 import { useAuth } from "@/lib/auth-context";
+import { KycDocView } from "@/components/KycDocView";
 
 export default function KycReviewPage() {
   const { user } = useAuth();
@@ -75,7 +76,7 @@ export default function KycReviewPage() {
 
   return (
     <div>
-      <PageHeader title="KYC documents" description="Review submitted identity documents. Rider KYC is approved only when Aadhaar, PAN and Driving Licence are approved." />
+      <PageHeader title="KYC documents" description="Review pending files, or open approved Aadhaar, PAN and driving licence documents for any rider. Rider KYC is approved only when those three are approved." />
       <ProvisionPanel
         title="Document vault and KYC vendor"
         description="Image preview from blob storage and Digio/Signzy verification will be planned next. Review can already run on submitted records."
@@ -159,15 +160,29 @@ export default function KycReviewPage() {
       )}
       {error && <div className="mb-4"><Alert message={error} /></div>}
       {success && <div className="mb-4"><Alert variant="success" message={success} /></div>}
-      <div className="mb-4">
-        <Select value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">Pending / under review</option>
-          <option value="Approved">Approved</option>
-          <option value="Rejected">Rejected</option>
-        </Select>
+      <div className="mb-4 flex flex-wrap gap-2">
+        {[
+          { id: "", label: "To review" },
+          { id: "Approved", label: "Approved documents" },
+          { id: "Rejected", label: "Rejected" },
+          { id: "all", label: "All" },
+        ].map((tab) => (
+          <Button
+            key={tab.id || "pending"}
+            type="button"
+            variant={status === tab.id ? "primary" : "secondary"}
+            onClick={() => setStatus(tab.id)}
+          >
+            {tab.label}
+          </Button>
+        ))}
       </div>
       {loading ? <p className="text-sm text-text-secondary">Loading…</p> : items.length === 0 ? (
-        <EmptyState icon={<IconShield className="h-7 w-7" />} title="No documents" description="Pending KYC submissions from riders appear here." />
+        <EmptyState
+          icon={<IconShield className="h-7 w-7" />}
+          title={status === "Approved" ? "No approved documents" : "No documents"}
+          description={status === "Approved" ? "Approved Aadhaar, PAN, licence and photos will appear here." : "Pending KYC submissions from riders appear here."}
+        />
       ) : (
         <div className="space-y-4">
           {items.map((d) => (
@@ -177,17 +192,7 @@ export default function KycReviewPage() {
                   <p className="font-semibold">{d.documentType}</p>
                   <p className="text-sm text-text-secondary">{d.riderName ?? d.riderPhone} · {d.documentNumberMasked ?? "No number on file"}</p>
                   <div className="mt-2 flex gap-2"><Badge status={d.status} />{d.riderKycStatus && <Badge status={d.riderKycStatus} />}</div>
-                  {d.blobUrl && (
-                    d.blobUrl.startsWith("data:") ? (
-                      <img
-                        src={d.blobUrl}
-                        alt={`${d.documentType} preview`}
-                        className="mt-3 max-h-64 max-w-full rounded-lg border border-border object-contain"
-                      />
-                    ) : (
-                      <a className="mt-2 inline-block text-sm font-semibold text-brand" href={d.blobUrl} target="_blank" rel="noreferrer">Open document</a>
-                    )
-                  )}
+                  <KycDocView blobUrl={d.blobUrl} title={`${d.documentType} · ${d.riderName ?? d.riderPhone ?? "rider"}`} />
                   <div className="mt-2"><Link className="text-sm text-brand" href={`/riders/${d.riderId}`}>Rider profile</Link></div>
                 </div>
                 {canWrite && (d.status === "Pending" || d.status === "UnderReview") && (
