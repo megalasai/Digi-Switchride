@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Headers, Param, Post, Put, Query, Req, U
 import { AuthGuard } from '@nestjs/passport';
 import { AdminGuard, RolesGuard } from '../auth/admin.guard';
 import { Roles } from '../auth/roles.decorator';
+import { UpdateIoTDeviceDto } from '../auth/dto/admin-auth.dto';
 import { GpsIntegrationService } from './gps-integration.service';
 import { IoTService } from './iot.service';
 
@@ -101,8 +102,12 @@ export class IoTController {
 
   @Put('devices/:deviceId')
   @Roles('SuperAdmin', 'Administrator', 'Operations')
-  updateDevice(@Param('deviceId') deviceId: string, @Body() body: { vendorType?: string; vehicleId?: string | null }) {
-    return this.iotService.updateDevice(deviceId, body);
+  updateDevice(
+    @Req() req: { user?: { role?: string } },
+    @Param('deviceId') deviceId: string,
+    @Body() body: UpdateIoTDeviceDto,
+  ) {
+    return this.iotService.updateDevice(deviceId, body, req.user?.role === 'SuperAdmin');
   }
 
   @Post('devices/:deviceId/command')

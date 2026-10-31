@@ -55,9 +55,9 @@ export function CompanyField({
   }, [isSuper, workingId]);
   if (!isSuper) return null;
   return (
-    <Field label="Company">
-      <Select value={value} onChange={(e) => onChange(e.target.value)} required>
-        <option value="">Select company</option>
+    <Field label="Customer / company" hint="Leave as SuperAdmin until you assign this GPS vehicle to a customer">
+      <Select value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">SuperAdmin (unassigned)</option>
         {companies.filter((c) => c.kind !== "Parent").map((c) => (
           <option key={c.id} value={c.id}>{c.name}</option>
         ))}
@@ -69,5 +69,5 @@ export function CompanyField({
 export function CompanyCell({ tenantId }: { tenantId?: string }) {
   const { isSuper, nameOf } = useCompanies();
   if (!isSuper) return null;
-  return <span className="text-xs text-text-muted">{nameOf(tenantId) || "—"}</span>;
+  return <span className="text-xs text-text-muted">{nameOf(tenantId) || "SuperAdmin"}</span>;
 }

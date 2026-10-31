@@ -224,6 +224,28 @@ export class UpdateVehicleDto {
   @IsString()
   @MaxLength(500)
   notes?: string;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v != null && v !== '')
+  @IsMongoId()
+  tenantId?: string;
+}
+
+export class UpdateIoTDeviceDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  vendorType?: string;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v != null && v !== '')
+  @IsMongoId()
+  vehicleId?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v != null && v !== '')
+  @IsMongoId()
+  tenantId?: string;
 }
 
 export class UpdateVehicleStatusDto {

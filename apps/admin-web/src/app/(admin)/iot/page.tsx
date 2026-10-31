@@ -82,6 +82,7 @@ export default function IoTPage() {
         await api.updateIoTDevice(editId, {
           vendorType: form.vendorType,
           vehicleId: form.vehicleId || null,
+          tenantId: form.tenantId || undefined,
         });
         setSuccess("Device updated");
       } else {
@@ -129,7 +130,7 @@ export default function IoTPage() {
     <div>
       <PageHeader
         title="IoT Devices"
-        description="Register a tracker IMEI or link it to a vehicle. Connect Track360 and other GPS APIs, including JSON import, under Integrations."
+        description="Incoming GPS devices stay with SuperAdmin until you edit one and assign it to a customer. That vehicle then appears only for that company. Connect GPS APIs under Integrations."
         actions={
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => void syncTrack360()} disabled={syncing}>

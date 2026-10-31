@@ -89,7 +89,8 @@ export class FleetAdminController {
   @Put('vehicles/:vehicleId')
   @Roles('SuperAdmin', 'Administrator', 'Operations')
   updateVehicle(@Req() req: Parameters<typeof actorFromRequest>[0], @Param('vehicleId') vehicleId: string, @Body() body: UpdateVehicleDto) {
-    return this.fleetService.updateVehicle(vehicleId, body, actorFromRequest(req));
+    const isSuper = (req as { user?: { role?: string } }).user?.role === 'SuperAdmin';
+    return this.fleetService.updateVehicle(vehicleId, body, actorFromRequest(req), isSuper);
   }
 
   @Delete('vehicles/:vehicleId')

@@ -421,11 +421,13 @@ export interface UpdateVehicle {
   iotDeviceId?: string | null;
   status?: string;
   notes?: string;
+  tenantId?: string;
 }
 
 export interface UpdateIoTDevice {
   vendorType?: string;
   vehicleId?: string | null;
+  tenantId?: string;
 }
 
 export interface UpdatePromotion {

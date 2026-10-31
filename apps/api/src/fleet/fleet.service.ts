@@ -10,6 +10,7 @@ import { AuditService, type AuditActor } from '../audit/audit.service';
 import { VEHICLE_STATUSES, resolveWheelClass } from '@digi-switchride/shared';
 import { applyHubScope, assignedHubIds, hubAllowed } from '../common/hub-scope';
 import { runInWriteTenant } from '../common/tenant-write';
+import { runWithoutTenant } from '../common/tenant-als';
 
 const BLOCKED_ASSIGN_STATUSES = ['Maintenance', 'Offline', 'InRide'];
 
@@ -162,10 +163,13 @@ export class FleetService {
 
   async updateVehicle(
     vehicleId: string,
-    data: { registrationNumber?: string; type?: string; wheelClass?: string; hubId?: string; model?: string; iotDeviceId?: string | null; status?: string; notes?: string },
+    data: { registrationNumber?: string; type?: string; wheelClass?: string; hubId?: string; model?: string; iotDeviceId?: string | null; status?: string; notes?: string; tenantId?: string },
     actor?: AuditActor | null,
+    allowTenantAssign = false,
   ) {
-    const vehicle = await findByEitherId(this.vehicleModel, vehicleId);
+    const vehicle = allowTenantAssign
+      ? await runWithoutTenant(() => findByEitherId(this.vehicleModel, vehicleId))
+      : await findByEitherId(this.vehicleModel, vehicleId);
     if (!vehicle) throw new NotFoundException('Vehicle not found');
     const before = this.toVehicle(vehicle);
 
@@ -210,7 +214,12 @@ export class FleetService {
     }
 
     await vehicle.save();
-    const after = await this.getVehicle(vehicleId);
+    if (data.tenantId && allowTenantAssign) {
+      await this.iotService.assignVehicleToTenant(vehicleId, data.tenantId);
+    }
+    const after = allowTenantAssign
+      ? await runWithoutTenant(() => this.getVehicle(vehicleId))
+      : await this.getVehicle(vehicleId);
     await this.auditService.record({
       actor,
       action: 'vehicle.update',

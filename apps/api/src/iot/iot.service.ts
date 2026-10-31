@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
 import { Model } from 'mongoose';
@@ -39,7 +39,7 @@ export class IoTService {
     tenantId?: string,
     extras?: { vehicleNumber?: string; imei?: string; lat?: number; lng?: number },
   ) {
-    return runInWriteTenant(tenantId, async () => {
+    const write = async () => {
     const existing = await this.deviceModel.findOne({ deviceId });
     if (existing) throw new ConflictException(`Device ${deviceId} already exists`);
     const imei = extras?.imei?.trim() || deviceId;
@@ -70,7 +70,9 @@ export class IoTService {
       });
     }
     return { deviceId, vendorType, vehicleId: vehicleId ?? null, vehicleNumber: vehicleNumber || null };
-    });
+    };
+    if (tenantId || currentTenantId()) return runInWriteTenant(tenantId, write);
+    return write();
   }
 
   async importVendorDevices(payload: unknown, tenantId?: string, vendorType = 'GenericPull') {
@@ -453,8 +455,12 @@ export class IoTService {
     };
   }
 
-  async updateDevice(deviceId: string, data: { vendorType?: string; vehicleId?: string | null }) {
-    const device = await this.deviceModel.findOne({ deviceId });
+  async updateDevice(
+    deviceId: string,
+    data: { vendorType?: string; vehicleId?: string | null; tenantId?: string },
+    allowTenantAssign = false,
+  ) {
+    const device = await runWithoutTenant(() => this.deviceModel.findOne({ deviceId }));
     if (!device) throw new NotFoundException('Device not found');
 
     if (data.vendorType != null) device.vendorType = data.vendorType;
@@ -469,7 +475,79 @@ export class IoTService {
       await device.save();
     }
 
-    return this.listDevices().then((items) => items.find((d) => d.id === deviceId));
+    if (allowTenantAssign && data.tenantId) {
+      await this.assignDeviceToTenant(deviceId, data.tenantId);
+    }
+
+    return runWithoutTenant(() => this.listScopedDevices(null)).then((items) => items.find((d) => d.id === deviceId));
+  }
+
+  async assignVehicleToTenant(vehicleId: string, tenantId: string) {
+    const owner = await this.requireCustomerTenant(tenantId);
+    await runWithoutTenant(async () => {
+      const vehicle = await findByEitherId(this.vehicleModel, vehicleId);
+      if (!vehicle) throw new NotFoundException('Vehicle not found');
+      await this.moveVehicleToTenant(vehicle, owner);
+      if (vehicle.iotDeviceId) await this.assignDeviceToTenant(vehicle.iotDeviceId, owner);
+    });
+    return { vehicleId, tenantId: owner };
+  }
+
+  async assignDeviceToTenant(deviceId: string, tenantId: string) {
+    const owner = await this.requireCustomerTenant(tenantId);
+    await this.rehomeDeviceToTenant(
+      { deviceId, imei: deviceId, name: '', lat: null, lng: null, vendorStatus: 'Unknown' },
+      owner,
+    );
+    const device = await runWithoutTenant(() => this.deviceModel.findOne({ deviceId }));
+    if (device?.vehicleId) {
+      const vehicle = await runWithoutTenant(() => findByEitherId(this.vehicleModel, device.vehicleId!));
+      if (vehicle) await this.moveVehicleToTenant(vehicle, owner);
+    }
+    return { deviceId, tenantId: owner };
+  }
+
+  private async requireCustomerTenant(tenantId: string) {
+    const tenant = await this.tenants.findById(tenantId);
+    if (this.tenants.isParent(tenant)) {
+      throw new BadRequestException('Assign the vehicle to a customer company, not Fleetel');
+    }
+    return tenant._id.toString();
+  }
+
+  private async moveVehicleToTenant(vehicle: VehicleDocument, tenantId: string) {
+    const hubId = await this.hubIdForTenant(tenantId, vehicle.hubId);
+    await this.vehicleModel.collection.updateOne(
+      { _id: vehicle._id },
+      { $set: { tenantId, hubId } },
+    );
+    vehicle.hubId = hubId;
+    (vehicle as { tenantId?: string }).tenantId = tenantId;
+  }
+
+  private async hubIdForTenant(tenantId: string, currentHubId?: string) {
+    if (currentHubId) {
+      const current = await runWithoutTenant(() => findByEitherId(this.hubModel, currentHubId));
+      if (current && String((current as { tenantId?: string }).tenantId ?? '') === tenantId) {
+        return current._id.toString();
+      }
+    }
+    const dest = await tenantAls.run({ tenantId, hubIds: null, skip: false }, () =>
+      this.hubModel.findOne({ status: 'Active' }).sort({ name: 1 }),
+    );
+    if (dest) return dest._id.toString();
+    const created = await tenantAls.run({ tenantId, hubIds: null, skip: false }, () =>
+      this.hubModel.create({
+        name: 'Main hub',
+        address: 'Assigned with GPS vehicle',
+        location: toGeoLocation(12.9716, 77.5946),
+        capacity: 500,
+        geoFenceRadiusM: 250,
+        status: 'Active',
+        tenantId,
+      }),
+    );
+    return created._id.toString();
   }
 
   async unlinkDevice(deviceId: string) {
