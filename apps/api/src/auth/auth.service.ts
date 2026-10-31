@@ -93,30 +93,34 @@ export class AuthService implements OnModuleInit {
   }
 
   async registerCustomer(dto: CustomerRegisterDto) {
-    const salt = this.passwordSalt();
-    const username = dto.username.trim().toLowerCase();
-    const existing = await this.customerModel.findOne({ username });
-    if (existing) throw new ConflictException('Username already taken');
+    return this.withCustomerTenant(dto.tenantSlug, async () => {
+      const salt = this.passwordSalt();
+      const username = dto.username.trim().toLowerCase();
+      const existing = await this.customerModel.findOne({ username });
+      if (existing) throw new ConflictException('Username already taken');
 
-    const customer = await this.customerModel.create({
-      username,
-      passwordHash: hashPassword(dto.password, salt),
-      fullName: dto.fullName?.trim(),
-      kycStatus: 'NotSubmitted',
-      accountStatus: 'Active',
+      const customer = await this.customerModel.create({
+        username,
+        passwordHash: hashPassword(dto.password, salt),
+        fullName: dto.fullName?.trim(),
+        kycStatus: 'NotSubmitted',
+        accountStatus: 'Active',
+      });
+
+      return this.issueCustomerTokens(customer, true);
     });
-
-    return this.issueCustomerTokens(customer, true);
   }
 
   async loginCustomer(dto: CustomerLoginDto) {
-    const salt = this.passwordSalt();
-    const username = dto.username.trim().toLowerCase();
-    const customer = await this.customerModel.findOne({ username, accountStatus: 'Active' });
-    if (!customer?.passwordHash || customer.passwordHash !== hashPassword(dto.password, salt)) {
-      throw new UnauthorizedException('Invalid username or password');
-    }
-    return this.issueCustomerTokens(customer, false);
+    return this.withCustomerTenant(dto.tenantSlug, async () => {
+      const salt = this.passwordSalt();
+      const username = dto.username.trim().toLowerCase();
+      const customer = await this.customerModel.findOne({ username, accountStatus: 'Active' });
+      if (!customer?.passwordHash || customer.passwordHash !== hashPassword(dto.password, salt)) {
+        throw new UnauthorizedException('Invalid username or password');
+      }
+      return this.issueCustomerTokens(customer, false);
+    });
   }
 
   async adminLogin(dto: AdminLoginDto) {
@@ -366,6 +370,30 @@ export class AuthService implements OnModuleInit {
     const filters: object[] = [{ _id: id }];
     if (Types.ObjectId.isValid(id)) filters.push({ _id: new Types.ObjectId(id) });
     return filters;
+  }
+
+  private async withCustomerTenant<T>(slug: string | undefined, fn: () => Promise<T>): Promise<T> {
+    const tenant = await this.resolveActiveCustomerTenant(slug);
+    return tenantAls.run({ tenantId: tenant._id.toString(), hubIds: null, skip: false }, fn);
+  }
+
+  private async resolveActiveCustomerTenant(slug?: string) {
+    const trimmed = slug?.trim().toLowerCase();
+    if (trimmed) {
+      const tenant = await this.tenants.findBySlug(trimmed);
+      if (!tenant) throw new BadRequestException('Unknown organization');
+      if (tenant.status !== 'Active') throw new BadRequestException('Organization is not active');
+      if (this.tenants.isParent(tenant)) {
+        throw new BadRequestException('Select your operating company, not the platform parent org');
+      }
+      return tenant;
+    }
+    const defaultId = this.tenants.defaultTenantId();
+    const tenant = defaultId ? await this.tenants.peek(defaultId) : null;
+    if (!tenant || tenant.status !== 'Active') {
+      throw new BadRequestException('Organization is required. Set organization slug on sign-in.');
+    }
+    return tenant;
   }
 
   private async issueCustomerTokens(customer: CustomerDocument, isNewUser: boolean) {

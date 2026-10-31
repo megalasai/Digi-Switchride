@@ -14,7 +14,8 @@
         android:label="Digi-Switchride"
         android:supportsRtl="true"
         android:theme="@style/Theme.DigiSwitchride"
-        android:usesCleartextTraffic="true">
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:usesCleartextTraffic="false">
 
         <activity
             android:name=".MainActivity"

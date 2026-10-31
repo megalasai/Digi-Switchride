@@ -420,6 +420,7 @@ export interface UpdateCustomer {
   email?: string;
   accountStatus?: string;
   forceUnassign?: boolean;
+  tenantId?: string;
 }
 
 export interface UpdateHub {

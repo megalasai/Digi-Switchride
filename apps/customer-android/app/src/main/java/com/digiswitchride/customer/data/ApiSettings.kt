@@ -15,45 +15,25 @@ private val Context.apiSettingsStore by preferencesDataStore("api_settings")
 
 @Singleton
 class ApiSettings @Inject constructor(@ApplicationContext private val context: Context) {
-    private val baseUrlKey = stringPreferencesKey("base_url")
     private val tenantSlugKey = stringPreferencesKey("tenant_slug")
 
-    suspend fun getBaseUrl(): String = BuildConfig.API_BASE_URL
-
-    suspend fun setBaseUrl(input: String) {
-        val normalized = normalizeBaseUrl(input)
-        context.apiSettingsStore.edit { it[baseUrlKey] = normalized }
-    }
+    /** Production API host is fixed at build time (`API_BASE_URL` in gradle.properties). */
+    fun apiBaseUrl(): String = BuildConfig.API_BASE_URL
 
     suspend fun getTenantSlug(): String {
-        return context.apiSettingsStore.data.map { it[tenantSlugKey] }.first() ?: "digi-switchride"
+        return context.apiSettingsStore.data.map { it[tenantSlugKey] }.first()
+            ?: BuildConfig.DEFAULT_TENANT_SLUG
     }
 
     suspend fun setTenantSlug(slug: String) {
-        val value = slug.trim().lowercase().ifBlank { "digi-switchride" }
+        val value = slug.trim().lowercase().ifBlank { BuildConfig.DEFAULT_TENANT_SLUG }
         context.apiSettingsStore.edit { it[tenantSlugKey] = value }
     }
 
-    suspend fun getDisplayHost(): String {
-        val url = getBaseUrl()
-        return url.removePrefix("http://").removePrefix("https://").removeSuffix("/api/v1").removeSuffix("/")
-    }
-
-    companion object {
-        fun normalizeBaseUrl(input: String): String {
-            val trimmed = input.trim().trimEnd('/')
-            if (trimmed.isEmpty()) return BuildConfig.API_BASE_URL
-
-            val withScheme = when {
-                trimmed.startsWith("http://") || trimmed.startsWith("https://") -> trimmed
-                else -> "http://$trimmed"
-            }
-
-            return when {
-                withScheme.endsWith("/api/v1") -> withScheme
-                withScheme.endsWith("/api") -> "$withScheme/v1"
-                else -> "$withScheme/api/v1"
-            }
-        }
+    fun brandingLogoUrl(tenantSlug: String): String {
+        val base = apiBaseUrl().trimEnd('/')
+        val slug = tenantSlug.trim().lowercase()
+        return if (slug.isEmpty()) "$base/branding/optional-logo"
+        else "$base/branding/optional-logo?slug=${java.net.URLEncoder.encode(slug, Charsets.UTF_8.name())}"
     }
 }

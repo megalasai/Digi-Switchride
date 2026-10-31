@@ -71,6 +71,7 @@ services:
       - key: CORS_ORIGIN
         scope: RUN_TIME
         value: "https://fleetel-switchride-pmxt5.ondigitalocean.app"
+      # Rider Android/iOS apps use this public URL (build-time): …/api/v1 — see docs/deployment/mobile-rider-app.md
       - key: LOCATION_SERVICE_URL
         scope: RUN_TIME
         value: http://location:4100

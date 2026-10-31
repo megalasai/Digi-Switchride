@@ -57,8 +57,12 @@ export class RidersAdminController {
 
   @Put(':id')
   @Roles('SuperAdmin', 'Administrator', 'Operations')
-  update(@Req() req: Parameters<typeof actorFromRequest>[0], @Param('id') id: string, @Body() body: UpdateCustomerDto) {
-    return this.ridersService.update(id, body, actorFromRequest(req));
+  update(
+    @Req() req: Parameters<typeof actorFromRequest>[0] & { user?: { role?: string } },
+    @Param('id') id: string,
+    @Body() body: UpdateCustomerDto,
+  ) {
+    return this.ridersService.update(id, body, actorFromRequest(req), req.user?.role);
   }
 
   @Delete(':id')

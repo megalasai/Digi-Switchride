@@ -16,10 +16,14 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
+        val productionApi =
+            project.findProperty("API_BASE_URL") as String?
+                ?: "https://fleetel-switchride-pmxt5.ondigitalocean.app/api/v1"
+        buildConfigField("String", "API_BASE_URL", "\"$productionApi\"")
         buildConfigField(
             "String",
-            "API_BASE_URL",
-            "\"${project.findProperty("API_BASE_URL") ?: "https://fleetel-switchride-pmxt5.ondigitalocean.app/api/v1"}\"",
+            "DEFAULT_TENANT_SLUG",
+            "\"${project.findProperty("DEFAULT_TENANT_SLUG") ?: "digi-switchride"}\"",
         )
         manifestPlaceholders["MAPS_API_KEY"] =
             (project.findProperty("MAPS_API_KEY") as String?) ?: ""
@@ -64,7 +68,7 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
-    implementation("io.coil-kt:coil-compose:2.7.1")
+    implementation("io.coil-kt:coil-compose:2.6.0")
 
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     debugImplementation("androidx.compose.ui:ui-tooling")

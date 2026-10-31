@@ -2,8 +2,15 @@ package com.digiswitchride.customer.data.api
 
 import retrofit2.http.*
 
-data class RegisterRequest(val username: String, val password: String, val fullName: String? = null)
-data class LoginRequest(val username: String, val password: String)
+data class RegisterRequest(
+    val username: String,
+    val password: String,
+    val fullName: String? = null,
+    val tenantSlug: String? = null,
+)
+data class LoginRequest(val username: String, val password: String, val tenantSlug: String? = null)
+data class PublicTenantOption(val id: String, val slug: String, val name: String, val isDefault: Boolean = false)
+data class PublicTenantsResponse(val items: List<PublicTenantOption>)
 data class AuthTokens(val accessToken: String, val refreshToken: String, val expiresIn: Int, val isNewUser: Boolean)
 data class CustomerProfile(
     val id: String,
@@ -214,6 +221,9 @@ interface SwitchrideApi {
 
     @GET("branding")
     suspend fun branding(): BrandingResponse
+
+    @GET("tenants/current")
+    suspend fun publicTenants(): PublicTenantsResponse
 
     @GET("hubs/nearby")
     suspend fun getNearbyHubs(@Query("lat") lat: Double, @Query("lng") lng: Double, @Query("radiusKm") radiusKm: Double = 25.0): HubsResponse

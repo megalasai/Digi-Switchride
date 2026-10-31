@@ -19,6 +19,8 @@ data class AuthState(
     val error: String? = null,
     val productName: String = "Fleetel-Switchride",
     val optionalLogoUrl: String? = null,
+    val organizations: List<PublicTenantOption> = emptyList(),
+    val organizationsLoading: Boolean = true,
 )
 
 @HiltViewModel
@@ -29,7 +31,7 @@ class AuthViewModel @Inject constructor(
 ) : ViewModel() {
     private val _state = MutableStateFlow(AuthState())
     val state: StateFlow<AuthState> = _state
-    private val _tenantSlug = MutableStateFlow("digi-switchride")
+    private val _tenantSlug = MutableStateFlow(BuildConfig.DEFAULT_TENANT_SLUG)
     val tenantSlug: StateFlow<String> = _tenantSlug
     private val _sessionChecked = MutableStateFlow(false)
     val sessionChecked: StateFlow<Boolean> = _sessionChecked
@@ -43,13 +45,25 @@ class AuthViewModel @Inject constructor(
             _sessionChecked.value = true
             try {
                 val branding = api.branding()
-                val logo = if (branding.hasOptionalLogo) "${apiSettings.getBaseUrl().trimEnd('/')}/branding/optional-logo" else null
+                val slug = _tenantSlug.value
+                val orgs = try {
+                    api.publicTenants().items
+                } catch (_: Exception) {
+                    emptyList()
+                }
+                if (orgs.isNotEmpty() && orgs.none { it.slug == slug }) {
+                    val pick = orgs.find { it.isDefault }?.slug ?: orgs.first().slug
+                    _tenantSlug.value = pick
+                    apiSettings.setTenantSlug(pick)
+                }
                 _state.value = _state.value.copy(
                     productName = branding.productName ?: "Fleetel-Switchride",
-                    optionalLogoUrl = logo,
+                    optionalLogoUrl = if (branding.hasOptionalLogo) apiSettings.brandingLogoUrl(_tenantSlug.value) else null,
+                    organizations = orgs,
+                    organizationsLoading = false,
                 )
             } catch (_: Exception) {
-                /* keep defaults if API is offline */
+                _state.value = _state.value.copy(organizationsLoading = false)
             }
         }
     }
@@ -60,10 +74,9 @@ class AuthViewModel @Inject constructor(
             apiSettings.setTenantSlug(slug)
             try {
                 val branding = api.branding()
-                val logo = if (branding.hasOptionalLogo) "${apiSettings.getBaseUrl().trimEnd('/')}/branding/optional-logo" else null
                 _state.value = _state.value.copy(
                     productName = branding.productName ?: "Fleetel-Switchride",
-                    optionalLogoUrl = logo,
+                    optionalLogoUrl = if (branding.hasOptionalLogo) apiSettings.brandingLogoUrl(slug) else null,
                 )
             } catch (_: Exception) { }
         }
@@ -74,7 +87,8 @@ class AuthViewModel @Inject constructor(
             _state.value = _state.value.copy(isLoading = true, error = null)
             try {
                 apiSettings.setTenantSlug(_tenantSlug.value)
-                val tokens = api.login(LoginRequest(username.trim(), password))
+                val slug = _tenantSlug.value.trim().lowercase()
+                val tokens = api.login(LoginRequest(username.trim(), password, slug))
                 tokenManager.saveTokens(tokens.accessToken, tokens.refreshToken)
                 _hasSession.value = true
                 _state.value = _state.value.copy(isLoading = false, isAuthenticated = true)
@@ -89,7 +103,15 @@ class AuthViewModel @Inject constructor(
             _state.value = _state.value.copy(isLoading = true, error = null)
             try {
                 apiSettings.setTenantSlug(_tenantSlug.value)
-                val tokens = api.register(RegisterRequest(username.trim(), password, fullName?.trim()?.takeIf { it.isNotEmpty() }))
+                val slug = _tenantSlug.value.trim().lowercase()
+                val tokens = api.register(
+                    RegisterRequest(
+                        username.trim(),
+                        password,
+                        fullName?.trim()?.takeIf { it.isNotEmpty() },
+                        slug,
+                    ),
+                )
                 tokenManager.saveTokens(tokens.accessToken, tokens.refreshToken)
                 _hasSession.value = true
                 _state.value = _state.value.copy(isLoading = false, isAuthenticated = true)
@@ -117,7 +139,7 @@ class AuthViewModel @Inject constructor(
             message.contains("Failed to connect", ignoreCase = true) ||
                 message.contains("timeout", ignoreCase = true) ||
                 message.contains("Unable to resolve host", ignoreCase = true) ->
-                "Cannot reach the API at ${BuildConfig.API_BASE_URL}. Check that the server is running and port 4000 is open."
+                "Cannot reach Digi-Switchride. Check mobile data or Wi‑Fi, then try again."
             else -> ApiErrorParser.message(e)
         }
     }
@@ -203,7 +225,8 @@ class RiderAppViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching {
                 val branding = api.branding()
-                val logo = if (branding.hasOptionalLogo) "${apiSettings.getBaseUrl().trimEnd('/')}/branding/optional-logo" else null
+                val slug = apiSettings.getTenantSlug()
+                val logo = if (branding.hasOptionalLogo) apiSettings.brandingLogoUrl(slug) else null
                 _state.value = _state.value.copy(tenantLogoUrl = logo)
             }
         }

@@ -15,13 +15,14 @@ import { IconUsers } from "@/components/icons";
 import { ACCESS, canAccess } from "@/lib/access";
 import { api, Rider } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { CompanyCell, CompanyField } from "@/lib/companies";
+import { CompanyCell, CompanyField, useCompanies } from "@/lib/companies";
 import { validateEmail, validateFullName, validatePhone } from "@/lib/validation";
 
 const emptyForm = { phone: "", fullName: "", email: "", accountStatus: "Active", tenantId: "" };
 
 export default function RidersPage() {
   const { user } = useAuth();
+  const { workingName, isSuper } = useCompanies();
   const canWrite = canAccess(user?.role, ACCESS.ridersWrite);
   const [riders, setRiders] = useState<Rider[]>([]);
   const [total, setTotal] = useState(0);
@@ -115,6 +116,7 @@ export default function RidersPage() {
           email: form.email || undefined,
           accountStatus: form.accountStatus,
           forceUnassign,
+          tenantId: form.tenantId || undefined,
         });
         setSuccess("Rider updated");
       } else {
@@ -137,7 +139,11 @@ export default function RidersPage() {
     <div>
       <PageHeader
         title="Rider Management"
-        description="Search, create, and maintain rider accounts"
+        description={
+          isSuper
+            ? `Search and manage riders${workingName ? ` — viewing ${workingName}` : " — all organizations (use header filter to scope)"}`
+            : "Search, create, and maintain rider accounts for your organization"
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Input className="w-56" placeholder="Search name, phone, email" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />

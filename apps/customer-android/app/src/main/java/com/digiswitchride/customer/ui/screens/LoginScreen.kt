@@ -21,6 +21,7 @@ import com.digiswitchride.customer.ui.theme.GradientEnd
 import com.digiswitchride.customer.ui.theme.GradientStart
 import com.digiswitchride.customer.ui.viewmodel.AuthViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(onAuthenticated: () -> Unit, viewModel: AuthViewModel = hiltViewModel()) {
     var isRegister by remember { mutableStateOf(false) }
@@ -43,7 +44,7 @@ fun LoginScreen(onAuthenticated: () -> Unit, viewModel: AuthViewModel = hiltView
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.Center,
         ) {
-            <TenantLogo(state.optionalLogoUrl)
+            TenantLogo(state.optionalLogoUrl)
             Spacer(Modifier.height(28.dp))
             BrandHeader(
                 state.productName.ifBlank { "Fleetel-Switchride" },
@@ -89,17 +90,43 @@ fun LoginScreen(onAuthenticated: () -> Unit, viewModel: AuthViewModel = hiltView
                             shape = RoundedCornerShape(12.dp),
                         )
                     }
-                    Spacer(Modifier.height(16.dp))
-                    OutlinedTextField(
-                        value = tenantSlug,
-                        onValueChange = { viewModel.updateTenantSlug(it) },
-                        label = { Text("Organization slug") },
-                        placeholder = { Text("digi-switchride") },
-                        supportingText = { Text("Your operator’s organization id") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                    )
+                    if (state.organizationsLoading) {
+                        Spacer(Modifier.height(12.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                            CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.dp)
+                        }
+                    } else if (state.organizations.size > 1) {
+                        Spacer(Modifier.height(16.dp))
+                        var expanded by remember { mutableStateOf(false) }
+                        val selected = state.organizations.find { it.slug == tenantSlug }
+                            ?: state.organizations.firstOrNull()
+                        ExposedDropdownMenuBox(
+                            expanded = expanded,
+                            onExpandedChange = { expanded = !expanded },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            OutlinedTextField(
+                                value = selected?.name ?: "Organization",
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Organization") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                            )
+                            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                state.organizations.forEach { org ->
+                                    DropdownMenuItem(
+                                        text = { Text(org.name) },
+                                        onClick = {
+                                            viewModel.updateTenantSlug(org.slug)
+                                            expanded = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
                     Spacer(Modifier.height(20.dp))
                     PrimaryButton(
                         text = if (isRegister) "Create account" else "Sign in",

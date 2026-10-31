@@ -5,6 +5,7 @@ import type { AccountStatus } from '@digi-switchride/shared';
 import type { AuditActor } from '../audit/audit.service';
 import { AuditService } from '../audit/audit.service';
 import { runInWriteTenant } from '../common/tenant-write';
+import { runWithoutTenant } from '../common/tenant-als';
 import { Customer, CustomerDocument, KycSubmission, KycSubmissionDocument } from '../schemas/customer.schema';
 import { Vehicle, VehicleDocument } from '../schemas/fleet.schema';
 import { Booking, BookingDocument, Payment, PaymentDocument, Ride, RideDocument } from '../schemas/booking.schema';
@@ -73,6 +74,7 @@ export class RidersService implements OnModuleInit {
       const q = params.search.trim();
       filter.$or = [
         { phone: { $regex: q, $options: 'i' } },
+        { username: { $regex: q, $options: 'i' } },
         { fullName: { $regex: q, $options: 'i' } },
         { email: { $regex: q, $options: 'i' } },
       ];
@@ -121,12 +123,33 @@ export class RidersService implements OnModuleInit {
 
   async update(
     riderId: string,
-    data: { phone?: string; fullName?: string; email?: string; accountStatus?: string; forceUnassign?: boolean },
+    data: {
+      phone?: string;
+      fullName?: string;
+      email?: string;
+      accountStatus?: string;
+      forceUnassign?: boolean;
+      tenantId?: string;
+    },
     actor?: AuditActor | null,
+    callerRole?: string,
   ) {
     const customer = await this.customerModel.findById(riderId);
     if (!customer) throw new NotFoundException('Rider not found');
     const before = this.toRiderSummary(customer);
+
+    if (data.tenantId && data.tenantId !== before.tenantId) {
+      if (callerRole !== 'SuperAdmin') {
+        throw new BadRequestException('Only a SuperAdmin can move a rider to another organization');
+      }
+      await runWithoutTenant(async () => {
+        await this.customerModel.collection.updateOne(
+          { _id: customer._id },
+          { $set: { tenantId: data.tenantId } },
+        );
+      });
+      (customer as { tenantId?: string }).tenantId = data.tenantId;
+    }
 
     if (data.phone && normalizeIndiaPhone(data.phone) !== customer.phone) {
       const phone = normalizeIndiaPhone(data.phone);

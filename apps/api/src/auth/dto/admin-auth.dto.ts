@@ -145,6 +145,10 @@ export class UpdateCustomerDto {
   @IsOptional()
   @IsBoolean()
   forceUnassign?: boolean;
+
+  @IsOptional()
+  @IsMongoId()
+  tenantId?: string;
 }
 
 export class AssignRiderPlanDto {
