@@ -539,6 +539,10 @@ export class DashboardService {
       lastPlaceKind: v.lastPlaceKind,
       lastLocation: v.lastLat != null && v.lastLng != null ? { lat: v.lastLat, lng: v.lastLng } : null,
       lastTelemetryAt: v.lastTelemetryAt,
+      speedKmh: v.speedKmh,
+      ignition: v.ignition,
+      assignedRiderId: v.assignedRiderId,
+      immobilised: Boolean(v.immobilised),
     }));
   }
 }

@@ -564,6 +564,10 @@ export interface LocatedVehicle {
   lastPlaceKind?: string;
   lastLocation?: { lat: number; lng: number } | null;
   lastTelemetryAt?: string;
+  speedKmh?: number;
+  ignition?: string;
+  assignedRiderId?: string;
+  immobilised?: boolean;
 }
 
 export interface ActiveRideVehicle {

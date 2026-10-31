@@ -63,7 +63,7 @@ export class Vehicle {
   @Prop({ required: true, trim: true })
   registrationNumber!: string;
 
-  @Prop({ required: true, enum: ['EScooter', 'EBike', 'ERickshaw', 'ECar'] })
+  @Prop({ required: true, enum: ['EScooter', 'EBike', 'ERickshaw', 'ECar', 'ETruck'] })
   type!: VehicleType;
 
   @Prop({ enum: ['TwoWheeler', 'ThreeWheeler', 'FourWheeler'] })

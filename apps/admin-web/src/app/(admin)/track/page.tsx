@@ -10,7 +10,7 @@ import { ImmobiliseButton, immobiliserHint } from "@/components/ImmobiliseButton
 import { ACCESS, canAccess } from "@/lib/access";
 import { api, TrackPoint, TrackVehicle } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { assetTypeLabel } from "@/lib/vehicleIcons";
+import { assetTypeLabel, FleetMotionLegend, resolveMotion, VehicleGlyph } from "@/lib/vehicleIcons";
 
 type Mode = "live" | "history";
 
@@ -92,18 +92,32 @@ export default function TrackVehiclePage() {
             vehicleType: selected.type,
             wheelClass: selected.wheelClass,
             status: selected.status,
+            speedKmh: playbackPoint.speedKmh,
+            ignition: playbackPoint.ignition,
+            lastTelemetryAt: playbackPoint.at,
+            withRider: selected.status === "InRide" || Boolean(selected.assignedRiderId),
+            immobilised: selected.immobilised,
           },
         ]
-      : located.map((v) => ({
-          id: v.id,
-          lat: v.lastLat as number,
-          lng: v.lastLng as number,
-          label: `${v.registrationNumber}<br/>${assetTypeLabel(v.type, v.wheelClass)} · ${v.status}${v.immobilised ? " · Immobilised" : ""}<br/>${v.lastPlace ?? ""}`,
-          trail: v.id === selectedId ? (v.locationTrail ?? []) : [],
-          vehicleType: v.type,
-          wheelClass: v.wheelClass,
-          status: v.status,
-        }));
+      : located.map((v) => {
+          const motion = resolveMotion(v);
+          const withRider = v.status === "InRide" || Boolean(v.assignedRiderId);
+          return {
+            id: v.id,
+            lat: v.lastLat as number,
+            lng: v.lastLng as number,
+            label: `${v.registrationNumber}<br/>${assetTypeLabel(v.type, v.wheelClass)} · ${motion.label}${withRider ? " · On trip" : ""}${v.immobilised ? " · Immobilised" : ""}<br/>${v.lastPlace ?? ""}`,
+            trail: v.id === selectedId ? (v.locationTrail ?? []) : [],
+            vehicleType: v.type,
+            wheelClass: v.wheelClass,
+            status: v.status,
+            speedKmh: v.speedKmh,
+            ignition: v.ignition,
+            lastTelemetryAt: v.lastTelemetryAt,
+            withRider,
+            immobilised: v.immobilised,
+          };
+        });
 
   useEffect(() => {
     if (!playing || mode !== "history" || history.length < 2) return;
@@ -157,13 +171,24 @@ export default function TrackVehiclePage() {
                 }}
                 className={`w-full border-b border-border px-4 py-3 text-left transition ${active ? "bg-brand-light" : "hover:bg-surface"}`}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-semibold text-text-primary">{v.registrationNumber}</p>
-                  <span className={`h-2 w-2 rounded-full ${online ? "bg-emerald-500" : "bg-slate-300"}`} />
+                <div className="flex items-center gap-2">
+                  <VehicleGlyph
+                    type={v.type}
+                    wheelClass={v.wheelClass}
+                    color={resolveMotion(v).color}
+                    withRider={v.status === "InRide" || Boolean(v.assignedRiderId)}
+                    className="inline-flex h-8 w-8 shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold text-text-primary">{v.registrationNumber}</p>
+                      <span className={`h-2 w-2 rounded-full ${online ? "bg-emerald-500" : "bg-slate-300"}`} />
+                    </div>
+                    <p className="mt-0.5 text-xs text-text-muted">
+                      {assetTypeLabel(v.type, v.wheelClass)} · {resolveMotion(v).label}
+                    </p>
+                  </div>
                 </div>
-                <p className="mt-0.5 text-xs text-text-muted">
-                  {assetTypeLabel(v.type, v.wheelClass)} · {v.vendorType ?? "No GPS vendor"}
-                </p>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
                   <Badge status={v.status} />
                   {v.immobilised ? (
@@ -190,7 +215,7 @@ export default function TrackVehiclePage() {
           }}
         />
 
-        <div className="absolute left-4 top-4 z-[400] flex gap-2">
+        <div className="absolute left-4 top-4 z-[400] flex flex-wrap items-center gap-2">
           <Button type="button" variant={mode === "live" ? "primary" : "secondary"} onClick={() => { setMode("live"); setPlaying(false); }}>
             Live
           </Button>
@@ -206,6 +231,9 @@ export default function TrackVehiclePage() {
           >
             History playback
           </Button>
+          <div className="rounded-full border border-border bg-white/95 px-3 py-1.5 shadow-sm">
+            <FleetMotionLegend className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-text-muted" />
+          </div>
         </div>
 
         {error && (

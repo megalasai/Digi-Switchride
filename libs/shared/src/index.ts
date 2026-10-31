@@ -1,6 +1,6 @@
 export type KycStatus = 'NotSubmitted' | 'Pending' | 'UnderReview' | 'Approved' | 'Rejected';
 export type AccountStatus = 'Active' | 'Suspended' | 'Deactivated';
-export type VehicleType = 'EScooter' | 'EBike' | 'ERickshaw' | 'ECar';
+export type VehicleType = 'EScooter' | 'EBike' | 'ERickshaw' | 'ECar' | 'ETruck';
 export type WheelClass = 'TwoWheeler' | 'ThreeWheeler' | 'FourWheeler';
 export type VehicleStatus = 'Available' | 'Reserved' | 'InRide' | 'Maintenance' | 'Offline';
 export type BookingType = 'PerMinute' | 'Hourly' | 'Daily' | 'Weekly' | 'Monthly';
@@ -49,12 +49,12 @@ export function normalizeAdminRole(role: string | undefined | null): AdminRole |
 export const ACCOUNT_STATUSES: AccountStatus[] = ['Active', 'Suspended', 'Deactivated'];
 export const KYC_STATUSES: KycStatus[] = ['NotSubmitted', 'Pending', 'UnderReview', 'Approved', 'Rejected'];
 export const VEHICLE_STATUSES: VehicleStatus[] = ['Available', 'Reserved', 'InRide', 'Maintenance', 'Offline'];
-export const VEHICLE_TYPES: VehicleType[] = ['EScooter', 'EBike', 'ERickshaw', 'ECar'];
+export const VEHICLE_TYPES: VehicleType[] = ['EScooter', 'EBike', 'ERickshaw', 'ECar', 'ETruck'];
 export const WHEEL_CLASSES: WheelClass[] = ['TwoWheeler', 'ThreeWheeler', 'FourWheeler'];
 
 export function wheelClassFromType(type?: string | null): WheelClass {
   if (type === 'ERickshaw') return 'ThreeWheeler';
-  if (type === 'ECar') return 'FourWheeler';
+  if (type === 'ECar' || type === 'ETruck') return 'FourWheeler';
   return 'TwoWheeler';
 }
 

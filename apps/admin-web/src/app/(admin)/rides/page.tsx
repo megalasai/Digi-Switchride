@@ -62,6 +62,10 @@ function ActiveRidesView() {
               vehicleType: ride.vehicleType,
               wheelClass: ride.wheelClass,
               status: "InRide",
+              speedKmh: ride.speedKmh,
+              ignition: ride.ignition,
+              lastTelemetryAt: ride.lastTelemetryAt,
+              withRider: true,
             }))}
             onSelect={(id) => {
               document.getElementById(`ride-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });

@@ -1095,7 +1095,9 @@ function gpsPullRequest(config: GpsPullConfig) {
 
 function vehicleTypeFromTrack360(type?: string): VehicleType {
   const t = (type ?? '').toLowerCase();
+  if (t.includes('truck') || t.includes('lorry') || t.includes('pickup')) return 'ETruck';
   if (t.includes('rick') || t.includes('auto')) return 'ERickshaw';
-  if (t.includes('scoot') || t.includes('bike') || t.includes('cycle')) return 'EScooter';
+  if (t.includes('scoot')) return 'EScooter';
+  if (t.includes('bike') || t.includes('moto') || t.includes('cycle')) return 'EBike';
   return 'ECar';
 }

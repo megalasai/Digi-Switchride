@@ -5,7 +5,7 @@ import type { Map as LeafletMap, Marker as LeafletMarker, Polyline as LeafletPol
 import "leaflet/dist/leaflet.css";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Input";
-import { resolveWheelClass, vehicleMarkerSvg, type WheelClass } from "@/lib/vehicleIcons";
+import { resolveAssetKind, resolveMotion, vehicleMarkerSvg } from "@/lib/vehicleIcons";
 
 import { api } from "@/lib/api";
 
@@ -209,6 +209,11 @@ export function LocationPreview({
   wheelClass,
   vehicleType,
   alignToRoads = true,
+  speedKmh,
+  ignition,
+  lastTelemetryAt,
+  withRider,
+  immobilised,
 }: {
   lat?: number | null;
   lng?: number | null;
@@ -218,6 +223,11 @@ export function LocationPreview({
   wheelClass?: string | null;
   vehicleType?: string | null;
   alignToRoads?: boolean;
+  speedKmh?: number | null;
+  ignition?: string | null;
+  lastTelemetryAt?: string | Date | null;
+  withRider?: boolean;
+  immobilised?: boolean;
 }) {
   const mapEl = useRef<HTMLDivElement>(null);
 
@@ -242,7 +252,14 @@ export function LocationPreview({
         ).addTo(map);
       }
       const heading = headingFromPath([...path, { lat, lng }]);
-      const icon = vehicleLeafletIcon(L, resolveWheelClass(vehicleType, wheelClass), heading);
+      const motion = resolveMotion({ speedKmh, ignition, lastTelemetryAt, immobilised });
+      const icon = vehicleLeafletIcon(L, {
+        type: vehicleType,
+        wheelClass,
+        heading,
+        color: motion.color,
+        withRider,
+      });
       L.marker([lat, lng], { icon }).addTo(map).bindPopup(label ?? `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
       watchSize(mapEl.current, map);
     })();
@@ -250,7 +267,7 @@ export function LocationPreview({
       cancelled = true;
       map?.remove();
     };
-  }, [lat, lng, label, trailKey, wheelClass, vehicleType, alignToRoads]);
+  }, [lat, lng, label, trailKey, wheelClass, vehicleType, alignToRoads, speedKmh, ignition, lastTelemetryAt, withRider, immobilised]);
 
   if (lat == null || lng == null) {
     return <p className="text-xs text-text-muted">No coordinates to show on the map.</p>;
@@ -322,6 +339,11 @@ export function LiveVehicleMap({
     wheelClass?: string | null;
     vehicleType?: string | null;
     status?: string | null;
+    speedKmh?: number | null;
+    ignition?: string | null;
+    lastTelemetryAt?: string | Date | null;
+    withRider?: boolean;
+    immobilised?: boolean;
   }[];
   onSelect?: (id: string) => void;
   className?: string;
@@ -344,7 +366,10 @@ export function LiveVehicleMap({
   onSelectRef.current = onSelect;
 
   const signature = vehicles
-    .map((v) => `${v.id}:${v.lat.toFixed(5)}:${v.lng.toFixed(5)}:${(v.trail ?? []).length}:${v.wheelClass}:${v.vehicleType}:${showTrail}`)
+    .map((v) => {
+      const motion = resolveMotion(v);
+      return `${v.id}:${v.lat.toFixed(5)}:${v.lng.toFixed(5)}:${(v.trail ?? []).length}:${v.vehicleType}:${v.wheelClass}:${motion.kind}:${v.withRider ? 1 : 0}:${showTrail}`;
+    })
     .join("|");
 
   useEffect(() => {
@@ -392,7 +417,15 @@ export function LiveVehicleMap({
       const raw = show ? (v.trail ?? []).filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng)) : [];
       const path = show && align ? await snapToRoads(raw) : raw;
       const heading = headingFromPath([...path, { lat: v.lat, lng: v.lng }]);
-      const icon = vehicleLeafletIcon(L, resolveWheelClass(v.vehicleType, v.wheelClass), heading, statusColor(v.status));
+      const motion = resolveMotion(v);
+      const withRider = Boolean(v.withRider || v.status === "InRide");
+      const icon = vehicleLeafletIcon(L, {
+        type: v.vehicleType,
+        wheelClass: v.wheelClass,
+        heading,
+        color: motion.color,
+        withRider,
+      });
       let marker = markersRef.current.get(v.id);
       if (!marker) {
         marker = L.marker([v.lat, v.lng], { icon }).addTo(map);
@@ -413,7 +446,7 @@ export function LiveVehicleMap({
       if (path.length > 1) {
         const line = L.polyline(
           path.map((p) => [p.lat, p.lng] as [number, number]),
-          { color: "#0f6e56", weight: 5, opacity: 0.88 },
+          { color: motion.color, weight: 5, opacity: 0.88 },
         ).addTo(map);
         trailsRef.current.set(v.id, line);
       }
@@ -458,14 +491,6 @@ function watchSize(el: HTMLElement | null, map: LeafletMap | null) {
   ro.observe(el);
 }
 
-function statusColor(status?: string | null) {
-  if (status === "InRide") return "#0f6e56";
-  if (status === "Available") return "#2e90fa";
-  if (status === "Reserved") return "#b45309";
-  if (status === "Maintenance" || status === "Offline") return "#b42318";
-  return "#5b7cfa";
-}
-
 function headingFromPath(path: { lat: number; lng: number }[]) {
   if (path.length < 2) return 0;
   const a = path[path.length - 2];
@@ -504,16 +529,26 @@ async function snapToRoads(path: { lat: number; lng: number }[]) {
 
 function vehicleLeafletIcon(
   L: Awaited<ReturnType<typeof loadLeaflet>>,
-  wheelClass: WheelClass,
-  heading: number,
-  color = "#0f6e56",
+  opts: {
+    type?: string | null;
+    wheelClass?: string | null;
+    heading: number;
+    color: string;
+    withRider?: boolean;
+  },
 ) {
+  const kind = resolveAssetKind(opts.type, opts.wheelClass);
+  const svg = vehicleMarkerSvg(kind, opts.color, { withRider: opts.withRider, kind });
+  const pip =
+    opts.heading && Number.isFinite(opts.heading)
+      ? `<span style="position:absolute;left:50%;top:-2px;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:7px solid ${opts.color};transform:translateX(-50%) rotate(${opts.heading}deg);transform-origin:50% 22px"></span>`
+      : "";
   return L.divIcon({
     className: "vehicle-map-icon",
-    html: `<div style="width:36px;height:36px;transform:rotate(${heading}deg);transform-origin:center;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))">${vehicleMarkerSvg(wheelClass, color)}</div>`,
-    iconSize: [36, 36],
-    iconAnchor: [18, 18],
-    popupAnchor: [0, -16],
+    html: `<div style="position:relative;width:40px;height:40px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))">${pip}${svg}</div>`,
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
+    popupAnchor: [0, -18],
   });
 }
 

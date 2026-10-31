@@ -14,7 +14,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { LiveVehicleMap } from "@/components/ui/LocationMap";
 import { IconDashboard } from "@/components/icons";
 import { api, DashboardSnapshot } from "@/lib/api";
-import { assetTypeLabel } from "@/lib/vehicleIcons";
+import { assetTypeLabel, FleetMotionLegend, resolveMotion, VehicleGlyph } from "@/lib/vehicleIcons";
 import { Input } from "@/components/ui/Input";
 
 function money(n: number) {
@@ -130,15 +130,24 @@ export default function DashboardPage() {
               className="z-0 mb-6 h-[28rem] w-full overflow-hidden rounded-2xl border border-border"
               showTrail={false}
               alignToRoads={false}
-              vehicles={located.map((v) => ({
-                id: v.rideId ?? v.id,
-                lat: v.lastLocation!.lat,
-                lng: v.lastLocation!.lng,
-                label: `${v.registrationNumber}<br/>${v.status ?? ""}<br/>${v.lastPlace ?? "Locating…"}`,
-                vehicleType: v.type,
-                wheelClass: v.wheelClass,
-                status: v.status,
-              }))}
+              vehicles={located.map((v) => {
+                const motion = resolveMotion(v);
+                const withRider = Boolean(v.rideId || v.status === "InRide" || v.assignedRiderId);
+                return {
+                  id: v.rideId ?? v.id,
+                  lat: v.lastLocation!.lat,
+                  lng: v.lastLocation!.lng,
+                  label: `${v.registrationNumber}<br/>${assetTypeLabel(v.type, v.wheelClass)} · ${motion.label}${withRider ? " · On trip" : ""}<br/>${v.lastPlace ?? "Locating…"}`,
+                  vehicleType: v.type,
+                  wheelClass: v.wheelClass,
+                  status: v.status,
+                  speedKmh: v.speedKmh,
+                  ignition: v.ignition,
+                  lastTelemetryAt: v.lastTelemetryAt,
+                  withRider,
+                  immobilised: v.immobilised,
+                };
+              })}
               onSelect={(id) => {
                 const hit = located.find((v) => (v.rideId ?? v.id) === id);
                 if (hit?.rideId) router.push(`/rides?ride=${hit.rideId}`);
@@ -148,6 +157,7 @@ export default function DashboardPage() {
             ) : (
               <p className="mb-4 text-sm text-text-muted">IoT vehicles are listed below. Map markers appear when Track360 sends coordinates.</p>
             )}
+            <FleetMotionLegend className="mb-4 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-text-muted" />
             <DataTable>
               <Table>
                 <TableHead>
@@ -155,15 +165,23 @@ export default function DashboardPage() {
                   <TableHeaderCell>Status</TableHeaderCell>
                   <TableHeaderCell>Location</TableHeaderCell>
                   <TableHeaderCell>Asset type</TableHeaderCell>
+                  <TableHeaderCell>Live</TableHeaderCell>
                 </TableHead>
                 <TableBody>
                   {visibleFleet.map((v) => (
                     <TableRow key={v.id}>
                       <TableCell>
                         <Link
-                          className="font-semibold text-brand"
+                          className="inline-flex items-center gap-2 font-semibold text-brand"
                           href={v.rideId ? `/rides?ride=${v.rideId}` : `/vehicles/${v.id}`}
                         >
+                          <VehicleGlyph
+                            type={v.type}
+                            wheelClass={v.wheelClass}
+                            color={resolveMotion(v).color}
+                            withRider={Boolean(v.rideId || v.status === "InRide" || v.assignedRiderId)}
+                            className="inline-flex h-8 w-8 shrink-0"
+                          />
                           {v.registrationNumber}
                         </Link>
                       </TableCell>
@@ -173,6 +191,7 @@ export default function DashboardPage() {
                         {v.lastPlaceKind ? ` (${v.lastPlaceKind === "Hub" ? "hub" : "on road"})` : ""}
                       </TableCell>
                       <TableCell>{assetTypeLabel(v.type, v.wheelClass)}</TableCell>
+                      <TableCell>{resolveMotion(v).label}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

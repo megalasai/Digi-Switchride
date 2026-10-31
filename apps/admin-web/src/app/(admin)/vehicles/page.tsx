@@ -17,7 +17,7 @@ import { useAuth } from "@/lib/auth-context";
 import { api, Hub, Rider, Vehicle } from "@/lib/api";
 import { CompanyCell, CompanyField } from "@/lib/companies";
 import { ImmobiliseButton } from "@/components/ImmobiliseButton";
-import { assetTypeLabel, wheelClassFromType } from "@/lib/vehicleIcons";
+import { assetTypeLabel, FleetMotionLegend, resolveMotion, VehicleGlyph, wheelClassFromType } from "@/lib/vehicleIcons";
 import { normalizeRegistration, validateRegistration, validateRequired } from "@/lib/validation";
 
 const emptyForm = { registrationNumber: "", type: "EScooter", wheelClass: "TwoWheeler", hubId: "", model: "", iotDeviceId: "", notes: "", tenantId: "" };
@@ -146,6 +146,7 @@ export default function VehiclesPage() {
           </div>
         }
       />
+      <FleetMotionLegend className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-text-muted" />
       <div className="mb-4 flex flex-wrap gap-3">
         <Select value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">All statuses</option>
@@ -187,8 +188,9 @@ export default function VehiclesPage() {
               >
                 <option value="EScooter">E-Scooter (2-wheeler)</option>
                 <option value="EBike">E-Bike (2-wheeler)</option>
-                <option value="ERickshaw">E-Rickshaw (3-wheeler)</option>
-                <option value="ECar">E-Car (4-wheeler)</option>
+                <option value="ERickshaw">Auto rickshaw (3-wheeler)</option>
+                <option value="ECar">Car (4-wheeler)</option>
+                <option value="ETruck">Truck (4-wheeler)</option>
               </Select>
             </Field>
             <Field label="Wheel class" hint="Map icon follows this setting">
@@ -245,10 +247,26 @@ export default function VehiclesPage() {
             <TableBody>
               {vehicles.map((v) => (
                 <TableRow key={v.id}>
-                  <TableCell className="font-semibold">{v.registrationNumber}</TableCell>
+                  <TableCell>
+                    <span className="inline-flex items-center gap-2 font-semibold">
+                      <VehicleGlyph
+                        type={v.type}
+                        wheelClass={v.wheelClass}
+                        color={resolveMotion(v).color}
+                        withRider={v.status === "InRide" || Boolean(v.assignedRiderId)}
+                        className="inline-flex h-8 w-8 shrink-0"
+                      />
+                      {v.registrationNumber}
+                    </span>
+                  </TableCell>
                   <TableCell><CompanyCell tenantId={v.tenantId} /></TableCell>
                   <TableCell>{v.model}</TableCell>
-                  <TableCell>{assetTypeLabel(v.type, v.wheelClass)}</TableCell>
+                  <TableCell>
+                    <div>
+                      {assetTypeLabel(v.type, v.wheelClass)}
+                      <p className="text-[11px] font-normal text-text-muted">{resolveMotion(v).label}</p>
+                    </div>
+                  </TableCell>
                   <TableCell><Badge status={v.status} /></TableCell>
                   <TableCell>{v.immobilised ? "Immobilised" : "Active"}</TableCell>
                   <TableCell>{v.speedKmh != null ? `${Math.round(v.speedKmh)} km/h` : "—"}</TableCell>

@@ -12,6 +12,7 @@ import { Field, Input, Select } from "@/components/ui/Input";
 import { LocationPreview } from "@/components/ui/LocationMap";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ImmobiliseButton } from "@/components/ImmobiliseButton";
+import { assetTypeLabel, resolveMotion, VehicleGlyph, wheelClassFromType } from "@/lib/vehicleIcons";
 import { ACCESS, canAccess } from "@/lib/access";
 import { api, Rider, VehicleDetail } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -43,7 +44,7 @@ export default function VehicleDetailPage() {
         setStatus(d.vehicle.status);
         setRegistrationNumber(d.vehicle.registrationNumber);
         setType(d.vehicle.type);
-        setWheelClass(d.vehicle.wheelClass ?? (d.vehicle.type === "ERickshaw" ? "ThreeWheeler" : d.vehicle.type === "ECar" ? "FourWheeler" : "TwoWheeler"));
+        setWheelClass(d.vehicle.wheelClass ?? wheelClassFromType(d.vehicle.type));
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load vehicle"))
       .finally(() => setLoading(false));
@@ -111,7 +112,7 @@ export default function VehicleDetailPage() {
     <div>
       <PageHeader
         title={v.registrationNumber}
-        description={`${v.model} · ${v.type} · ${v.wheelClass ?? "TwoWheeler"}`}
+        description={`${v.model} · ${assetTypeLabel(v.type, v.wheelClass)} · ${resolveMotion(v).label}`}
         actions={<Link href="/vehicles"><Button variant="secondary">Back to fleet</Button></Link>}
       />
       {error && <div className="mb-4"><Alert message={error} /></div>}
@@ -119,7 +120,16 @@ export default function VehicleDetailPage() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card className="space-y-2 p-6 text-sm">
-          <p><span className="text-text-muted">Status</span> · <Badge status={v.status} /></p>
+          <p className="flex items-center gap-2">
+            <VehicleGlyph
+              type={v.type}
+              wheelClass={v.wheelClass}
+              color={resolveMotion(v).color}
+              withRider={v.status === "InRide" || Boolean(v.assignedRiderId)}
+              className="inline-flex h-10 w-10 shrink-0"
+            />
+            <span className="text-text-muted">Status</span> · <Badge status={v.status} />
+          </p>
           <p>Battery {v.batteryPercent}% · Odometer {v.odometerKm ?? 0} km · Speed {v.speedKmh != null ? `${Math.round(v.speedKmh)} km/h` : "—"}</p>
           <p>Immobiliser: {v.immobilised ? "Immobilised" : "Active"}</p>
           <p>Hub: {detail.hub?.name ?? v.hubId}</p>
@@ -139,7 +149,20 @@ export default function VehicleDetailPage() {
           <p>Last telemetry: {v.lastTelemetryAt ? new Date(v.lastTelemetryAt).toLocaleString() : "—"}</p>
           {v.lastPlace && <p>Place: {v.lastPlace}{v.lastPlaceKind ? ` (${v.lastPlaceKind === 'Hub' ? 'inside hub' : 'outside hub'})` : ''}</p>}
           {v.notes && <p>Notes: {v.notes}</p>}
-          <LocationPreview lat={v.lastLat} lng={v.lastLng} label={v.registrationNumber} trail={v.locationTrail} place={v.lastPlace} vehicleType={v.type} wheelClass={v.wheelClass} />
+          <LocationPreview
+            lat={v.lastLat}
+            lng={v.lastLng}
+            label={v.registrationNumber}
+            trail={v.locationTrail}
+            place={v.lastPlace}
+            vehicleType={v.type}
+            wheelClass={v.wheelClass}
+            speedKmh={v.speedKmh}
+            ignition={v.ignition}
+            lastTelemetryAt={v.lastTelemetryAt}
+            withRider={v.status === "InRide" || Boolean(v.assignedRiderId)}
+            immobilised={v.immobilised}
+          />
         </Card>
         <Card className="space-y-3 p-6 text-sm">
           <p className="font-semibold">Assigned rider</p>
@@ -202,13 +225,14 @@ export default function VehicleDetailPage() {
                 onChange={(e) => {
                   const next = e.target.value;
                   setType(next);
-                  setWheelClass(next === "ERickshaw" ? "ThreeWheeler" : next === "ECar" ? "FourWheeler" : "TwoWheeler");
+                  setWheelClass(wheelClassFromType(next));
                 }}
               >
                 <option value="EScooter">E-Scooter</option>
                 <option value="EBike">E-Bike</option>
-                <option value="ERickshaw">E-Rickshaw</option>
-                <option value="ECar">E-Car</option>
+                <option value="ERickshaw">Auto rickshaw</option>
+                <option value="ECar">Car</option>
+                <option value="ETruck">Truck</option>
               </Select>
             </Field>
             <Field label="Wheel class">
