@@ -61,3 +61,37 @@ export const ACCESS = {
   branding: ["SuperAdmin", "Administrator"] as AdminRoleName[],
   tenants: ["SuperAdmin"] as AdminRoleName[],
 };
+
+export const ROUTE_ACCESS: { prefix: string; roles: AdminRoleName[] }[] = [
+  { prefix: "/dashboard", roles: ACCESS.dashboard },
+  { prefix: "/reports", roles: ACCESS.reports },
+  { prefix: "/riders", roles: ACCESS.riders },
+  { prefix: "/customers", roles: ACCESS.riders },
+  { prefix: "/vehicles", roles: ACCESS.vehicles },
+  { prefix: "/track", roles: ACCESS.track },
+  { prefix: "/hubs", roles: ACCESS.hubs },
+  { prefix: "/stations", roles: ACCESS.stations },
+  { prefix: "/kyc", roles: ACCESS.kyc },
+  { prefix: "/plans", roles: ACCESS.plans },
+  { prefix: "/bookings", roles: ACCESS.bookings },
+  { prefix: "/rides", roles: ACCESS.bookings },
+  { prefix: "/breakdowns", roles: ACCESS.breakdowns },
+  { prefix: "/service", roles: ACCESS.service },
+  { prefix: "/iot", roles: ACCESS.iot },
+  { prefix: "/support", roles: ACCESS.support },
+  { prefix: "/promotions", roles: ACCESS.promotions },
+  { prefix: "/finance", roles: ACCESS.finance },
+  { prefix: "/engagement", roles: ACCESS.engagement },
+  { prefix: "/users", roles: ACCESS.users },
+  { prefix: "/tenants", roles: ACCESS.tenants },
+  { prefix: "/audit", roles: ACCESS.audit },
+  { prefix: "/branding", roles: ACCESS.branding },
+  { prefix: "/integrations", roles: ACCESS.integrations },
+];
+
+export function rolesForPath(pathname: string) {
+  const match = ROUTE_ACCESS.filter((row) => pathname === row.prefix || pathname.startsWith(`${row.prefix}/`)).sort(
+    (a, b) => b.prefix.length - a.prefix.length,
+  )[0];
+  return match?.roles ?? ACCESS.dashboard;
+}

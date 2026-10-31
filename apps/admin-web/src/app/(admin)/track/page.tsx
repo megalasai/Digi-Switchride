@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Input";
 import { LiveVehicleMap } from "@/components/ui/LocationMap";
-import { ImmobiliseButton, immobiliserHint } from "@/components/ImmobiliseButton";
+import { ImmobiliseButton } from "@/components/ImmobiliseButton";
 import { ACCESS, canAccess } from "@/lib/access";
 import { api, GeoPlace, TrackPoint, TrackVehicle } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -141,9 +141,10 @@ export default function TrackVehiclePage() {
     setPlaying(false);
     try {
       const result = await api.vehicleTrackHistory(vehicleId, new Date(from).toISOString(), new Date(to).toISOString());
-      setHistory(result.points);
+      const moving = result.points.filter((p) => p.speedKmh != null && p.speedKmh > 0);
+      setHistory(moving);
       setPlayIndex(0);
-      if (!result.points.length) setError("No history in this period. Live pings from the last minute still appear on Live.");
+      if (!moving.length) setError("No moving points (speed > 0) in this period.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "History failed");
     } finally {
@@ -214,7 +215,7 @@ export default function TrackVehiclePage() {
       <section className="relative min-w-0 flex-1">
         <LiveVehicleMap
           className="z-0 h-full w-full rounded-none border-0"
-          showTrail={mode === "history" || Boolean(selectedId)}
+          showTrail={mode === "history"}
           alignToRoads={mode === "history"}
           focusId={mode === "live" ? selectedId : null}
           vehicles={mapVehicles}
@@ -234,13 +235,39 @@ export default function TrackVehiclePage() {
           <FleetMotionLegend className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-text-muted" />
         </div>
 
-        <div className="absolute right-4 top-4 z-[400] w-[280px] rounded-2xl border border-border bg-white/95 p-3 shadow-xl">
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Geofences & POI</p>
-          <div className="mt-2 flex gap-2">
-            <Button type="button" variant={drawKind === "geofence" ? "primary" : "secondary"} className="flex-1 text-xs" onClick={() => setDrawKind(drawKind === "geofence" ? null : "geofence")}>
+        <div className="absolute bottom-4 right-4 z-[500] w-[280px] rounded-2xl border border-border bg-white/95 p-3 shadow-xl">
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant={mode === "live" && !drawKind ? "primary" : "secondary"}
+              className="text-xs"
+              onClick={() => {
+                setDrawKind(null);
+                setMode("live");
+                setPlaying(false);
+                setSelectedId(null);
+              }}
+            >
+              Live tracking
+            </Button>
+            <Button
+              type="button"
+              variant={mode === "history" ? "primary" : "secondary"}
+              className="text-xs"
+              disabled={!selectedId}
+              onClick={() => {
+                if (!selectedId) return;
+                setDrawKind(null);
+                setMode("history");
+                void loadHistory(selectedId);
+              }}
+            >
+              History
+            </Button>
+            <Button type="button" variant={drawKind === "geofence" ? "primary" : "secondary"} className="text-xs" onClick={() => setDrawKind(drawKind === "geofence" ? null : "geofence")}>
               Geofence
             </Button>
-            <Button type="button" variant={drawKind === "poi" ? "primary" : "secondary"} className="flex-1 text-xs" onClick={() => setDrawKind(drawKind === "poi" ? null : "poi")}>
+            <Button type="button" variant={drawKind === "poi" ? "primary" : "secondary"} className="text-xs" onClick={() => setDrawKind(drawKind === "poi" ? null : "poi")}>
               POI
             </Button>
           </div>
@@ -250,7 +277,7 @@ export default function TrackVehiclePage() {
               onSubmit={async (e) => {
                 e.preventDefault();
                 if (!placeForm.name.trim() || !placeForm.lat || !placeForm.lng) {
-                  setError("Click the map to set a point, then enter a name.");
+                  setError("Click the map, then enter a name.");
                   return;
                 }
                 try {
@@ -275,16 +302,15 @@ export default function TrackVehiclePage() {
                 }
               }}
             >
-              <p className="text-[11px] text-text-muted">Click the map to place the {drawKind === "geofence" ? "circle" : "pin"}.</p>
               <Field label="Name"><Input value={placeForm.name} onChange={(e) => setPlaceForm({ ...placeForm, name: e.target.value })} required /></Field>
               {drawKind === "geofence" && (
                 <Field label="Radius (m)"><Input type="number" min={20} value={placeForm.radiusM} onChange={(e) => setPlaceForm({ ...placeForm, radiusM: e.target.value })} /></Field>
               )}
-              <p className="text-[11px] text-text-muted">{placeForm.lat && placeForm.lng ? `${placeForm.lat}, ${placeForm.lng}` : "No point yet"}</p>
+              <p className="text-[11px] text-text-muted">{placeForm.lat && placeForm.lng ? `${placeForm.lat}, ${placeForm.lng}` : "Click the map"}</p>
               <Button type="submit" className="w-full">Save</Button>
             </form>
           )}
-          <div className="mt-3 max-h-40 space-y-1 overflow-y-auto">
+          <div className="mt-3 max-h-28 space-y-1 overflow-y-auto">
             {places.map((p) => (
               <div key={p.id} className="flex items-center justify-between gap-2 text-xs">
                 <span className="truncate">{p.kind === "geofence" ? "Circle" : "POI"} · {p.name}</span>
@@ -315,24 +341,6 @@ export default function TrackVehiclePage() {
           </div>
         </div>
 
-        <div className="absolute bottom-36 right-4 z-[400] flex flex-col gap-2">
-          <Button type="button" variant={mode === "live" ? "primary" : "secondary"} onClick={() => { setMode("live"); setPlaying(false); }}>
-            Live tracking
-          </Button>
-          <Button
-            type="button"
-            variant={mode === "history" ? "primary" : "secondary"}
-            disabled={!selectedId}
-            onClick={() => {
-              if (!selectedId) return;
-              setMode("history");
-              void loadHistory(selectedId);
-            }}
-          >
-            History playback
-          </Button>
-        </div>
-
         {error && (
           <div className="absolute left-4 right-4 top-16 z-[400] max-w-xl">
             <Alert message={error} />
@@ -345,7 +353,7 @@ export default function TrackVehiclePage() {
         )}
 
         {selected && (
-          <div className="absolute bottom-4 left-4 right-4 z-[400] rounded-2xl border border-border bg-white/95 p-4 shadow-xl backdrop-blur">
+          <div className="absolute bottom-4 left-4 z-[400] max-w-lg rounded-2xl border border-border bg-white/95 p-4 shadow-xl backdrop-blur">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-text-primary">{selected.registrationNumber}</p>
@@ -378,8 +386,6 @@ export default function TrackVehiclePage() {
                 )}
               </div>
             </div>
-            <p className="mt-2 text-[11px] text-text-muted">{immobiliserHint(selected.vendorType)}</p>
-
             {mode === "history" && (
               <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
                 <label className="text-xs text-text-muted">

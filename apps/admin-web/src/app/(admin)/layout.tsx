@@ -3,8 +3,10 @@
 import { AdminHeader } from "@/components/AdminHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { useBranding } from "@/components/BrandLogos";
+import { canAccess, rolesForPath } from "@/lib/access";
 import { AuthGate, useAuth } from "@/lib/auth-context";
 import { SidebarUiProvider, useSidebarUi } from "@/lib/sidebar-context";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 function BrandingSync({ children }: { children: React.ReactNode }) {
@@ -18,6 +20,18 @@ function BrandingSync({ children }: { children: React.ReactNode }) {
 
 function AdminShell({ children }: { children: React.ReactNode }) {
   const { hidden } = useSidebarUi();
+  const { user } = useAuth();
+  const pathname = usePathname();
+  const router = useRouter();
+  const allowed = canAccess(user?.role, rolesForPath(pathname));
+
+  useEffect(() => {
+    if (allowed) return;
+    router.replace("/dashboard");
+  }, [allowed, router]);
+
+  if (!allowed) return null;
+
   return (
     <div className="flex min-h-screen bg-surface">
       {!hidden ? <Sidebar /> : null}

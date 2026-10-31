@@ -6,7 +6,6 @@ import {
   GpsTrackPointDocument,
   IoTDevice,
   IoTDeviceDocument,
-  type LocationPing,
   RentalHub,
   RentalHubDocument,
   Vehicle,
@@ -612,31 +611,21 @@ export class FleetService {
     const ids = mongoIdCandidates(vehicleId).map((id) => String(id));
     ids.push(vehicle._id.toString());
     const points = await this.trackPointModel
-      .find({ vehicleId: { $in: [...new Set(ids)] }, at: { $gte: start, $lte: end } })
+      .find({
+        vehicleId: { $in: [...new Set(ids)] },
+        at: { $gte: start, $lte: end },
+        speedKmh: { $gt: 0 },
+      })
       .sort({ at: 1 })
       .limit(15000)
       .lean();
-    const fallback = (vehicle.locationTrail ?? [])
-      .filter((p: LocationPing) => {
-        const t = new Date(p.at).getTime();
-        return t >= start.getTime() && t <= end.getTime();
-      })
-      .map((p: LocationPing) => ({
-        lat: p.lat,
-        lng: p.lng,
-        at: p.at,
-        speedKmh: undefined as number | undefined,
-        ignition: undefined as string | undefined,
-      }));
-    const rows = points.length
-      ? points.map((p) => ({
-          lat: p.lat,
-          lng: p.lng,
-          at: p.at,
-          speedKmh: p.speedKmh,
-          ignition: p.ignition,
-        }))
-      : fallback;
+    const rows = points.map((p) => ({
+      lat: p.lat,
+      lng: p.lng,
+      at: p.at,
+      speedKmh: p.speedKmh,
+      ignition: p.ignition,
+    }));
     return { vehicle: this.toVehicle(vehicle), from: start, to: end, points: rows };
   }
 

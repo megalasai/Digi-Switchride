@@ -111,9 +111,6 @@ export default function LoginPage() {
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Signing in…" : "Sign in"}
           </Button>
-          <p className="text-center text-xs text-text-muted">
-            SuperAdmin: leave Organization on Fleetel. Tenant operators: pick their company and use the email created under Admin Users — not the SuperAdmin account.
-          </p>
         </form>
       </div>
     </div>

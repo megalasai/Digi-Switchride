@@ -150,7 +150,6 @@ export default function IoTPage() {
     <div>
       <PageHeader
         title="IoT Devices"
-        description="Incoming GPS devices stay with SuperAdmin until you edit one and assign it to a customer. That vehicle then appears only for that company. Connect GPS APIs under Integrations."
         actions={
           <div className="flex gap-2">
             <Button
@@ -211,9 +210,6 @@ export default function IoTPage() {
           {devices.filter((d) => d.vendorType === "WanWay").length ? ` · ${devices.filter((d) => d.vendorType === "WanWay").length} WanWay` : ""}
           {devices.filter((d) => d.connectionStatus === "Connected").length ? ` · ${devices.filter((d) => d.connectionStatus === "Connected").length} online` : ""}
           {syncInfo ? ` · last sync ${new Date(syncInfo.at).toLocaleTimeString()} (${syncInfo.ok ? `${syncInfo.synced} devices` : syncInfo.message})` : ""}
-        </p>
-        <p className="mt-2 text-xs text-text-muted">
-          WanWay trackers must send TCP to the telemetry droplet (ports 21100, 5001, 8821), not to this admin/API host. Point the device at that public IP and use the same MongoDB as the platform.
         </p>
         <div className="mt-3">
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search IMEI, registration, status…" />

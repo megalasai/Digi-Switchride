@@ -369,12 +369,14 @@ export function LiveVehicleMap({
   const onSelectRef = useRef(onSelect);
   const placesRef = useRef(places);
   const onMapClickRef = useRef(onMapClick);
+  const drawingRef = useRef(drawing);
   vehiclesRef.current = vehicles;
   showTrailRef.current = showTrail;
   alignToRoadsRef.current = alignToRoads;
   onSelectRef.current = onSelect;
   placesRef.current = places;
   onMapClickRef.current = onMapClick;
+  drawingRef.current = drawing;
 
   const signature = vehicles
     .map((v) => {
@@ -391,7 +393,6 @@ export function LiveVehicleMap({
       if (cancelled || !mapEl.current) return;
       const map = L.map(mapEl.current, { scrollWheelZoom: true }).setView([INDIA.lat, INDIA.lng], 5);
       L.tileLayer(TILES, { attribution: ATTRIBUTION, maxZoom: 19 }).addTo(map);
-      map.on("click", (event) => onMapClickRef.current?.(event.latlng.lat, event.latlng.lng));
       mapRef.current = map;
       watchSize(mapEl.current, map);
       await syncLiveMarkers(L);
@@ -456,9 +457,15 @@ export function LiveVehicleMap({
       });
       let marker = markersRef.current.get(v.id);
       if (!marker) {
-        marker = L.marker([v.lat, v.lng], { icon }).addTo(map);
+        marker = L.marker([v.lat, v.lng], { icon, interactive: !drawingRef.current }).addTo(map);
         const vehicleId = v.id;
-        marker.on("click", () => onSelectRef.current?.(vehicleId));
+        marker.on("click", (event) => {
+          if (drawingRef.current) {
+            event.originalEvent?.stopPropagation();
+            return;
+          }
+          onSelectRef.current?.(vehicleId);
+        });
         markersRef.current.set(v.id, marker);
       } else {
         marker.setLatLng([v.lat, v.lng]);
@@ -516,6 +523,7 @@ export function LiveVehicleMap({
           color: "#2563eb",
           weight: 2,
           fillOpacity: 0.12,
+          interactive: !drawingRef.current,
         }).addTo(map);
         circle.bindPopup(place.name);
         placeLayersRef.current.set(place.id, circle);
@@ -525,6 +533,7 @@ export function LiveVehicleMap({
           color: "#7c3aed",
           fillColor: "#7c3aed",
           fillOpacity: 0.9,
+          interactive: !drawingRef.current,
         }).addTo(map);
         marker.bindPopup(place.name);
         placeLayersRef.current.set(place.id, marker as unknown as LeafletMarker);
@@ -545,7 +554,23 @@ export function LiveVehicleMap({
     map.setView([hit.lat, hit.lng], Math.max(map.getZoom(), 16), { animate: true });
   }, [focusId]);
 
-  return <div ref={mapEl} className={className ?? "z-0 mb-6 h-80 w-full overflow-hidden rounded-2xl border border-border"} />;
+  return (
+    <div className={`relative ${className ?? "z-0 mb-6 h-80 w-full overflow-hidden rounded-2xl border border-border"}`}>
+      <div ref={mapEl} className="h-full w-full" />
+      {drawing && (
+        <div
+          className="absolute inset-0 z-[500] cursor-crosshair"
+          onClick={(event) => {
+            const map = mapRef.current;
+            if (!map) return;
+            const rect = map.getContainer().getBoundingClientRect();
+            const latlng = map.containerPointToLatLng([event.clientX - rect.left, event.clientY - rect.top]);
+            onMapClickRef.current?.(latlng.lat, latlng.lng);
+          }}
+        />
+      )}
+    </div>
+  );
 }
 
 function watchSize(el: HTMLElement | null, map: LeafletMap | null) {
