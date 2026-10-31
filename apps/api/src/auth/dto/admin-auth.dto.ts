@@ -279,6 +279,12 @@ export class UnassignVehicleDto {
   reason?: string;
 }
 
+export class ImmobiliseVehicleDto {
+  @IsOptional()
+  @IsBoolean()
+  immobilise?: boolean;
+}
+
 export class CreateHubDto {
   @IsString()
   @MinLength(2)

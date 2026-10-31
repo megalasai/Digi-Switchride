@@ -35,6 +35,7 @@ const sections = [
     items: [
       { href: "/riders", label: "Riders", icon: IconUsers, access: ACCESS.riders },
       { href: "/vehicles", label: "Vehicles", icon: IconScooter, access: ACCESS.vehicles },
+      { href: "/track", label: "Track Vehicle", icon: IconMapPin, access: ACCESS.track },
       { href: "/hubs", label: "Rental Hubs", icon: IconMapPin, access: ACCESS.hubs },
       { href: "/stations", label: "Charging", icon: IconBolt, access: ACCESS.stations },
       { href: "/kyc", label: "KYC Review", icon: IconShield, access: ACCESS.kyc },

@@ -14,6 +14,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { LiveVehicleMap } from "@/components/ui/LocationMap";
 import { IconDashboard } from "@/components/icons";
 import { api, DashboardSnapshot } from "@/lib/api";
+import { assetTypeLabel } from "@/lib/vehicleIcons";
+import { Input } from "@/components/ui/Input";
 
 function money(n: number) {
   return `₹${n.toLocaleString("en-IN")}`;
@@ -24,6 +26,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardSnapshot | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [fleetSearch, setFleetSearch] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -71,7 +74,13 @@ export default function DashboardPage() {
   if (!data) return null;
 
   const fleet = data.locatedVehicles ?? [];
-  const located = fleet.filter((v) => v.lastLocation);
+  const q = fleetSearch.trim().toLowerCase();
+  const visibleFleet = q
+    ? fleet.filter((v) =>
+        [v.registrationNumber, v.status, v.lastPlace, v.type, v.wheelClass].filter(Boolean).some((s) => String(s).toLowerCase().includes(q)),
+      )
+    : fleet;
+  const located = visibleFleet.filter((v) => v.lastLocation);
 
   return (
     <div>
@@ -98,12 +107,15 @@ export default function DashboardPage() {
       </div>
 
       <Card className="mt-8 p-5">
-        <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-text-primary">All located vehicles</h3>
-            <p className="text-xs text-text-muted">Every vehicle with a GPS ping. Markers move on refresh without resetting zoom. Click an in-ride vehicle to open Active Rides.</p>
+            <p className="text-xs text-text-muted">Every vehicle with a GPS ping. Markers move on refresh without resetting zoom. Open Track Vehicle for live playback and immobiliser.</p>
           </div>
-          <Link className="text-sm font-semibold text-brand" href="/rides">Open active rides</Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <Input className="w-56" value={fleetSearch} onChange={(e) => setFleetSearch(e.target.value)} placeholder="Search vehicle…" />
+            <Link className="text-sm font-semibold text-brand" href="/track">Track Vehicle</Link>
+          </div>
         </div>
         {fleet.length === 0 ? (
           <EmptyState
@@ -115,6 +127,7 @@ export default function DashboardPage() {
           <>
             {located.length > 0 ? (
             <LiveVehicleMap
+              className="z-0 mb-6 h-[28rem] w-full overflow-hidden rounded-2xl border border-border"
               showTrail={false}
               alignToRoads={false}
               vehicles={located.map((v) => ({
@@ -141,10 +154,10 @@ export default function DashboardPage() {
                   <TableHeaderCell>Vehicle</TableHeaderCell>
                   <TableHeaderCell>Status</TableHeaderCell>
                   <TableHeaderCell>Location</TableHeaderCell>
-                  <TableHeaderCell>Class</TableHeaderCell>
+                  <TableHeaderCell>Asset type</TableHeaderCell>
                 </TableHead>
                 <TableBody>
-                  {fleet.map((v) => (
+                  {visibleFleet.map((v) => (
                     <TableRow key={v.id}>
                       <TableCell>
                         <Link
@@ -159,7 +172,7 @@ export default function DashboardPage() {
                         {v.lastPlace ?? (v.lastLocation ? `${v.lastLocation.lat.toFixed(4)}, ${v.lastLocation.lng.toFixed(4)}` : "Waiting for GPS")}
                         {v.lastPlaceKind ? ` (${v.lastPlaceKind === "Hub" ? "hub" : "on road"})` : ""}
                       </TableCell>
-                      <TableCell>{v.wheelClass ?? v.type ?? "—"}</TableCell>
+                      <TableCell>{assetTypeLabel(v.type, v.wheelClass)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

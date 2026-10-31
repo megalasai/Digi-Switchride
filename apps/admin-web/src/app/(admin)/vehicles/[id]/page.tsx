@@ -11,6 +11,7 @@ import { DataTable, Table, TableBody, TableCell, TableHead, TableHeaderCell, Tab
 import { Field, Input, Select } from "@/components/ui/Input";
 import { LocationPreview } from "@/components/ui/LocationMap";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { ImmobiliseButton } from "@/components/ImmobiliseButton";
 import { ACCESS, canAccess } from "@/lib/access";
 import { api, Rider, VehicleDetail } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -19,6 +20,7 @@ export default function VehicleDetailPage() {
   const params = useParams<{ id: string }>();
   const { user } = useAuth();
   const canWrite = canAccess(user?.role, ACCESS.vehiclesWrite);
+  const canCommand = canWrite || canAccess(user?.role, ACCESS.track);
   const [detail, setDetail] = useState<VehicleDetail | null>(null);
   const [riders, setRiders] = useState<Rider[]>([]);
   const [riderId, setRiderId] = useState("");
@@ -118,9 +120,22 @@ export default function VehicleDetailPage() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card className="space-y-2 p-6 text-sm">
           <p><span className="text-text-muted">Status</span> · <Badge status={v.status} /></p>
-          <p>Battery {v.batteryPercent}% · Odometer {v.odometerKm ?? 0} km</p>
+          <p>Battery {v.batteryPercent}% · Odometer {v.odometerKm ?? 0} km · Speed {v.speedKmh != null ? `${Math.round(v.speedKmh)} km/h` : "—"}</p>
+          <p>Immobiliser: {v.immobilised ? "Immobilised" : "Active"}</p>
           <p>Hub: {detail.hub?.name ?? v.hubId}</p>
           <p>IoT: {v.iotDeviceId ?? "Not linked"}</p>
+          {canCommand && (
+            <ImmobiliseButton>
+              vehicleId={v.id}
+              immobilised={v.immobilised}
+              iotDeviceId={v.iotDeviceId}
+              onDone={(msg) => {
+                setSuccess(msg);
+                load();
+              }}
+              onError={setError}
+            />
+          )}
           <p>Last telemetry: {v.lastTelemetryAt ? new Date(v.lastTelemetryAt).toLocaleString() : "—"}</p>
           {v.lastPlace && <p>Place: {v.lastPlace}{v.lastPlaceKind ? ` (${v.lastPlaceKind === 'Hub' ? 'inside hub' : 'outside hub'})` : ''}</p>}
           {v.notes && <p>Notes: {v.notes}</p>}

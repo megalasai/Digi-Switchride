@@ -133,6 +133,20 @@ export const api = {
   updateVehicle: (id: string, data: UpdateVehicle) =>
     request<Vehicle>(`/admin/vehicles/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteVehicle: (id: string) => request<{ deleted: boolean }>(`/admin/vehicles/${id}`, { method: "DELETE" }),
+  trackVehicles: () => request<{ items: TrackVehicle[] }>("/admin/track/vehicles"),
+  vehicleTrackHistory: (id: string, from?: string, to?: string) => {
+    const q = new URLSearchParams();
+    if (from) q.set("from", from);
+    if (to) q.set("to", to);
+    return request<{ vehicle: Vehicle; from: string; to: string; points: TrackPoint[] }>(
+      `/admin/vehicles/${id}/track-history?${q}`,
+    );
+  },
+  immobiliseVehicle: (id: string, immobilise: boolean) =>
+    request<{ status: string; vendorType: string; message: string; immobilised: boolean }>(
+      `/admin/vehicles/${id}/immobilise`,
+      { method: "POST", body: JSON.stringify({ immobilise }) },
+    ),
   updateVehicleStatus: (vehicleId: string, status: string, reason?: string) =>
     request<Vehicle>(`/admin/vehicles/${vehicleId}/status`, { method: "POST", body: JSON.stringify({ status, reason }) }),
   assignVehicle: (vehicleId: string, data: { riderId: string; override?: boolean; reason?: string }) =>
@@ -631,6 +645,24 @@ export interface Vehicle {
   assignedRiderPhone?: string;
   notes?: string;
   tenantId?: string;
+  speedKmh?: number;
+  ignition?: string;
+  immobilised?: boolean;
+  immobilisedAt?: string;
+}
+
+export interface TrackPoint {
+  lat: number;
+  lng: number;
+  at?: string;
+  speedKmh?: number;
+  ignition?: string;
+}
+
+export interface TrackVehicle extends Vehicle {
+  vendorType?: string | null;
+  connectionStatus?: string | null;
+  canImmobilise?: boolean;
 }
 
 export interface CreateVehicle {

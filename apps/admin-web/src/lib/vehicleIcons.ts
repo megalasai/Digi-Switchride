@@ -17,6 +17,21 @@ export const WHEEL_CLASS_LABEL: Record<WheelClass, string> = {
   FourWheeler: "4-wheeler",
 };
 
+export const ASSET_TYPE_LABEL: Record<string, string> = {
+  EScooter: "E-scooter",
+  EBike: "E-bike",
+  ERickshaw: "E-rickshaw",
+  ECar: "Car",
+};
+
+export function assetTypeLabel(type?: string | null, wheelClass?: string | null) {
+  if (type && ASSET_TYPE_LABEL[type]) return ASSET_TYPE_LABEL[type];
+  if (wheelClass === "FourWheeler") return "Car";
+  if (wheelClass === "ThreeWheeler") return "E-rickshaw";
+  if (wheelClass === "TwoWheeler") return "Bike";
+  return type || "Vehicle";
+}
+
 export function vehicleMarkerSvg(wheelClass: WheelClass, color = "#0f6e56") {
   if (wheelClass === "FourWheeler") {
     return `<svg viewBox="0 0 48 48" width="36" height="36" xmlns="http://www.w3.org/2000/svg">

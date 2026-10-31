@@ -311,6 +311,7 @@ export function LiveVehicleMap({
   className,
   showTrail = true,
   alignToRoads = true,
+  focusId,
 }: {
   vehicles: {
     id: string;
@@ -326,6 +327,7 @@ export function LiveVehicleMap({
   className?: string;
   showTrail?: boolean;
   alignToRoads?: boolean;
+  focusId?: string | null;
 }) {
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
@@ -434,6 +436,14 @@ export function LiveVehicleMap({
       fittedRef.current = true;
     }
   }
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focusId) return;
+    const hit = vehiclesRef.current.find((v) => v.id === focusId);
+    if (!hit) return;
+    map.setView([hit.lat, hit.lng], Math.max(map.getZoom(), 16), { animate: true });
+  }, [focusId]);
 
   return <div ref={mapEl} className={className ?? "z-0 mb-6 h-80 w-full overflow-hidden rounded-2xl border border-border"} />;
 }

@@ -3,7 +3,16 @@ import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
 import { Model } from 'mongoose';
 import { randomUUID } from 'crypto';
-import { IoTDevice, IoTDeviceDocument, RentalHub, RentalHubDocument, Vehicle, VehicleDocument } from '../schemas/fleet.schema';
+import {
+  GpsTrackPoint,
+  GpsTrackPointDocument,
+  IoTDevice,
+  IoTDeviceDocument,
+  RentalHub,
+  RentalHubDocument,
+  Vehicle,
+  VehicleDocument,
+} from '../schemas/fleet.schema';
 import { appendTrail, resolveHubOrPlace } from './location-lookup';
 import { wheelClassFromType, type VehicleType } from '@digi-switchride/shared';
 import { toGeoLocation } from '../common/helpers';
@@ -27,6 +36,7 @@ export class IoTService {
     @InjectModel(IoTDevice.name) private deviceModel: Model<IoTDeviceDocument>,
     @InjectModel(Vehicle.name) private vehicleModel: Model<VehicleDocument>,
     @InjectModel(RentalHub.name) private hubModel: Model<RentalHubDocument>,
+    @InjectModel(GpsTrackPoint.name) private trackPointModel: Model<GpsTrackPointDocument>,
     private config: ConfigService,
     private tenants: TenantsService,
     private gps: GpsIntegrationService,
@@ -124,13 +134,56 @@ export class IoTService {
   }
 
   async sendCommand(deviceId: string, command: string) {
-    await this.deviceModel.findOneAndUpdate(
-      { deviceId },
-      { deviceId, vendorType: 'Simulator' },
-      { upsert: true, setDefaultsOnInsert: true },
+    const device = await runWithoutTenant(() => this.deviceModel.findOne({ deviceId }));
+    if (!device) throw new NotFoundException('Device not found');
+    const vendorType = device.vendorType || 'Simulator';
+    const kind = commandKind(command);
+    const payload = encodeVendorCommand(vendorType, kind, command);
+    const immobilised = kind === 'immobilise' ? true : kind === 'restore' ? false : undefined;
+    await this.deviceModel.collection.updateOne(
+      { _id: device._id },
+      {
+        $set: {
+          pendingCommand: payload,
+          lastCommandAt: new Date(),
+          ...(immobilised != null ? { immobilised } : {}),
+        },
+      },
     );
-    console.log(`[IoT] Command '${command}' sent to device ${deviceId}`);
-    return { commandId: randomUUID(), status: 'Sent' };
+    if (immobilised != null && device.vehicleId) {
+      const vehicle = await runWithoutTenant(() => findByEitherId(this.vehicleModel, device.vehicleId!));
+      if (vehicle) {
+        await this.vehicleModel.collection.updateOne(
+          { _id: vehicle._id },
+          { $set: { immobilised, immobilisedAt: immobilised ? new Date() : null } },
+        );
+      }
+    }
+    this.logger.log(`IoT command ${payload} queued for ${deviceId} (${vendorType})`);
+    return {
+      commandId: randomUUID(),
+      status: vendorType === 'WanWay' ? 'Queued' : 'Recorded',
+      vendorType,
+      command: payload,
+      immobilised: immobilised ?? device.immobilised ?? false,
+      message:
+        vendorType === 'WanWay'
+          ? 'Command queued. The WanWay tracker will receive it on the next TCP packet.'
+          : `${vendorType} does not expose a live cut-off API here; immobiliser status is recorded on the vehicle.`,
+    };
+  }
+
+  async immobiliseVehicle(vehicleId: string, immobilise: boolean) {
+    const vehicle = await runWithoutTenant(() => findByEitherId(this.vehicleModel, vehicleId));
+    if (!vehicle) throw new NotFoundException('Vehicle not found');
+    if (!vehicle.iotDeviceId) throw new BadRequestException('Link an IoT device before sending immobiliser commands');
+    const device = await runWithoutTenant(() =>
+      this.deviceModel.findOne({
+        $or: [{ deviceId: vehicle.iotDeviceId }, { vehicleId: String(vehicle._id) }],
+      }),
+    );
+    if (!device) throw new BadRequestException('No IoT device is linked to this vehicle');
+    return this.sendCommand(device.deviceId, immobilise ? 'Immobilise' : 'Restore');
   }
 
   async listDevices(allTenants = false) {
@@ -653,6 +706,7 @@ export class IoTService {
       iotDeviceId: vehicle.iotDeviceId,
       ...(currentTenantId() ? { tenantId: currentTenantId() } : {}),
     });
+    await this.recordTrackPoint(vehicle._id.toString(), deviceId, lat, lng, now, extras);
 
     return {
       deviceId,
@@ -939,6 +993,45 @@ export class IoTService {
       ...(currentTenantId() ? { tenantId: currentTenantId() } : {}),
     });
   }
+
+  private async recordTrackPoint(
+    vehicleId: string,
+    deviceId: string,
+    lat: number,
+    lng: number,
+    at: Date,
+    extras?: { speedKmh?: number; ignition?: string },
+  ) {
+    try {
+      await this.trackPointModel.create({
+        vehicleId,
+        deviceId,
+        lat,
+        lng,
+        at,
+        speedKmh: extras?.speedKmh,
+        ignition: extras?.ignition,
+        ...(currentTenantId() ? { tenantId: currentTenantId() } : {}),
+      });
+    } catch (error) {
+      this.logger.warn(`Track point not stored: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+}
+
+function commandKind(command: string): 'immobilise' | 'restore' | 'other' {
+  const value = command.trim().toLowerCase();
+  if (['immobilise', 'immobilize', 'lock', 'dyd', 'cut'].some((k) => value.includes(k))) return 'immobilise';
+  if (['restore', 'hfyd', 'unlock', 'resume'].some((k) => value.includes(k))) return 'restore';
+  return 'other';
+}
+
+function encodeVendorCommand(vendorType: string, kind: 'immobilise' | 'restore' | 'other', command: string) {
+  if (vendorType === 'WanWay') {
+    if (kind === 'immobilise') return 'DYD,000000#';
+    if (kind === 'restore') return 'HFYD,000000#';
+  }
+  return command.trim() || (kind === 'immobilise' ? 'Immobilise' : kind === 'restore' ? 'Restore' : command);
 }
 
 function deviceKeys(...values: (string | undefined)[]) {

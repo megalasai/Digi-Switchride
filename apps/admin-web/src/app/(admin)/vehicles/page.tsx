@@ -16,7 +16,8 @@ import { ACCESS, canAccess } from "@/lib/access";
 import { useAuth } from "@/lib/auth-context";
 import { api, Hub, Rider, Vehicle } from "@/lib/api";
 import { CompanyCell, CompanyField } from "@/lib/companies";
-import { wheelClassFromType } from "@/lib/vehicleIcons";
+import { ImmobiliseButton } from "@/components/ImmobiliseButton";
+import { assetTypeLabel, wheelClassFromType } from "@/lib/vehicleIcons";
 import { normalizeRegistration, validateRegistration, validateRequired } from "@/lib/validation";
 
 const emptyForm = { registrationNumber: "", type: "EScooter", wheelClass: "TwoWheeler", hubId: "", model: "", iotDeviceId: "", notes: "", tenantId: "" };
@@ -24,6 +25,7 @@ const emptyForm = { registrationNumber: "", type: "EScooter", wheelClass: "TwoWh
 export default function VehiclesPage() {
   const { user } = useAuth();
   const canWrite = canAccess(user?.role, ACCESS.vehiclesWrite);
+  const canCommand = canWrite || canAccess(user?.role, ACCESS.track);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [hubs, setHubs] = useState<Hub[]>([]);
   const [searchInput, setSearchInput] = useState("");
@@ -231,8 +233,11 @@ export default function VehiclesPage() {
               <TableHeaderCell>Registration</TableHeaderCell>
               <TableHeaderCell>Company</TableHeaderCell>
               <TableHeaderCell>Model</TableHeaderCell>
-              <TableHeaderCell>Class</TableHeaderCell>
+              <TableHeaderCell>Asset type</TableHeaderCell>
               <TableHeaderCell>Status</TableHeaderCell>
+              <TableHeaderCell>Immobiliser</TableHeaderCell>
+              <TableHeaderCell>Speed</TableHeaderCell>
+              <TableHeaderCell>Odometer</TableHeaderCell>
               <TableHeaderCell>Battery</TableHeaderCell>
               <TableHeaderCell>Assigned rider</TableHeaderCell>
               <TableHeaderCell />
@@ -243,8 +248,11 @@ export default function VehiclesPage() {
                   <TableCell className="font-semibold">{v.registrationNumber}</TableCell>
                   <TableCell><CompanyCell tenantId={v.tenantId} /></TableCell>
                   <TableCell>{v.model}</TableCell>
-                  <TableCell>{v.wheelClass ?? v.type}</TableCell>
+                  <TableCell>{assetTypeLabel(v.type, v.wheelClass)}</TableCell>
                   <TableCell><Badge status={v.status} /></TableCell>
+                  <TableCell>{v.immobilised ? "Immobilised" : "Active"}</TableCell>
+                  <TableCell>{v.speedKmh != null ? `${Math.round(v.speedKmh)} km/h` : "—"}</TableCell>
+                  <TableCell>{v.odometerKm != null ? `${Math.round(v.odometerKm)} km` : "—"}</TableCell>
                   <TableCell>{v.batteryPercent}%</TableCell>
                   <TableCell>
                     {v.assignedRiderName ?? v.assignedRiderPhone ? (
@@ -308,6 +316,18 @@ export default function VehiclesPage() {
                             setShowForm(true);
                             setError("");
                           }}
+                        />
+                      )}
+                      {canCommand && (
+                        <ImmobiliseButton>
+                          vehicleId={v.id}
+                          immobilised={v.immobilised}
+                          iotDeviceId={v.iotDeviceId}
+                          onDone={(msg) => {
+                            setSuccess(msg);
+                            load();
+                          }}
+                          onError={setError}
                         />
                       )}
                       <Link className="text-xs font-semibold text-brand" href={`/vehicles/${v.id}`}>Details</Link>

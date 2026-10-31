@@ -36,6 +36,7 @@ export const ACCESS = {
   riders: ["SuperAdmin", "Administrator", "CommandCenter", "Operations", "KycTeam", "Finance"] as AdminRoleName[],
   ridersWrite: ["SuperAdmin", "Administrator", "Operations"] as AdminRoleName[],
   vehicles: ["SuperAdmin", "Administrator", "Operations", "CommandCenter", "ServiceTeam"] as AdminRoleName[],
+  track: ["SuperAdmin", "Administrator", "Operations", "CommandCenter", "ServiceTeam"] as AdminRoleName[],
   vehiclesWrite: ["SuperAdmin", "Administrator", "Operations"] as AdminRoleName[],
   hubs: ["SuperAdmin", "Administrator", "Operations", "CommandCenter", "ServiceTeam"] as AdminRoleName[],
   kyc: ["SuperAdmin", "Administrator", "KycTeam"] as AdminRoleName[],

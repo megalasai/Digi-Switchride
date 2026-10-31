@@ -1,7 +1,18 @@
 import { Injectable, BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { RentalHub, RentalHubDocument, Vehicle, VehicleDocument, VehicleEvent, VehicleEventDocument } from '../schemas/fleet.schema';
+import {
+  GpsTrackPoint,
+  GpsTrackPointDocument,
+  IoTDevice,
+  IoTDeviceDocument,
+  RentalHub,
+  RentalHubDocument,
+  Vehicle,
+  VehicleDocument,
+  VehicleEvent,
+  VehicleEventDocument,
+} from '../schemas/fleet.schema';
 import { Customer, CustomerDocument } from '../schemas/customer.schema';
 import { haversineDistanceKm, normalizeVehicleRegistration, readLatLng, toGeoLocation } from '../common/helpers';
 import { findByEitherId, mongoIdCandidates } from '../common/mongo-id';
@@ -21,6 +32,8 @@ export class FleetService {
     @InjectModel(Vehicle.name) private vehicleModel: Model<VehicleDocument>,
     @InjectModel(VehicleEvent.name) private eventModel: Model<VehicleEventDocument>,
     @InjectModel(Customer.name) private customerModel: Model<CustomerDocument>,
+    @InjectModel(GpsTrackPoint.name) private trackPointModel: Model<GpsTrackPointDocument>,
+    @InjectModel(IoTDevice.name) private deviceModel: Model<IoTDeviceDocument>,
     private iotService: IoTService,
     private auditService: AuditService,
   ) {}
@@ -498,6 +511,67 @@ export class FleetService {
       notes: v.notes,
       statusChangedAt: v.statusChangedAt,
       tenantId: (v as { tenantId?: string }).tenantId,
+      speedKmh: v.speedKmh,
+      ignition: v.ignition,
+      immobilised: Boolean(v.immobilised),
+      immobilisedAt: v.immobilisedAt,
     };
+  }
+
+  async listTrackFleet() {
+    const vehicles = await this.vehicleModel.find(applyHubScope({})).sort({ registrationNumber: 1 }).limit(500);
+    const deviceIds = vehicles.map((v) => v.iotDeviceId).filter(Boolean) as string[];
+    const devices = deviceIds.length
+      ? await this.deviceModel.find({
+          $or: [{ deviceId: { $in: deviceIds } }, { vehicleId: { $in: vehicles.map((v) => v._id.toString()) } }],
+        })
+      : [];
+    const byDeviceId = Object.fromEntries(devices.map((d) => [d.deviceId, d]));
+    const byVehicleId = Object.fromEntries(devices.filter((d) => d.vehicleId).map((d) => [String(d.vehicleId), d]));
+    return {
+      items: vehicles.map((v) => {
+        const device = (v.iotDeviceId ? byDeviceId[v.iotDeviceId] : undefined) ?? byVehicleId[v._id.toString()];
+        return {
+          ...this.toVehicle(v),
+          vendorType: device?.vendorType ?? null,
+          connectionStatus: device?.connectionStatus ?? null,
+          canImmobilise: Boolean(v.iotDeviceId),
+        };
+      }),
+    };
+  }
+
+  async trackHistory(vehicleId: string, from?: string, to?: string) {
+    const vehicle = await findByEitherId(this.vehicleModel, vehicleId);
+    if (!vehicle) throw new NotFoundException('Vehicle not found');
+    const end = to ? new Date(to) : new Date();
+    const start = from ? new Date(from) : new Date(end.getTime() - 24 * 60 * 60 * 1000);
+    const ids = mongoIdCandidates(vehicleId).map((id) => String(id));
+    ids.push(vehicle._id.toString());
+    const points = await this.trackPointModel
+      .find({ vehicleId: { $in: [...new Set(ids)] }, at: { $gte: start, $lte: end } })
+      .sort({ at: 1 })
+      .limit(8000)
+      .lean();
+    const fallback = (vehicle.locationTrail ?? [])
+      .filter((p) => {
+        const t = new Date(p.at).getTime();
+        return t >= start.getTime() && t <= end.getTime();
+      })
+      .map((p) => ({ lat: p.lat, lng: p.lng, at: p.at, speedKmh: undefined as number | undefined, ignition: undefined as string | undefined }));
+    const rows = points.length
+      ? points.map((p) => ({
+          lat: p.lat,
+          lng: p.lng,
+          at: p.at,
+          speedKmh: p.speedKmh,
+          ignition: p.ignition,
+        }))
+      : fallback;
+    return { vehicle: this.toVehicle(vehicle), from: start, to: end, points: rows };
+  }
+
+  async immobiliseVehicle(vehicleId: string, immobilise: boolean) {
+    return this.iotService.immobiliseVehicle(vehicleId, immobilise);
   }
 }

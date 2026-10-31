@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards 
 import { AuthGuard } from '@nestjs/passport';
 import { AdminGuard, RolesGuard } from '../auth/admin.guard';
 import { Roles } from '../auth/roles.decorator';
-import { AssignVehicleDto, CreateVehicleDto, UnassignVehicleDto, UpdateVehicleDto, UpdateVehicleStatusDto } from '../auth/dto/admin-auth.dto';
+import { AssignVehicleDto, CreateVehicleDto, ImmobiliseVehicleDto, UnassignVehicleDto, UpdateVehicleDto, UpdateVehicleStatusDto } from '../auth/dto/admin-auth.dto';
 import { actorFromRequest } from '../common/actor';
 import { FleetService } from './fleet.service';
 
@@ -59,6 +59,31 @@ export class FleetAdminController {
   @Roles('SuperAdmin', 'Administrator', 'Operations')
   deleteHub(@Param('hubId') hubId: string) {
     return this.fleetService.deleteHub(hubId);
+  }
+
+  @Get('track/vehicles')
+  @Roles('SuperAdmin', 'Administrator', 'Operations', 'CommandCenter', 'ServiceTeam')
+  listTrackFleet() {
+    return this.fleetService.listTrackFleet();
+  }
+
+  @Get('vehicles/:vehicleId/track-history')
+  @Roles('SuperAdmin', 'Administrator', 'Operations', 'CommandCenter', 'ServiceTeam')
+  trackHistory(
+    @Param('vehicleId') vehicleId: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.fleetService.trackHistory(vehicleId, from, to);
+  }
+
+  @Post('vehicles/:vehicleId/immobilise')
+  @Roles('SuperAdmin', 'Administrator', 'Operations', 'CommandCenter')
+  immobilise(
+    @Param('vehicleId') vehicleId: string,
+    @Body() body: ImmobiliseVehicleDto,
+  ) {
+    return this.fleetService.immobiliseVehicle(vehicleId, body.immobilise !== false);
   }
 
   @Get('vehicles')
