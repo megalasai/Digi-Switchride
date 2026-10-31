@@ -377,22 +377,12 @@ export class IoTService {
     name?: string;
     vendorType?: string;
   }) {
-    const deviceId = await this.resolveDeviceKey(body.deviceId);
-    const vendorType = body.vendorType ?? (body.name ? 'Track360' : 'Simulator');
-    await this.deviceModel.findOneAndUpdate(
-      { deviceId },
-      {
-        $set: {
-          imei: String(body.deviceId).replace(/\D/g, '') || body.deviceId,
-          ...(body.name ? { displayName: body.name } : {}),
-        },
-        $setOnInsert: { deviceId, vendorType },
-      },
-      { upsert: true, setDefaultsOnInsert: true },
-    );
-    return this.updateTelemetry(deviceId, body.lat, body.lng, body.batteryPercent, body.odometerKm, {
-      speedKmh: body.speedKmh,
-      ignition: body.ignition,
+    return runWithoutTenant(async () => {
+      const deviceId = await this.resolveDeviceKey(body.deviceId);
+      return this.updateTelemetry(deviceId, body.lat, body.lng, body.batteryPercent, body.odometerKm, {
+        speedKmh: body.speedKmh,
+        ignition: body.ignition,
+      });
     });
   }
 
@@ -678,18 +668,29 @@ export class IoTService {
   }
 
   private async resolveVehicle(deviceId: string): Promise<VehicleDocument | null> {
-    const device = await this.deviceModel.findOne({ deviceId });
+    const keys = deviceKeys(deviceId);
+    const device = await this.deviceModel.findOne({
+      $or: [{ deviceId: { $in: keys } }, { imei: { $in: keys } }],
+    });
     if (device?.vehicleId) {
       const byId = await findByEitherId(this.vehicleModel, device.vehicleId);
       if (byId) return byId;
     }
-    return this.vehicleModel.findOne({ iotDeviceId: deviceId });
+    return this.vehicleModel.findOne({ iotDeviceId: { $in: keys } });
   }
 
   private async upsertDeviceTelemetry(deviceId: string, patch: Record<string, unknown>) {
     const tenantId = currentTenantId();
-    const filter = tenantId ? { deviceId, tenantId } : { deviceId };
-    const update = { deviceId, ...patch, ...(tenantId ? { tenantId } : {}) };
+    const keys = deviceKeys(deviceId);
+    const existing = await this.deviceModel.findOne({
+      $or: [{ deviceId: { $in: keys } }, { imei: { $in: keys } }],
+    });
+    const filter = existing
+      ? { _id: existing._id }
+      : tenantId
+        ? { deviceId, tenantId }
+        : { deviceId };
+    const update = { deviceId: existing?.deviceId ?? deviceId, ...patch, ...(tenantId ? { tenantId } : {}) };
     try {
       return await this.deviceModel.findOneAndUpdate(filter, update, {
         upsert: true,
