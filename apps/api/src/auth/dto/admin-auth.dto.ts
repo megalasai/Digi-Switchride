@@ -788,6 +788,21 @@ export class UpdateSupportTicketDto {
   note?: string;
 }
 
+export class UpdateBrandingDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  productName?: string;
+
+  @IsOptional()
+  @IsString()
+  optionalLogoDataUrl?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  clearOptionalLogo?: boolean;
+}
+
 export class CreateSupportTicketDto {
   @IsMongoId()
   riderId!: string;

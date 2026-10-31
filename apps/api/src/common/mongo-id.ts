@@ -81,6 +81,22 @@ export async function removeByEitherId(
   return 0;
 }
 
+export async function patchByEitherId(
+  collection: { updateOne: (filter: object, update: object) => Promise<{ matchedCount: number }> },
+  id: string,
+  update: object,
+) {
+  const filters = [
+    { $expr: { $eq: [{ $toString: '$_id' }, id] } },
+    ...mongoIdCandidates(id).map((value) => ({ _id: value })),
+  ];
+  for (const filter of filters) {
+    const res = await collection.updateOne(filter as never, update as never);
+    if (res.matchedCount) return res.matchedCount;
+  }
+  return 0;
+}
+
 export async function persistById(
   collection: { updateOne: (filter: object, update: object) => Promise<{ matchedCount: number }> },
   id: string,

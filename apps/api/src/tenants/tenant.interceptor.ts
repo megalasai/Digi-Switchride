@@ -16,11 +16,20 @@ export class TenantInterceptor implements NestInterceptor {
       headers: Record<string, string | string[] | undefined>;
     }>();
     const path = req.originalUrl ?? req.url ?? '';
+    const headerId = headerValue(req.headers['x-tenant-id']);
+    const headerSlug = headerValue(req.headers['x-tenant-slug']);
+    if (isPublicBranding(path)) {
+      const slug = queryValue(path, 'slug') || headerSlug;
+      const tenant = slug ? await this.tenants.findBySlug(slug) : null;
+      return from(
+        tenantAls.run({ tenantId: tenant?._id.toString() ?? null, hubIds: null, skip: !tenant }, () =>
+          lastValueFrom(next.handle()),
+        ),
+      );
+    }
     if (isPublicUnauthenticated(path)) {
       return from(tenantAls.run({ tenantId: null, skip: true }, () => lastValueFrom(next.handle())));
     }
-    const headerId = headerValue(req.headers['x-tenant-id']);
-    const headerSlug = headerValue(req.headers['x-tenant-slug']);
     const user = req.user;
     let tenantId: string | null;
 
@@ -54,9 +63,18 @@ function isPublicUnauthenticated(path: string) {
     route === '/api/v1/auth/refresh' ||
     route.startsWith('/api/v1/auth/otp/') ||
     route === '/api/v1/tenants/current' ||
-    route.startsWith('/api/v1/branding') ||
     route === '/api/v1/iot/ingest'
   );
+}
+
+function isPublicBranding(path: string) {
+  const route = path.split('?')[0] ?? '';
+  return route.startsWith('/api/v1/branding');
+}
+
+function queryValue(path: string, key: string) {
+  const query = path.includes('?') ? path.slice(path.indexOf('?') + 1) : '';
+  return new URLSearchParams(query).get(key)?.trim() || undefined;
 }
 
 function headerValue(value: string | string[] | undefined) {

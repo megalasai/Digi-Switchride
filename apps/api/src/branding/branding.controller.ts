@@ -3,6 +3,7 @@ import { AuthGuard } from '@nestjs/passport';
 import type { Response } from 'express';
 import { AdminGuard, RolesGuard } from '../auth/admin.guard';
 import { Roles } from '../auth/roles.decorator';
+import { UpdateBrandingDto } from '../auth/dto/admin-auth.dto';
 import { BrandingService } from './branding.service';
 
 @Controller('v1/branding')
@@ -32,16 +33,14 @@ export class BrandingAdminController {
   constructor(private brandingService: BrandingService) {}
 
   @Get()
+  @Roles('SuperAdmin', 'Administrator', 'Operations', 'CommandCenter', 'ServiceTeam', 'Finance', 'KycTeam')
   get() {
     return this.brandingService.getPublic();
   }
 
   @Put()
   @Roles('SuperAdmin', 'Administrator')
-  update(
-    @Body()
-    body: { productName?: string; optionalLogoDataUrl?: string | null; clearOptionalLogo?: boolean },
-  ) {
+  update(@Body() body: UpdateBrandingDto) {
     return this.brandingService.update(body);
   }
 }

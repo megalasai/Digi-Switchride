@@ -7,9 +7,9 @@ import { Card } from "@/components/ui/Card";
 import { Field, Input, Select } from "@/components/ui/Input";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ACCESS, canAccess } from "@/lib/access";
-import { api, API_BASE, Branding, TenantOrg } from "@/lib/api";
+import { api, Branding, TenantOrg } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { useBranding } from "@/components/BrandLogos";
+import { tenantLogoSrc, useBranding } from "@/components/BrandLogos";
 
 export default function BrandingPage() {
   const { user } = useAuth();
@@ -52,8 +52,8 @@ export default function BrandingPage() {
 
   const onFile = (file?: File) => {
     if (!file) return;
-    if (file.size > 400_000) {
-      setError("Logo must be under 400 KB");
+    if (file.size > 800_000) {
+      setError("Logo must be under 800 KB");
       return;
     }
     const reader = new FileReader();
@@ -97,10 +97,8 @@ export default function BrandingPage() {
     }
   };
 
-  const tenantSrc =
-    preview ??
-    branding?.optionalLogoDataUrl ??
-    (branding?.hasOptionalLogo ? `${API_BASE}/branding/optional-logo` : null);
+  const companySlug = companies.find((c) => c.id === companyId)?.slug || branding?.companySlug;
+  const tenantSrc = preview ?? tenantLogoSrc(branding, companySlug);
   const companyName = companies.find((c) => c.id === companyId)?.name || branding?.companyName || user?.tenantName;
 
   return (
@@ -136,7 +134,7 @@ export default function BrandingPage() {
         {canWrite && (
           <>
             <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={(e) => onFile(e.target.files?.[0])} />
-            <p className="text-xs text-text-muted">PNG, JPEG, WebP or SVG, under 400 KB.</p>
+            <p className="text-xs text-text-muted">PNG, JPEG, WebP or SVG, under 800 KB.</p>
             <Field label="Display name">
               <Input value={productName} onChange={(e) => setProductName(e.target.value)} maxLength={60} />
             </Field>

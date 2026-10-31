@@ -85,7 +85,7 @@ export default function LoginPage() {
             {tenantSlug ? (
               <>
                 <p className="text-lg font-semibold text-text-primary">{orgs.find((o) => o.slug === tenantSlug)?.name}</p>
-                <TenantLogo branding={orgBranding} slug={tenantSlug} size="md" fallback />
+                <TenantLogo branding={orgBranding} slug={tenantSlug} size="md" />
               </>
             ) : null}
             <div>

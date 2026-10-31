@@ -76,8 +76,6 @@ export function AdminHeader() {
           <TenantLogo
             size="sm"
             label={false}
-            fallback
-            branding={null}
             slug={tenants.find((t) => t.id === tenantId)?.slug}
           />
         ) : null}

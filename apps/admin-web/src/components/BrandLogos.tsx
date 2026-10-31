@@ -26,8 +26,17 @@ export function BrandingProvider({ children }: { children: React.ReactNode }) {
   const [branding, setBranding] = useState<Branding>(FALLBACK);
   const load = useCallback(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("adminToken") : null;
-    const canAdmin = Boolean(token && user && ["SuperAdmin", "Administrator"].includes(user.role));
-    const req = canAdmin ? api.getBranding() : api.publicBranding();
+    const tenantId = typeof window !== "undefined" ? localStorage.getItem("adminTenantId") : null;
+    let req: Promise<Branding>;
+    if (token && user) {
+      if (user.role === "SuperAdmin") {
+        req = tenantId ? api.getBranding(tenantId) : api.publicBranding();
+      } else {
+        req = api.getBranding();
+      }
+    } else {
+      req = api.publicBranding();
+    }
     req.then((next) => setBranding({ ...FALLBACK, ...next })).catch(() => setBranding(FALLBACK));
   }, [user?.id, user?.role, user?.tenantId]);
   useEffect(() => {
@@ -40,19 +49,23 @@ export function useBranding() {
   return useContext(BrandingContext);
 }
 
-export function tenantLogoSrc(branding: Branding | null, slug?: string | null) {
+export function tenantLogoSrc(branding?: Branding | null, slug?: string | null) {
   if (branding?.optionalLogoDataUrl) return branding.optionalLogoDataUrl;
+  const query = slug || branding?.companySlug || null;
   if (branding?.optionalLogoUrl) {
     if (branding.optionalLogoUrl.startsWith("http") || branding.optionalLogoUrl.startsWith("data:")) {
       return branding.optionalLogoUrl;
     }
-    if (branding.optionalLogoUrl.startsWith("/api/")) return branding.optionalLogoUrl;
+    if (branding.optionalLogoUrl.startsWith("/api-proxy/") || branding.optionalLogoUrl.startsWith("/api/")) {
+      if (branding.optionalLogoUrl.startsWith("/api/v1/")) {
+        return `${API_BASE}${branding.optionalLogoUrl.slice("/api/v1".length)}`;
+      }
+      return branding.optionalLogoUrl;
+    }
     return `${API_BASE}${branding.optionalLogoUrl.startsWith("/") ? branding.optionalLogoUrl : `/${branding.optionalLogoUrl}`}`;
   }
-  if (branding?.hasOptionalLogo) {
-    const query = slug || branding?.companySlug;
-    return query ? `${API_BASE}/branding/optional-logo?slug=${encodeURIComponent(query)}` : `${API_BASE}/branding/optional-logo`;
-  }
+  if (query) return `${API_BASE}/branding/optional-logo?slug=${encodeURIComponent(query)}`;
+  if (branding?.hasOptionalLogo) return `${API_BASE}/branding/optional-logo`;
   return null;
 }
 
