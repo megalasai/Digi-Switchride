@@ -6,6 +6,7 @@ import {
   GpsTrackPointDocument,
   IoTDevice,
   IoTDeviceDocument,
+  type LocationPing,
   RentalHub,
   RentalHubDocument,
   Vehicle,
@@ -554,11 +555,17 @@ export class FleetService {
       .limit(8000)
       .lean();
     const fallback = (vehicle.locationTrail ?? [])
-      .filter((p) => {
+      .filter((p: LocationPing) => {
         const t = new Date(p.at).getTime();
         return t >= start.getTime() && t <= end.getTime();
       })
-      .map((p) => ({ lat: p.lat, lng: p.lng, at: p.at, speedKmh: undefined as number | undefined, ignition: undefined as string | undefined }));
+      .map((p: LocationPing) => ({
+        lat: p.lat,
+        lng: p.lng,
+        at: p.at,
+        speedKmh: undefined as number | undefined,
+        ignition: undefined as string | undefined,
+      }));
     const rows = points.length
       ? points.map((p) => ({
           lat: p.lat,
