@@ -54,6 +54,7 @@ function isPublicUnauthenticated(path: string) {
     route === '/api/v1/auth/refresh' ||
     route.startsWith('/api/v1/auth/otp/') ||
     route === '/api/v1/tenants/current' ||
+    route.startsWith('/api/v1/branding') ||
     route === '/api/v1/iot/ingest'
   );
 }

@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { api, API_BASE, Branding } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 
 const BrandingContext = createContext<{ branding: Branding | null; reload: () => void }>({
   branding: null,
@@ -21,12 +22,14 @@ const FALLBACK: Branding = {
 };
 
 export function BrandingProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [branding, setBranding] = useState<Branding>(FALLBACK);
   const load = useCallback(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("adminToken") : null;
-    const req = token ? api.getBranding() : api.publicBranding();
+    const canAdmin = Boolean(token && user && ["SuperAdmin", "Administrator"].includes(user.role));
+    const req = canAdmin ? api.getBranding() : api.publicBranding();
     req.then((next) => setBranding({ ...FALLBACK, ...next })).catch(() => setBranding(FALLBACK));
-  }, []);
+  }, [user?.id, user?.role, user?.tenantId]);
   useEffect(() => {
     load();
   }, [load]);
@@ -46,7 +49,7 @@ export function tenantLogoSrc(branding: Branding | null, slug?: string | null) {
     if (branding.optionalLogoUrl.startsWith("/api/")) return branding.optionalLogoUrl;
     return `${API_BASE}${branding.optionalLogoUrl.startsWith("/") ? branding.optionalLogoUrl : `/${branding.optionalLogoUrl}`}`;
   }
-  if (branding?.hasOptionalLogo || slug) {
+  if (branding?.hasOptionalLogo) {
     const query = slug || branding?.companySlug;
     return query ? `${API_BASE}/branding/optional-logo?slug=${encodeURIComponent(query)}` : `${API_BASE}/branding/optional-logo`;
   }

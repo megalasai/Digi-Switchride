@@ -44,11 +44,16 @@ export class BrandingService {
   }
 
   async getOptionalLogo(slug?: string) {
-    if (slug) {
-      const tenantId = await this.tenants.resolveTenantId(slug);
-      return tenantAls.run({ tenantId, hubIds: null, skip: false }, () => this.readLogo());
+    try {
+      if (slug) {
+        const tenantId = await this.tenants.resolveTenantId(slug);
+        return await tenantAls.run({ tenantId, hubIds: null, skip: false }, () => this.readLogo());
+      }
+      return await this.readLogo();
+    } catch (error) {
+      if (error instanceof NotFoundException) return null;
+      throw error;
     }
-    return this.readLogo();
   }
 
   async update(data: { productName?: string; optionalLogoDataUrl?: string | null; clearOptionalLogo?: boolean }) {

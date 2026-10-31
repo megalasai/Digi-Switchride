@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Header, Put, Query, StreamableFile, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Put, Query, Res, StreamableFile, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import type { Response } from 'express';
 import { AdminGuard, RolesGuard } from '../auth/admin.guard';
 import { Roles } from '../auth/roles.decorator';
 import { BrandingService } from './branding.service';
@@ -15,8 +16,12 @@ export class BrandingPublicController {
 
   @Get('optional-logo')
   @Header('Cache-Control', 'no-store')
-  async optionalLogo(@Query('slug') slug?: string) {
+  async optionalLogo(@Query('slug') slug?: string, @Res({ passthrough: true }) res?: Response) {
     const logo = await this.brandingService.getOptionalLogo(slug);
+    if (!logo) {
+      res?.status(204);
+      return;
+    }
     return new StreamableFile(logo.buffer, { type: logo.mime, disposition: 'inline' });
   }
 }
@@ -27,7 +32,6 @@ export class BrandingAdminController {
   constructor(private brandingService: BrandingService) {}
 
   @Get()
-  @Roles('SuperAdmin', 'Administrator')
   get() {
     return this.brandingService.getPublic();
   }
