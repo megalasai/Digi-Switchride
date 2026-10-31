@@ -125,7 +125,7 @@ export default function VehicleDetailPage() {
           <p>Hub: {detail.hub?.name ?? v.hubId}</p>
           <p>IoT: {v.iotDeviceId ?? "Not linked"}</p>
           {canCommand && (
-            <ImmobiliseButton>
+            <ImmobiliseButton
               vehicleId={v.id}
               immobilised={v.immobilised}
               iotDeviceId={v.iotDeviceId}

@@ -319,7 +319,7 @@ export default function VehiclesPage() {
                         />
                       )}
                       {canCommand && (
-                        <ImmobiliseButton>
+                        <ImmobiliseButton
                           vehicleId={v.id}
                           immobilised={v.immobilised}
                           iotDeviceId={v.iotDeviceId}
