@@ -9,7 +9,7 @@ const BrandingContext = createContext<{ branding: Branding | null; reload: () =>
   reload: () => {},
 });
 
-const PRODUCT = "Fleetel-Switchride";
+const PRODUCT = "MoventraX";
 const FALLBACK_LOGO = "/brand/partner.png";
 
 const FALLBACK: Branding = {
@@ -82,7 +82,7 @@ export function ProductBrand({
 }) {
   const { branding } = useBranding();
   const raw = branding?.productName ?? PRODUCT;
-  const name = /digi[\s-]*switch/i.test(raw) ? PRODUCT : raw;
+  const name = /digi[\s-]*switch|fleetel[\s-]*switch|switchride|^fleetel$/i.test(raw) ? PRODUCT : raw;
   const company = companyName ?? branding?.companyName;
   const pin = size === "lg" ? "h-14 w-14" : size === "sm" ? "h-9 w-9" : "h-11 w-11";
   const nameColor = variant === "dark" ? "text-white" : "text-text-primary";
@@ -90,7 +90,7 @@ export function ProductBrand({
 
   return (
     <div className="flex min-w-0 items-center gap-3">
-      <img src="/brand/switchride.svg" alt="Fleetel-Switchride" className={`${pin} shrink-0`} />
+      <img src="/brand/switchride.svg" alt="MoventraX" className={`${pin} shrink-0`} />
       {showName ? (
         <div className="min-w-0">
           <p className={`truncate text-base font-bold tracking-tight ${nameColor}`}>{company || name}</p>

@@ -11,7 +11,7 @@ export class HealthController {
     return {
       status: 'ok',
       service: 'api',
-      product: 'Fleetel-Switchride',
+      product: 'MoventraX',
       location,
     };
   }

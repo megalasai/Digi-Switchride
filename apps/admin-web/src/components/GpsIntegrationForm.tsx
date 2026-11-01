@@ -173,7 +173,7 @@ export function GpsIntegrationForm({ tenantId: forcedTenantId }: { tenantId?: st
       <Card className="p-5">
         <p className="font-semibold text-text-primary">Connect a GPS / telematics API</p>
         <p className="mt-1 text-sm text-text-secondary">
-          Track360, Traccar, or any JSON HTTP pull. Use Push ingest when the vendor posts devices to Switchride. Save a separate integration for each API.
+          Track360, Traccar, or any JSON HTTP pull. Use Push ingest when the vendor posts devices to MoventraX. Save a separate integration for each API.
         </p>
         {error && <div className="mt-3"><Alert message={error} /></div>}
         {success && <div className="mt-3"><Alert variant="success" message={success} /></div>}

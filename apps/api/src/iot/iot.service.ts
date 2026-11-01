@@ -585,7 +585,7 @@ export class IoTService implements OnModuleInit {
   private async requireCustomerTenant(tenantId: string) {
     const tenant = await this.tenants.findById(tenantId);
     if (this.tenants.isParent(tenant)) {
-      throw new BadRequestException('Assign the vehicle to a customer company, not Fleetel');
+      throw new BadRequestException('Assign the vehicle to a customer company, not MoventraX');
     }
     return tenant._id.toString();
   }

@@ -68,15 +68,17 @@ export class TenantsService implements OnModuleInit {
         isDefault: false,
         kind: 'Parent',
         contactEmail: 'hello@fleetel.com',
-        notes: 'Platform operator. Customer companies are tenants of Fleetel.',
+        notes: 'Platform operator. Customer companies are tenants of MoventraX.',
       });
-    } else if (parent.kind !== 'Parent') {
-      await this.tenantModel.collection.updateOne(
-        { slug: PARENT_COMPANY_SLUG },
-        { $set: { kind: 'Parent', name: PARENT_COMPANY_NAME } },
-      );
-      parent.kind = 'Parent';
-      parent.name = PARENT_COMPANY_NAME;
+    } else {
+      if (parent.kind !== 'Parent' || parent.name !== PARENT_COMPANY_NAME) {
+        await this.tenantModel.collection.updateOne(
+          { slug: PARENT_COMPANY_SLUG },
+          { $set: { kind: 'Parent', name: PARENT_COMPANY_NAME } },
+        );
+        parent.kind = 'Parent';
+        parent.name = PARENT_COMPANY_NAME;
+      }
     }
     await this.tenantModel.updateMany({ slug: { $ne: PARENT_COMPANY_SLUG }, $or: [{ kind: { $exists: false } }, { kind: null }] }, { $set: { kind: 'Tenant' } });
     return parent;
@@ -92,7 +94,7 @@ export class TenantsService implements OnModuleInit {
         isDefault: true,
         kind: 'Tenant',
         contactEmail: 'admin@digiswitchride.com',
-        notes: 'Sample tenant on the Fleetel-Switchride product, operated by Fleetel.',
+        notes: 'Sample tenant on the MoventraX product.',
       });
     } else {
       const set: Record<string, unknown> = {};
@@ -181,7 +183,7 @@ export class TenantsService implements OnModuleInit {
 
   async create(data: { name: string; slug: string; contactEmail?: string; notes?: string }) {
     const slug = this.normalizeSlug(data.slug);
-    if (slug === PARENT_COMPANY_SLUG) throw new BadRequestException('Fleetel is the parent company and cannot be created as a tenant');
+    if (slug === PARENT_COMPANY_SLUG) throw new BadRequestException('MoventraX is the parent company and cannot be created as a tenant');
     const existing = await this.tenantModel.findOne({ slug });
     if (existing) throw new ConflictException('Tenant slug already exists');
     const tenant = await this.tenantModel.create({
@@ -211,7 +213,7 @@ export class TenantsService implements OnModuleInit {
     if (data.status != null) {
       if (this.isParent(tenant) || tenant.isDefault) {
         if (data.status === 'Suspended') {
-          throw new BadRequestException('Fleetel (parent) and the default tenant cannot be suspended');
+          throw new BadRequestException('MoventraX (parent) and the default tenant cannot be suspended');
         }
       }
       tenant.status = data.status;
@@ -253,7 +255,7 @@ export class TenantsService implements OnModuleInit {
     return {
       id: tenant._id.toString(),
       slug: tenant.slug,
-      name: /digi[\s-]*switch/i.test(tenant.name) ? PRODUCT_NAME : tenant.name,
+      name: displayProductName(tenant.name),
       contactEmail: tenant.contactEmail,
       status: tenant.status,
       isDefault: tenant.isDefault,

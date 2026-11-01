@@ -102,7 +102,7 @@ export class GeoService {
       signal: AbortSignal.timeout(8000),
       headers: {
         Accept: 'application/json',
-        'User-Agent': 'Fleetel-Switchride/1.0 (operations)',
+        'User-Agent': 'MoventraX/1.0 (operations)',
       },
     });
     if (!res.ok) throw new Error(`Place search failed (${res.status})`);
@@ -152,7 +152,7 @@ export class GeoService {
         signal: AbortSignal.timeout(8000),
         headers: {
           Accept: 'application/json',
-          'User-Agent': 'Fleetel-Switchride/1.0 (operations)',
+          'User-Agent': 'MoventraX/1.0 (operations)',
         },
       });
       if (!res.ok) return null;

@@ -4,7 +4,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
 import { Model, Types } from 'mongoose';
 import { randomUUID } from 'crypto';
-import { normalizeAdminRole, type AdminRole } from '@digi-switchride/shared';
+import { normalizeAdminRole, PARENT_COMPANY_NAME, type AdminRole } from '@digi-switchride/shared';
 import { AuditService, type AuditActor } from '../audit/audit.service';
 import { Customer, CustomerDocument, OtpRecord, OtpRecordDocument, RefreshToken, RefreshTokenDocument } from '../schemas/customer.schema';
 import { AdminUser, AdminUserDocument } from '../schemas/admin.schema';
@@ -171,7 +171,7 @@ export class AuthService implements OnModuleInit {
     if (!tenantId) throw new ForbiddenException('Choose an organization for this user');
     const org = await this.tenants.peek(tenantId);
     if (org && this.tenants.isParent(org) && dto.role !== 'SuperAdmin') {
-      throw new ForbiddenException('Assign company users to a tenant. Fleetel is the parent company.');
+      throw new ForbiddenException('Assign company users to a tenant. MoventraX is the parent company.');
     }
 
     const salt = this.passwordSalt();
@@ -442,7 +442,7 @@ export class AuthService implements OnModuleInit {
       expiresIn: 28800,
       user: {
         ...this.toAdminUser(admin),
-        tenantName: tenant?.name ?? (normalizeAdminRole(admin.role) === 'SuperAdmin' ? 'Fleetel' : undefined),
+        tenantName: tenant?.name ?? (normalizeAdminRole(admin.role) === 'SuperAdmin' ? PARENT_COMPANY_NAME : undefined),
       },
     };
   }

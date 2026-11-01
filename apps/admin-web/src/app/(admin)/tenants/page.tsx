@@ -81,7 +81,7 @@ export default function TenantsPage() {
             {items.map((t) => (
               <TableRow key={t.id}>
                 <TableCell className="font-semibold">{t.name}{t.isDefault ? " (sample tenant)" : ""}</TableCell>
-                <TableCell>{t.kind === "Parent" ? "Parent (Fleetel)" : "Tenant"}</TableCell>
+                <TableCell>{t.kind === "Parent" ? "Parent (MoventraX)" : "Tenant"}</TableCell>
                 <TableCell>{t.slug}</TableCell>
                 <TableCell><Badge status={t.status} /></TableCell>
                 <TableCell>

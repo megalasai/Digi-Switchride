@@ -79,10 +79,10 @@ export type PaymentGatewayProvider = (typeof PAYMENT_GATEWAY_PROVIDERS)[number];
 export const PAYMENT_GATEWAY_MODES = ['Test', 'Live'] as const;
 export type PaymentGatewayMode = (typeof PAYMENT_GATEWAY_MODES)[number];
 export const PARENT_COMPANY_SLUG = 'fleetel';
-export const PARENT_COMPANY_NAME = 'Fleetel';
-export const PRODUCT_NAME = 'Fleetel-Switchride';
+export const PARENT_COMPANY_NAME = 'MoventraX';
+export const PRODUCT_NAME = 'MoventraX';
 export function displayProductName(name?: string | null) {
-  if (!name || /digi[\s-]*switch/i.test(name)) return PRODUCT_NAME;
+  if (!name || /digi[\s-]*switch|fleetel[\s-]*switch|switchride|^fleetel$/i.test(name)) return PRODUCT_NAME;
   return name;
 }
 export const KYC_DOCUMENT_TYPES: KycDocumentType[] = ['Aadhaar', 'PAN', 'DrivingLicence', 'Selfie'];

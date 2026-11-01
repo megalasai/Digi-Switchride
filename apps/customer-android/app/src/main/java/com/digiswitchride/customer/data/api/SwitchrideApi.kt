@@ -266,7 +266,7 @@ data class RideEndResult(val ride: Ride, val fare: Double, val paymentId: String
 data class HubsResponse(val items: List<RentalHubSummary>)
 data class VehiclesResponse(val items: List<VehicleSummary>)
 data class BrandingResponse(
-    val productName: String? = "Fleetel-Switchride",
+    val productName: String? = "MoventraX",
     val hasOptionalLogo: Boolean = false,
     val optionalLogoUrl: String? = null,
 )

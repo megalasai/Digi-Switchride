@@ -19,7 +19,7 @@ export default function BrandingPage() {
   const [companies, setCompanies] = useState<TenantOrg[]>([]);
   const [companyId, setCompanyId] = useState("");
   const [branding, setBranding] = useState<Branding | null>(null);
-  const [productName, setProductName] = useState("Fleetel-Switchride");
+  const [productName, setProductName] = useState("MoventraX");
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -39,7 +39,7 @@ export default function BrandingPage() {
       .getBranding(isSuper ? id || companyId : undefined)
       .then((b) => {
         setBranding(b);
-        setProductName(/digi[\s-]*switch/i.test(b.productName) ? "Fleetel-Switchride" : b.productName);
+        setProductName(/digi[\s-]*switch|fleetel[\s-]*switch|switchride|^fleetel$/i.test(b.productName) ? "MoventraX" : b.productName);
         setPreview(null);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load branding"));

@@ -73,7 +73,7 @@ export default function LoginPage() {
           <p className="mt-4 max-w-md text-sm leading-6 text-[#c5cffc]">Riders, vehicles, payments and workshops in one operations desk.</p>
         </div>
         <div className="relative">
-          <p className="text-xs text-[#9aa3bc]">Fleetel-Switchride · Fleetel</p>
+          <p className="text-xs text-[#9aa3bc]">MoventraX</p>
         </div>
       </div>
       <div className="flex items-center justify-center bg-surface p-6">
@@ -95,7 +95,7 @@ export default function LoginPage() {
           </div>
           <Field label="Organization">
             <Select value={tenantSlug} onChange={(e) => setTenantSlug(e.target.value)}>
-              <option value="">Fleetel SuperAdmin — parent company</option>
+              <option value="">MoventraX SuperAdmin</option>
               {orgs.map((org) => (
                 <option key={org.id} value={org.slug}>{org.name} ({org.slug})</option>
               ))}

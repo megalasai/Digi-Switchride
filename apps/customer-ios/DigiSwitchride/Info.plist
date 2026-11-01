@@ -8,8 +8,8 @@
 		<true/>
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Digi-Switchride uses your location to show nearby hubs and vehicles.</string>
+	<string>MoventraX uses your location to show nearby hubs and vehicles.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Digi-Switchride uses the camera to capture KYC documents.</string>
+	<string>MoventraX uses the camera to capture KYC documents.</string>
 </dict>
 </plist>

@@ -84,7 +84,7 @@ export function PaymentGatewayForm({ tenantId: forcedTenantId }: { tenantId?: st
       {isSuper && overview.length > 0 && (
         <Card className="p-5">
           <p className="font-semibold text-text-primary">Tenant gateways</p>
-          <p className="mt-1 text-sm text-text-secondary">Each customer company uses its own merchant account. Fleetel does not collect on their behalf.</p>
+          <p className="mt-1 text-sm text-text-secondary">Each customer company uses its own merchant account. MoventraX does not collect on their behalf.</p>
           <ul className="mt-4 divide-y divide-border">
             {overview.map((row) => (
               <li key={row.tenantId} className="flex items-center justify-between gap-3 py-2 text-sm">

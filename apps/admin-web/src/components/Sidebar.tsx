@@ -125,7 +125,7 @@ export function Sidebar() {
       </nav>
 
       <div className="border-t border-sidebar-border px-5 py-4">
-        <p className="text-xs text-[#9aa3bc]">Fleetel-Switchride · Fleetel</p>
+        <p className="text-xs text-[#9aa3bc]">MoventraX</p>
       </div>
     </aside>
   );

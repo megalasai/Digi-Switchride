@@ -41,7 +41,7 @@ export class PaymentGatewayService {
     const tenant = await this.tenants.peek(tenantId);
     if (!tenant) throw new NotFoundException('Company not found');
     if (this.tenants.isParent(tenant)) {
-      throw new BadRequestException('Fleetel is the parent company. Connect a payment gateway on a tenant, not on Fleetel.');
+      throw new BadRequestException('MoventraX is the parent company. Connect a payment gateway on a tenant, not on MoventraX.');
     }
     return tenant._id.toString();
   }
@@ -126,7 +126,7 @@ export class PaymentGatewayService {
   async requireEnabled(tenantId: string) {
     const doc = await this.gatewayModel.findOne({ tenantId, enabled: true });
     if (!doc) {
-      throw new BadRequestException('This company has not connected a payment gateway. Ask Fleetel or the company admin to add keys under Finance → Gateway.');
+      throw new BadRequestException('This company has not connected a payment gateway. Ask MoventraX or the company admin to add keys under Finance → Gateway.');
     }
     return doc;
   }

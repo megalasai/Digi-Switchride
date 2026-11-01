@@ -48,7 +48,7 @@ fun LoginScreen(onAuthenticated: () -> Unit, viewModel: AuthViewModel = hiltView
             TenantLogo(state.optionalLogoUrl)
             Spacer(Modifier.height(28.dp))
             BrandHeader(
-                state.productName.ifBlank { "Fleetel Switchride" },
+                state.productName.ifBlank { "MoventraX" },
                 "Your vehicle, plan, payments and support",
                 state.optionalLogoUrl,
             )

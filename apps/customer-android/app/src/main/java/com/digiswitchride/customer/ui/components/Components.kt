@@ -52,7 +52,7 @@ fun TenantLogo(url: String?, modifier: Modifier = Modifier, showLabel: Boolean =
             if (url.isNullOrBlank()) {
                 androidx.compose.foundation.Image(
                     painter = painterResource(R.drawable.fleetel_logo),
-                    contentDescription = "Fleetel logo",
+                    contentDescription = "MoventraX logo"
                     modifier = Modifier.height(48.dp).widthIn(max = 180.dp).padding(8.dp),
                     contentScale = ContentScale.Fit,
                 )
@@ -75,14 +75,14 @@ fun BrandHeader(title: String, subtitle: String, logoUrl: String? = null) {
             if (logoUrl.isNullOrBlank()) {
                 androidx.compose.foundation.Image(
                     painter = painterResource(R.drawable.fleetel_logo),
-                    contentDescription = "Fleetel Switchride",
+                    contentDescription = "MoventraX",
                     modifier = Modifier.height(72.dp).widthIn(min = 120.dp, max = 200.dp).padding(12.dp),
                     contentScale = ContentScale.Fit,
                 )
             } else {
                 AsyncImage(
                     model = logoUrl,
-                    contentDescription = "Fleetel Switchride",
+                    contentDescription = "MoventraX",
                     modifier = Modifier.height(72.dp).widthIn(min = 120.dp, max = 200.dp).padding(12.dp),
                     contentScale = ContentScale.Fit,
                 )

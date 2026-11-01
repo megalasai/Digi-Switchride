@@ -13,11 +13,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+private fun displayAppName(name: String?): String {
+    val n = name?.replace("-", " ")?.trim().orEmpty()
+    return if (n.isBlank() || n.contains("switch", ignoreCase = true) || n.equals("Fleetel", ignoreCase = true)) {
+        "MoventraX"
+    } else {
+        n
+    }
+}
+
 data class AuthState(
     val isLoading: Boolean = false,
     val isAuthenticated: Boolean = false,
     val error: String? = null,
-    val productName: String = "Fleetel Switchride",
+    val productName: String = "MoventraX",
     val optionalLogoUrl: String? = null,
     val organizations: List<PublicTenantOption> = emptyList(),
     val organizationsLoading: Boolean = true,
@@ -57,7 +66,7 @@ class AuthViewModel @Inject constructor(
                     apiSettings.setTenantSlug(pick)
                 }
                 _state.value = _state.value.copy(
-                    productName = branding.productName?.replace("-", " ") ?: "Fleetel Switchride",
+                    productName = displayAppName(branding.productName),
                     optionalLogoUrl = if (branding.hasOptionalLogo) apiSettings.brandingLogoUrl(_tenantSlug.value) else null,
                     organizations = orgs,
                     organizationsLoading = false,
@@ -75,7 +84,7 @@ class AuthViewModel @Inject constructor(
             try {
                 val branding = api.branding()
                 _state.value = _state.value.copy(
-                    productName = branding.productName?.replace("-", " ") ?: "Fleetel Switchride",
+                    productName = displayAppName(branding.productName),
                     optionalLogoUrl = if (branding.hasOptionalLogo) apiSettings.brandingLogoUrl(slug) else null,
                 )
             } catch (_: Exception) { }
@@ -141,7 +150,7 @@ class AuthViewModel @Inject constructor(
             message.contains("Failed to connect", ignoreCase = true) ||
                 message.contains("timeout", ignoreCase = true) ||
                 message.contains("Unable to resolve host", ignoreCase = true) ->
-                "Cannot reach Digi-Switchride. Check mobile data or Wi‑Fi, then try again."
+                "Cannot reach MoventraX. Check mobile data or Wi‑Fi, then try again."
             else -> ApiErrorParser.message(e)
         }
     }

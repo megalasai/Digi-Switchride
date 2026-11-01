@@ -83,7 +83,7 @@ export class GpsIntegrationService implements OnModuleInit {
     const tenant = await this.tenants.peek(tenantId);
     if (!tenant) throw new NotFoundException('Company not found');
     if (this.tenants.isParent(tenant)) {
-      throw new BadRequestException('Configure GPS on a tenant company, not on Fleetel (parent).');
+      throw new BadRequestException('Configure GPS on a tenant company, not on MoventraX (parent).');
     }
     return tenant._id.toString();
   }

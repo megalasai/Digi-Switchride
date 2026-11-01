@@ -42,7 +42,7 @@ async function download(url: string, dest: string, refresh: boolean): Promise<vo
     try {
       console.log(`downloading ${url} (attempt ${attempt}/5)`);
       const response = await fetch(url, {
-        headers: { 'user-agent': 'Fleetel-Switchride-Location/1.0' },
+        headers: { 'user-agent': 'MoventraX-Location/1.0' },
         signal: AbortSignal.timeout(600_000),
         redirect: 'follow',
       });

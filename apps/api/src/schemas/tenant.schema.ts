@@ -20,7 +20,7 @@ export class Tenant {
   @Prop({ default: false })
   isDefault!: boolean;
 
-  /** Parent = Fleetel platform operator. Tenant = customer company. */
+  /** Parent = MoventraX platform operator. Tenant = customer company. */
   @Prop({ required: true, enum: ['Parent', 'Tenant'], default: 'Tenant' })
   kind!: 'Parent' | 'Tenant';
 

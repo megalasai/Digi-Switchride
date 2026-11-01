@@ -65,7 +65,7 @@ export function AdminHeader() {
         </Button>
         <div className="hidden min-w-0 sm:block">
           <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
-            {user?.role === "SuperAdmin" ? "Fleetel" : user?.tenantName || "Company portal"}
+            {user?.role === "SuperAdmin" ? "MoventraX" : user?.tenantName || "Company portal"}
           </p>
           <h2 className="truncate text-lg font-semibold text-text-primary">{title}</h2>
         </div>
@@ -104,7 +104,7 @@ export function AdminHeader() {
           <>
             <div className="hidden text-right md:block">
               <p className="text-sm font-medium text-text-primary">{user.fullName}</p>
-              <p className="text-xs text-text-secondary">{user.role}{user.role === "SuperAdmin" ? " · Fleetel" : user.tenantName ? ` · ${user.tenantName}` : ""}</p>
+              <p className="text-xs text-text-secondary">{user.role}{user.role === "SuperAdmin" ? " · MoventraX" : user.tenantName ? ` · ${user.tenantName}` : ""}</p>
             </div>
             <Button variant="ghost" className="text-xs" onClick={() => { logout(); router.replace("/login"); }}>
               Logout
