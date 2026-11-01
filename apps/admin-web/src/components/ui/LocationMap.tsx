@@ -332,6 +332,8 @@ export function LiveVehicleMap({
   places = [],
   onMapClick,
   drawing = false,
+  draft = null,
+  focusPoint = null,
 }: {
   vehicles: {
     id: string;
@@ -356,12 +358,15 @@ export function LiveVehicleMap({
   places?: { id: string; kind: "geofence" | "poi"; name: string; lat: number; lng: number; radiusM?: number }[];
   onMapClick?: (lat: number, lng: number) => void;
   drawing?: boolean;
+  draft?: { kind: "geofence" | "poi"; lat: number; lng: number; radiusM?: number } | null;
+  focusPoint?: { lat: number; lng: number } | null;
 }) {
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<Map<string, LeafletMarker>>(new Map());
   const trailsRef = useRef<Map<string, LeafletPolyline>>(new Map());
   const placeLayersRef = useRef<Map<string, LeafletMarker | LeafletCircle>>(new Map());
+  const draftLayerRef = useRef<LeafletMarker | LeafletCircle | null>(null);
   const fittedRef = useRef(false);
   const vehiclesRef = useRef(vehicles);
   const showTrailRef = useRef(showTrail);
@@ -393,6 +398,10 @@ export function LiveVehicleMap({
       if (cancelled || !mapEl.current) return;
       const map = L.map(mapEl.current, { scrollWheelZoom: true }).setView([INDIA.lat, INDIA.lng], 5);
       L.tileLayer(TILES, { attribution: ATTRIBUTION, maxZoom: 19 }).addTo(map);
+      map.on("click", (event) => {
+        if (!drawingRef.current) return;
+        onMapClickRef.current?.(event.latlng.lat, event.latlng.lng);
+      });
       mapRef.current = map;
       watchSize(mapEl.current, map);
       await syncLiveMarkers(L);
@@ -431,7 +440,45 @@ export function LiveVehicleMap({
     const map = mapRef.current;
     if (!map) return;
     map.getContainer().style.cursor = drawing ? "crosshair" : "";
+    map.doubleClickZoom[drawing ? "disable" : "enable"]();
   }, [drawing]);
+
+  useEffect(() => {
+    void (async () => {
+      const L = await loadLeaflet();
+      const map = mapRef.current;
+      if (!map) return;
+      if (draftLayerRef.current) {
+        map.removeLayer(draftLayerRef.current);
+        draftLayerRef.current = null;
+      }
+      if (!draft || !Number.isFinite(draft.lat) || !Number.isFinite(draft.lng)) return;
+      if (draft.kind === "geofence") {
+        const circle = L.circle([draft.lat, draft.lng], {
+          radius: draft.radiusM ?? 200,
+          color: "#dc2626",
+          weight: 3,
+          fillOpacity: 0.18,
+          dashArray: "6 4",
+        }).addTo(map);
+        draftLayerRef.current = circle;
+      } else {
+        const marker = L.circleMarker([draft.lat, draft.lng], {
+          radius: 10,
+          color: "#dc2626",
+          fillColor: "#dc2626",
+          fillOpacity: 1,
+        }).addTo(map);
+        draftLayerRef.current = marker as unknown as LeafletMarker;
+      }
+    })();
+  }, [draft?.kind, draft?.lat, draft?.lng, draft?.radiusM]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focusPoint) return;
+    map.setView([focusPoint.lat, focusPoint.lng], Math.max(map.getZoom(), 16), { animate: true });
+  }, [focusPoint?.lat, focusPoint?.lng]);
 
   async function syncLiveMarkers(L: Awaited<ReturnType<typeof loadLeaflet>>) {
     const map = mapRef.current;
@@ -457,12 +504,13 @@ export function LiveVehicleMap({
       });
       let marker = markersRef.current.get(v.id);
       if (!marker) {
-        marker = L.marker([v.lat, v.lng], { icon, interactive: !drawingRef.current }).addTo(map);
+        marker = L.marker([v.lat, v.lng], { icon }).addTo(map);
         const vehicleId = v.id;
         marker.on("click", (event) => {
-          if (drawingRef.current) {
+          const pos = marker?.getLatLng();
+          if (drawingRef.current && pos) {
             event.originalEvent?.stopPropagation();
-            return;
+            onMapClickRef.current?.(pos.lat, pos.lng);
           }
           onSelectRef.current?.(vehicleId);
         });
@@ -555,20 +603,8 @@ export function LiveVehicleMap({
   }, [focusId]);
 
   return (
-    <div className={`relative ${className ?? "z-0 mb-6 h-80 w-full overflow-hidden rounded-2xl border border-border"}`}>
-      <div ref={mapEl} className="h-full w-full" />
-      {drawing && (
-        <div
-          className="absolute inset-0 z-[500] cursor-crosshair"
-          onClick={(event) => {
-            const map = mapRef.current;
-            if (!map) return;
-            const rect = map.getContainer().getBoundingClientRect();
-            const latlng = map.containerPointToLatLng([event.clientX - rect.left, event.clientY - rect.top]);
-            onMapClickRef.current?.(latlng.lat, latlng.lng);
-          }}
-        />
-      )}
+    <div className={`relative isolate ${className ?? "z-0 mb-6 h-80 w-full overflow-hidden rounded-2xl border border-border"}`}>
+      <div ref={mapEl} className="absolute inset-0 z-0 h-full w-full" />
     </div>
   );
 }

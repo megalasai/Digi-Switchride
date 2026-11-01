@@ -51,6 +51,10 @@ export default function TrackVehiclePage() {
   const [drawKind, setDrawKind] = useState<"geofence" | "poi" | null>(null);
   const [placeForm, setPlaceForm] = useState({ name: "", radiusM: "200", lat: "", lng: "" });
   const [editingPlaceId, setEditingPlaceId] = useState<string | null>(null);
+  const [placeQuery, setPlaceQuery] = useState("");
+  const [placeHits, setPlaceHits] = useState<{ display_name: string; lat: string; lon: string }[]>([]);
+  const [searchingPlace, setSearchingPlace] = useState(false);
+  const [focusPoint, setFocusPoint] = useState<{ lat: number; lng: number } | null>(null);
 
   const load = () => {
     api
@@ -178,6 +182,10 @@ export default function TrackVehiclePage() {
                   setSelectedId(v.id);
                   setMode("live");
                   setPlaying(false);
+                  if (drawKind && v.lastLat != null && v.lastLng != null) {
+                    setPlaceForm((s) => ({ ...s, lat: v.lastLat!.toFixed(6), lng: v.lastLng!.toFixed(6) }));
+                    setFocusPoint({ lat: v.lastLat, lng: v.lastLng });
+                  }
                 }}
                 className={`w-full border-b border-border px-4 py-3 text-left transition ${active ? "bg-brand-light" : "hover:bg-surface"}`}
               >
@@ -221,18 +229,95 @@ export default function TrackVehiclePage() {
           vehicles={mapVehicles}
           places={places}
           drawing={Boolean(drawKind)}
+          focusPoint={focusPoint}
+          draft={
+            drawKind && placeForm.lat && placeForm.lng
+              ? {
+                  kind: drawKind,
+                  lat: Number(placeForm.lat),
+                  lng: Number(placeForm.lng),
+                  radiusM: Number(placeForm.radiusM) || 200,
+                }
+              : null
+          }
           onMapClick={(lat, lng) => {
             if (!drawKind) return;
             setPlaceForm((s) => ({ ...s, lat: lat.toFixed(6), lng: lng.toFixed(6) }));
+            setFocusPoint({ lat, lng });
           }}
           onSelect={(id) => {
             setSelectedId(id);
             setMode("live");
+            const v = vehicles.find((item) => item.id === id);
+            if (drawKind && v?.lastLat != null && v.lastLng != null) {
+              setPlaceForm((s) => ({ ...s, lat: v.lastLat!.toFixed(6), lng: v.lastLng!.toFixed(6) }));
+              setFocusPoint({ lat: v.lastLat, lng: v.lastLng });
+            }
           }}
         />
 
-        <div className="absolute left-4 top-4 z-[400] rounded-full border border-border bg-white/95 px-3 py-1.5 shadow-sm">
-          <FleetMotionLegend className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-text-muted" />
+        <div className="absolute left-4 top-4 z-[500] w-[min(22rem,calc(100%-2rem))] space-y-2">
+          <div className="rounded-full border border-border bg-white/95 px-3 py-1.5 shadow-sm">
+            <FleetMotionLegend className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-text-muted" />
+          </div>
+          <div className="rounded-2xl border border-border bg-white/95 p-2 shadow-sm">
+            <Input
+              value={placeQuery}
+              onChange={(e) => setPlaceQuery(e.target.value)}
+              placeholder="Search place, area, pin code…"
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return;
+                e.preventDefault();
+                const q = placeQuery.trim();
+                if (q.length < 3) return;
+                setSearchingPlace(true);
+                api
+                  .geoSearch(q)
+                  .then((items) => setPlaceHits(items))
+                  .catch(() => setPlaceHits([]))
+                  .finally(() => setSearchingPlace(false));
+              }}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              className="mt-2 w-full text-xs"
+              disabled={searchingPlace || placeQuery.trim().length < 3}
+              onClick={() => {
+                const q = placeQuery.trim();
+                if (q.length < 3) return;
+                setSearchingPlace(true);
+                api
+                  .geoSearch(q)
+                  .then((items) => setPlaceHits(items))
+                  .catch(() => setPlaceHits([]))
+                  .finally(() => setSearchingPlace(false));
+              }}
+            >
+              {searchingPlace ? "Searching…" : "Go to location"}
+            </Button>
+            {placeHits.length > 0 && (
+              <div className="mt-2 max-h-40 overflow-y-auto">
+                {placeHits.map((hit) => (
+                  <button
+                    key={`${hit.lat}-${hit.lon}-${hit.display_name}`}
+                    type="button"
+                    className="block w-full truncate rounded-lg px-2 py-1.5 text-left text-xs hover:bg-surface"
+                    onClick={() => {
+                      const lat = Number(hit.lat);
+                      const lng = Number(hit.lon);
+                      setFocusPoint({ lat, lng });
+                      setPlaceHits([]);
+                      setPlaceQuery(hit.display_name);
+                      if (drawKind) setPlaceForm((s) => ({ ...s, lat: lat.toFixed(6), lng: lng.toFixed(6), name: s.name || hit.display_name.split(",")[0] }));
+                    }}
+                  >
+                    {hit.display_name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="absolute bottom-4 right-4 z-[500] w-[280px] rounded-2xl border border-border bg-white/95 p-3 shadow-xl">
@@ -264,10 +349,34 @@ export default function TrackVehiclePage() {
             >
               History
             </Button>
-            <Button type="button" variant={drawKind === "geofence" ? "primary" : "secondary"} className="text-xs" onClick={() => setDrawKind(drawKind === "geofence" ? null : "geofence")}>
+            <Button
+              type="button"
+              variant={drawKind === "geofence" ? "primary" : "secondary"}
+              className="text-xs"
+              onClick={() => {
+                const next = drawKind === "geofence" ? null : "geofence";
+                setDrawKind(next);
+                if (next && selected?.lastLat != null && selected.lastLng != null) {
+                  setPlaceForm((s) => ({ ...s, lat: selected.lastLat!.toFixed(6), lng: selected.lastLng!.toFixed(6) }));
+                  setFocusPoint({ lat: selected.lastLat, lng: selected.lastLng });
+                }
+              }}
+            >
               Geofence
             </Button>
-            <Button type="button" variant={drawKind === "poi" ? "primary" : "secondary"} className="text-xs" onClick={() => setDrawKind(drawKind === "poi" ? null : "poi")}>
+            <Button
+              type="button"
+              variant={drawKind === "poi" ? "primary" : "secondary"}
+              className="text-xs"
+              onClick={() => {
+                const next = drawKind === "poi" ? null : "poi";
+                setDrawKind(next);
+                if (next && selected?.lastLat != null && selected.lastLng != null) {
+                  setPlaceForm((s) => ({ ...s, lat: selected.lastLat!.toFixed(6), lng: selected.lastLng!.toFixed(6) }));
+                  setFocusPoint({ lat: selected.lastLat, lng: selected.lastLng });
+                }
+              }}
+            >
               POI
             </Button>
           </div>
@@ -306,8 +415,23 @@ export default function TrackVehiclePage() {
               {drawKind === "geofence" && (
                 <Field label="Radius (m)"><Input type="number" min={20} value={placeForm.radiusM} onChange={(e) => setPlaceForm({ ...placeForm, radiusM: e.target.value })} /></Field>
               )}
-              <p className="text-[11px] text-text-muted">{placeForm.lat && placeForm.lng ? `${placeForm.lat}, ${placeForm.lng}` : "Click the map"}</p>
-              <Button type="submit" className="w-full">Save</Button>
+              <p className="text-[11px] text-text-muted">
+                {placeForm.lat && placeForm.lng ? `${placeForm.lat}, ${placeForm.lng}` : "Click the map, a vehicle, or search a place"}
+              </p>
+              {selected?.lastLat != null && selected.lastLng != null && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full text-xs"
+                  onClick={() => {
+                    setPlaceForm((s) => ({ ...s, lat: selected.lastLat!.toFixed(6), lng: selected.lastLng!.toFixed(6) }));
+                    setFocusPoint({ lat: selected.lastLat!, lng: selected.lastLng! });
+                  }}
+                >
+                  Use selected vehicle
+                </Button>
+              )}
+              <Button type="submit" className="w-full" disabled={!placeForm.lat || !placeForm.lng}>Save</Button>
             </form>
           )}
           <div className="mt-3 max-h-28 space-y-1 overflow-y-auto">
