@@ -10,7 +10,8 @@ const BrandingContext = createContext<{ branding: Branding | null; reload: () =>
 });
 
 const PRODUCT = "MoventraX";
-const FALLBACK_LOGO = "/brand/partner.png";
+const FALLBACK_LOGO = "/brand/moventrax-logo.png";
+const PRODUCT_LOGO = "/brand/moventrax-logo.png";
 
 const FALLBACK: Branding = {
   productName: PRODUCT,
@@ -90,7 +91,7 @@ export function ProductBrand({
 
   return (
     <div className="flex min-w-0 items-center gap-3">
-      <img src="/brand/switchride.svg" alt="MoventraX" className={`${pin} shrink-0`} />
+      <img src={PRODUCT_LOGO} alt="MoventraX" className={`${pin} shrink-0 rounded-xl object-cover`} />
       {showName ? (
         <div className="min-w-0">
           <p className={`truncate text-base font-bold tracking-tight ${nameColor}`}>{company || name}</p>

@@ -10,8 +10,8 @@
     <application
         android:name=".SwitchrideApp"
         android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:icon="@drawable/moventrax_logo"
+        android:roundIcon="@drawable/moventrax_logo"
         android:label="MoventraX"
         android:supportsRtl="true"
         android:theme="@style/Theme.DigiSwitchride"

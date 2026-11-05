@@ -17,9 +17,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.painterResource
-import coil.compose.AsyncImage
 import com.digiswitchride.customer.R
 import com.digiswitchride.customer.ui.theme.*
 
@@ -37,57 +37,24 @@ fun vehicleIcon(type: String?, wheelClass: String?): ImageVector {
 }
 
 @Composable
+fun AppLogo(modifier: Modifier = Modifier, size: Dp = 36.dp) {
+    androidx.compose.foundation.Image(
+        painter = painterResource(R.drawable.moventrax_logo),
+        contentDescription = "MoventraX",
+        modifier = modifier.size(size).clip(RoundedCornerShape(10.dp)),
+        contentScale = ContentScale.Crop,
+    )
+}
+
+@Composable
 fun TenantLogo(url: String?, modifier: Modifier = Modifier, showLabel: Boolean = true) {
-    Column(modifier) {
-        if (showLabel) {
-            Text(
-                "FLEETEL",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.height(6.dp))
-        }
-        Surface(shape = RoundedCornerShape(12.dp), color = Color.White, shadowElevation = 1.dp) {
-            if (url.isNullOrBlank()) {
-                androidx.compose.foundation.Image(
-                    painter = painterResource(R.drawable.fleetel_logo),
-                    contentDescription = "MoventraX logo"
-                    modifier = Modifier.height(48.dp).widthIn(max = 180.dp).padding(8.dp),
-                    contentScale = ContentScale.Fit,
-                )
-            } else {
-                AsyncImage(
-                    model = url,
-                    contentDescription = "Organization logo",
-                    modifier = Modifier.height(48.dp).widthIn(max = 180.dp).padding(8.dp),
-                    contentScale = ContentScale.Fit,
-                )
-            }
-        }
-    }
+    AppLogo(modifier = modifier, size = if (showLabel) 48.dp else 36.dp)
 }
 
 @Composable
 fun BrandHeader(title: String, subtitle: String, logoUrl: String? = null) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Surface(shape = RoundedCornerShape(16.dp), color = Color.White, shadowElevation = 2.dp) {
-            if (logoUrl.isNullOrBlank()) {
-                androidx.compose.foundation.Image(
-                    painter = painterResource(R.drawable.fleetel_logo),
-                    contentDescription = "MoventraX",
-                    modifier = Modifier.height(72.dp).widthIn(min = 120.dp, max = 200.dp).padding(12.dp),
-                    contentScale = ContentScale.Fit,
-                )
-            } else {
-                AsyncImage(
-                    model = logoUrl,
-                    contentDescription = "MoventraX",
-                    modifier = Modifier.height(72.dp).widthIn(min = 120.dp, max = 200.dp).padding(12.dp),
-                    contentScale = ContentScale.Fit,
-                )
-            }
-        }
+        AppLogo(size = 88.dp)
         Spacer(Modifier.height(16.dp))
         Text(title, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         Spacer(Modifier.height(4.dp))

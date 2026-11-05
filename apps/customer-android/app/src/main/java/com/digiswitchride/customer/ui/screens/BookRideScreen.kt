@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.digiswitchride.customer.ui.components.AppLogo
 import com.digiswitchride.customer.ui.components.EmptyState
 import com.digiswitchride.customer.ui.components.HubCard
 import com.digiswitchride.customer.ui.components.VehicleCard
@@ -94,6 +95,7 @@ fun ActiveRideScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
+                actions = { AppLogo(Modifier.padding(end = 12.dp), size = 28.dp) },
             )
         },
     ) { padding ->

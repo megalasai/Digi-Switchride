@@ -67,6 +67,7 @@ struct HomeView: View {
             }
             .background(AppColors.background)
             .navigationTitle("Home")
+            .toolbar { ToolbarItem(placement: .navigationBarLeading) { AppLogo(size: 28) } }
             .task { await load() }
             .refreshable { await load() }
         }
@@ -134,6 +135,7 @@ struct VehicleView: View {
             }
             .background(AppColors.background)
             .navigationTitle("Vehicle")
+            .toolbar { ToolbarItem(placement: .navigationBarLeading) { AppLogo(size: 28) } }
             .task { await load() }
         }
     }
@@ -173,6 +175,7 @@ struct PayView: View {
             }
             .background(AppColors.background)
             .navigationTitle("Pay")
+            .toolbar { ToolbarItem(placement: .navigationBarLeading) { AppLogo(size: 28) } }
             .task { await load() }
         }
     }
@@ -207,6 +210,7 @@ struct PlanView: View {
             }
             .background(AppColors.background)
             .navigationTitle("Plan")
+            .toolbar { ToolbarItem(placement: .navigationBarLeading) { AppLogo(size: 28) } }
             .task { await load() }
         }
     }
@@ -266,6 +270,7 @@ struct MoreView: View {
             }
             .background(AppColors.background)
             .navigationTitle("More")
+            .toolbar { ToolbarItem(placement: .navigationBarLeading) { AppLogo(size: 28) } }
             .task { await load() }
         }
     }

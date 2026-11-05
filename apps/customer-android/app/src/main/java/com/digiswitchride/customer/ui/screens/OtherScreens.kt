@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.digiswitchride.customer.ui.components.AppLogo
 import com.digiswitchride.customer.ui.components.KycStepCard
 import com.digiswitchride.customer.ui.components.PrimaryButton
 import com.digiswitchride.customer.ui.viewmodel.KycViewModel
@@ -139,6 +140,7 @@ fun KycScreen(onBack: () -> Unit, viewModel: KycViewModel = hiltViewModel()) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = { AppLogo(Modifier.padding(end = 12.dp), size = 28.dp) },
             )
         },
     ) { padding ->

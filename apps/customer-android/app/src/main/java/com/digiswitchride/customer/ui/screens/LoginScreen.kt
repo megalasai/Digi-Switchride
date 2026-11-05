@@ -16,7 +16,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.digiswitchride.customer.ui.components.BrandHeader
 import com.digiswitchride.customer.ui.components.PrimaryButton
-import com.digiswitchride.customer.ui.components.TenantLogo
 import com.digiswitchride.customer.ui.theme.GradientEnd
 import com.digiswitchride.customer.ui.theme.GradientStart
 import com.digiswitchride.customer.ui.viewmodel.AuthViewModel
@@ -45,12 +44,9 @@ fun LoginScreen(onAuthenticated: () -> Unit, viewModel: AuthViewModel = hiltView
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.Center,
         ) {
-            TenantLogo(state.optionalLogoUrl)
-            Spacer(Modifier.height(28.dp))
             BrandHeader(
-                state.productName.ifBlank { "MoventraX" },
+                "MoventraX",
                 "Your vehicle, plan, payments and support",
-                state.optionalLogoUrl,
             )
             Spacer(Modifier.height(40.dp))
 

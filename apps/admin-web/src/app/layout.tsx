@@ -9,6 +9,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 export const metadata: Metadata = {
   title: "MoventraX Admin",
   description: "MoventraX operations portal",
+  icons: { icon: "/brand/moventrax-logo.png", apple: "/brand/moventrax-logo.png" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

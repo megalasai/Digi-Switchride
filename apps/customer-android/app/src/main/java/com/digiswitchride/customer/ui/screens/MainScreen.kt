@@ -15,9 +15,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.digiswitchride.customer.data.api.RiderPlan
+import com.digiswitchride.customer.ui.components.AppLogo
 import com.digiswitchride.customer.ui.components.EmptyState
 import com.digiswitchride.customer.ui.components.StatusChip
-import com.digiswitchride.customer.ui.components.TenantLogo
 import com.digiswitchride.customer.ui.components.vehicleIcon
 import com.digiswitchride.customer.ui.util.formatInr
 import com.digiswitchride.customer.ui.viewmodel.ProfileViewModel
@@ -45,6 +45,16 @@ fun MainScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
+        topBar = {
+            if (!(tab == 4 && morePage != null)) {
+                TopAppBar(
+                    title = { Text("MoventraX", fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        AppLogo(Modifier.padding(start = 12.dp), size = 32.dp)
+                    },
+                )
+            }
+        },
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(selected = tab == 0, onClick = { tab = 0; morePage = null; vm.refreshHome() }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("Home") })
@@ -81,7 +91,7 @@ private fun HomeTab(vm: RiderAppViewModel, onKyc: () -> Unit) {
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
                 )
-                TenantLogo(ui.tenantLogoUrl, showLabel = false)
+                AppLogo(size = 36.dp)
             }
         }
         item {
@@ -295,9 +305,13 @@ private fun MoreMenu(onOpen: (String) -> Unit, vm: RiderAppViewModel) {
 @Composable
 private fun MoreDetail(page: String, onBack: () -> Unit, onKyc: () -> Unit, onLogout: () -> Unit, onActiveRide: (String) -> Unit, vm: RiderAppViewModel) {
     Column {
-        TopAppBar(title = { Text(page.replaceFirstChar { it.uppercase() }) }, navigationIcon = {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
-        })
+        TopAppBar(
+            title = { Text(page.replaceFirstChar { it.uppercase() }) },
+            navigationIcon = {
+                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
+            },
+            actions = { AppLogo(Modifier.padding(end = 12.dp), size = 28.dp) },
+        )
         when (page) {
             "profile" -> ProfileMore(vm, onLogout)
             "docs" -> DocsMore(vm, onKyc)

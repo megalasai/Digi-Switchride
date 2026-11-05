@@ -1,19 +1,25 @@
 import SwiftUI
 
+struct AppLogo: View {
+    var size: CGFloat = 36
+
+    var body: some View {
+        Image("MoventraXLogo")
+            .resizable()
+            .scaledToFill()
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+            .accessibilityLabel("MoventraX")
+    }
+}
+
 struct BrandHeader: View {
     let title: String
     let subtitle: String
 
     var body: some View {
         VStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(LinearGradient(colors: [AppColors.greenPrimary, AppColors.greenDark], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 72, height: 72)
-                Image(systemName: "scooter")
-                    .font(.system(size: 32, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
+            AppLogo(size: 88)
             Text(title)
                 .font(.largeTitle.bold())
             Text(subtitle)
