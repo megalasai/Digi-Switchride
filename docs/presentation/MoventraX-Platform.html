@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MoventraX — Product, Architecture &amp; Business Flows</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --ink: #16192a;
+      --muted: #5c647a;
+      --line: #d9def2;
+      --brand: #5b7cfa;
+      --brand2: #2e90fa;
+      --navy: #171a2b;
+      --card: #ffffff;
+      --soft: #eef1ff;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #0f1220; color: var(--ink); font-family: Inter, Segoe UI, system-ui, sans-serif; }
+    .deck { height: 100%; overflow: hidden; }
+    .slide {
+      display: none;
+      height: 100%;
+      padding: 40px 56px 72px;
+      background:
+        radial-gradient(circle at 90% 0%, rgba(91,124,250,.18), transparent 36%),
+        linear-gradient(180deg, #f7f8fd 0%, #eef1f8 100%);
+      position: relative;
+    }
+    .slide.on { display: flex; flex-direction: column; }
+    .slide.title-slide {
+      background: radial-gradient(circle at 15% 10%, rgba(91,124,250,.55), transparent 42%),
+        radial-gradient(circle at 90% 90%, rgba(46,144,250,.22), transparent 38%),
+        var(--navy);
+      color: #fff;
+    }
+    .kicker { font-size: 12px; letter-spacing: .22em; text-transform: uppercase; color: var(--brand); font-weight: 700; }
+    .title-slide .kicker { color: #c5cffc; }
+    h1 { margin: 8px 0 12px; font-size: 42px; letter-spacing: -0.03em; }
+    h2 { margin: 0 0 8px; font-size: 32px; letter-spacing: -0.03em; }
+    p, li { line-height: 1.45; }
+    .lede { font-size: 18px; color: var(--muted); max-width: 820px; }
+    .title-slide .lede { color: #c5cffc; }
+    .grid { display: grid; gap: 14px; margin-top: 22px; }
+    .g2 { grid-template-columns: 1fr 1fr; }
+    .g3 { grid-template-columns: 1fr 1fr 1fr; }
+    .g4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px 18px;
+      box-shadow: 0 10px 28px rgba(22,25,43,.06);
+    }
+    .card h3 { margin: 0 0 8px; font-size: 16px; }
+    .card p, .card li { margin: 0; font-size: 14px; color: var(--muted); }
+    .card ul { margin: 0; padding-left: 16px; }
+    .chip { display: inline-block; background: var(--soft); color: var(--brand); border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 700; }
+    .bar {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 56px; color: #8b93ab; font-size: 12px;
+    }
+    .title-slide .bar { color: #9aa3bc; }
+    .nav { display: flex; gap: 8px; }
+    button {
+      border: 1px solid var(--line); background: #fff; color: var(--ink);
+      border-radius: 10px; padding: 6px 12px; cursor: pointer; font-weight: 600;
+    }
+    .title-slide button { background: rgba(255,255,255,.1); color: #fff; border-color: rgba(255,255,255,.2); }
+    .mermaid { background: #fff; border-radius: 16px; padding: 12px; border: 1px solid var(--line); overflow: auto; }
+    .flow { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; align-items: stretch; }
+    .step {
+      flex: 1 1 140px; background: #fff; border-radius: 16px; padding: 14px;
+      border: 1px solid var(--line); min-width: 140px; position: relative;
+    }
+    .step b { display: block; color: var(--brand); font-size: 12px; margin-bottom: 6px; }
+    .arrow { align-self: center; color: var(--brand); font-size: 22px; font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; background: #fff; border-radius: 14px; overflow: hidden; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { background: var(--navy); color: #fff; font-weight: 600; }
+    .two { display: grid; grid-template-columns: 1.1fr .9fr; gap: 18px; margin-top: 18px; min-height: 0; }
+    .note { font-size: 13px; color: var(--muted); margin-top: 10px; }
+    @media print {
+      html, body, .deck { height: auto; overflow: visible; background: #fff; }
+      .slide { display: flex !important; page-break-after: always; height: 100vh; }
+      .bar button { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+<section class="slide title-slide on">
+  <p class="kicker">Electric vehicle rental platform</p>
+  <h1>MoventraX</h1>
+  <p class="lede">Web operations portal and rider mobile apps for multi-tenant EV rental in India — fleet, KYC, bookings, GPS, payments and service in one product.</p>
+  <div class="grid g3" style="margin-top:48px">
+    <div class="card" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.12);color:#fff">
+      <h3 style="color:#fff">Web application</h3>
+      <p style="color:#c5cffc">Command center for SuperAdmin, company admins, KYC, operations, finance and service teams.</p>
+    </div>
+    <div class="card" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.12);color:#fff">
+      <h3 style="color:#fff">Mobile application</h3>
+      <p style="color:#c5cffc">Android and iOS rider apps for KYC, plans, vehicle, pay, book-a-ride, breakdowns and support.</p>
+    </div>
+    <div class="card" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.12);color:#fff">
+      <h3 style="color:#fff">Platform</h3>
+      <p style="color:#c5cffc">NestJS API, MongoDB, India location service, GPS telemetry droplet, payment gateways.</p>
+    </div>
+  </div>
+  <div class="bar"><span>MoventraX</span><span>Confidential · Product briefing</span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Agenda</p>
+  <h2>What this briefing covers</h2>
+  <div class="grid g2">
+    <div class="card"><h3>1. Product model</h3><p>Who uses MoventraX, parent vs tenant companies, and operator roles.</p></div>
+    <div class="card"><h3>2. Web application</h3><p>Operations portal modules: fleet, track, KYC, bookings, finance, IoT, administration.</p></div>
+    <div class="card"><h3>3. Mobile application</h3><p>Rider journeys on Android and iOS from sign-in through ride, pay and support.</p></div>
+    <div class="card"><h3>4. Architecture &amp; flows</h3><p>High-level system diagram, deployment topology, and core business processes.</p></div>
+  </div>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Product</p>
+  <h2>One platform for EV rental companies</h2>
+  <p class="lede">MoventraX is a multi-tenant rental operating system. The parent company runs the platform. Each customer company (tenant) runs its own riders, vehicles, hubs, plans and payments.</p>
+  <div class="grid g3">
+    <div class="card">
+      <h3>Riders</h3>
+      <p>Sign in, complete KYC, take a plan, receive or book a vehicle, pay dues, report issues, and raise tickets from the phone.</p>
+    </div>
+    <div class="card">
+      <h3>Rental operators</h3>
+      <p>Onboard companies, assign vehicles after KYC, track GPS, review documents, collect rent, and run workshops.</p>
+    </div>
+    <div class="card">
+      <h3>Platform operator</h3>
+      <p>SuperAdmin manages organizations, branding, admin users, integrations and audit — without mixing tenant data.</p>
+    </div>
+  </div>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Tenancy</p>
+  <h2>How companies sit on the platform</h2>
+  <div class="two">
+    <div class="mermaid">
+flowchart TB
+  P["MoventraX parent<br/>kind: Parent"]
+  T1["Tenant company A"]
+  T2["Tenant company B"]
+  SA["SuperAdmin<br/>no tenant required"]
+  A1["Company admins"]
+  R1["Riders / vehicles / GPS"]
+  P --> T1
+  P --> T2
+  SA --> P
+  A1 --> T1
+  T1 --> R1
+    </div>
+    <div>
+      <div class="card">
+        <h3>Rules</h3>
+        <ul>
+          <li>Each rider, vehicle, booking, GPS point and payment belongs to one tenant.</li>
+          <li>SuperAdmin signs in without an organization and can switch companies.</li>
+          <li>Company users always work inside their tenant.</li>
+          <li>GPS and payment gateways are configured per tenant, not on the parent.</li>
+          <li>Tenant companies can be archived; parent and default sample tenant cannot be suspended.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Web application</p>
+  <h2>Operations portal at a glance</h2>
+  <p class="lede">Role-based Next.js admin. Menus the user cannot access are hidden.</p>
+  <table>
+    <thead><tr><th>Area</th><th>Modules</th><th>Typical roles</th></tr></thead>
+    <tbody>
+      <tr><td>Overview</td><td>Dashboard, Reports (CSV / PDF)</td><td>All signed-in admin roles</td></tr>
+      <tr><td>Riders &amp; fleet</td><td>Riders, Vehicles, Track Vehicle, Hubs, Charging, KYC, Rental Plans</td><td>Operations, KYC, Command Center</td></tr>
+      <tr><td>Operations</td><td>Bookings, Active Rides, Breakdowns, Service, IoT Devices, Support</td><td>Operations, Service, Command Center</td></tr>
+      <tr><td>Business</td><td>Promotions, Finance / Gateway, Engagement</td><td>Finance, Administrator</td></tr>
+      <tr><td>Administration</td><td>Admin Users, Organizations, Audit, Branding, Integrations</td><td>SuperAdmin / Administrator</td></tr>
+    </tbody>
+  </table>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Web · Riders &amp; fleet</p>
+  <h2>Onboard people and assets</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3>Riders</h3>
+      <ul>
+        <li>Create and manage rider accounts, contact details and status.</li>
+        <li>Assign a rental plan and a vehicle after KYC is approved.</li>
+        <li>Open rider detail for KYC documents, wallet, dues and history.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>KYC review</h3>
+      <ul>
+        <li>Queue of Aadhaar, PAN, driving licence and selfie.</li>
+        <li>View approved documents; approve or reject with a reason.</li>
+        <li>Vehicle assignment is gated until KYC is approved.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Vehicles &amp; hubs</h3>
+      <ul>
+        <li>E-scooter, e-bike, e-rickshaw, e-car, e-truck inventory.</li>
+        <li>Hubs with geo location; charging stations and charger counts.</li>
+        <li>Install and activation dates on vehicles for commercial tracking.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Rental plans</h3>
+      <ul>
+        <li>Per-minute, hourly, daily, weekly and monthly products.</li>
+        <li>Charges, GST-aware billing, and plan changes for riders.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Web · Track &amp; IoT</p>
+  <h2>Live fleet control</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3>Track Vehicle</h3>
+      <ul>
+        <li>Live map of all vehicles with battery and motion state.</li>
+        <li>History playback using GPS points with speed greater than zero.</li>
+        <li>Draw circular geofences and place points of interest.</li>
+        <li>Place a fence or POI by map click, vehicle click, search, or selected vehicle coordinates.</li>
+        <li>Six months of GPS history retained for investigation.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>IoT &amp; GPS integrations</h3>
+      <ul>
+        <li>Register devices (IMEI) and link them to vehicles.</li>
+        <li>Pull vendors such as Track360 / Traccar, or accept HTTP push.</li>
+        <li>WanWay and other TCP GPS protocols land on a dedicated telemetry host.</li>
+        <li>Commands: lock, unlock, ignition, location, battery, odometer, health.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Web · Operations &amp; money</p>
+  <h2>Run the rental day</h2>
+  <div class="grid g3">
+    <div class="card">
+      <h3>Bookings &amp; rides</h3>
+      <ul>
+        <li>Create and monitor bookings.</li>
+        <li>Active rides with last known place from India reverse-geocode.</li>
+        <li>Start / end ride with lock commands where devices support it.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Breakdowns &amp; service</h3>
+      <ul>
+        <li>Command Center queue for rider-reported issues.</li>
+        <li>Service requests, workshop slots and appointments.</li>
+        <li>Status from open through closed / completed.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Finance &amp; engagement</h3>
+      <ul>
+        <li>Per-tenant payment gateway (Razorpay, PayU, Cashfree, PhonePe, Paytm, Stripe, custom).</li>
+        <li>Wallets, promotions, rental agreements.</li>
+        <li>Exports for operations and finance reports.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Web · Administration</p>
+  <h2>Platform controls</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3>Organizations &amp; users</h3>
+      <ul>
+        <li>Create tenant companies with slug, contact and notes.</li>
+        <li>Archive a tenant without destroying history.</li>
+        <li>Admin users: SuperAdmin, Administrator, Command Center, Finance, Operations, Service Team, KYC Team.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Trust &amp; brand</h3>
+      <ul>
+        <li>Audit trail of sensitive admin actions.</li>
+        <li>Per-tenant product name and optional logo.</li>
+        <li>Support tickets from riders land with Command Center.</li>
+        <li>Integrations page for GPS and related vendor keys.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Mobile application</p>
+  <h2>Rider app (Android &amp; iOS)</h2>
+  <p class="lede">Native apps talk to the same rider APIs. Company logo and product name come from tenant branding.</p>
+  <div class="grid g4">
+    <div class="card"><h3>Home</h3><p>Greeting, wallet, dues, plan, assigned vehicle, battery, KYC status, alerts, pay outstanding.</p></div>
+    <div class="card"><h3>Vehicle</h3><p>Assigned vehicle, status, battery; report breakdown; raise service request.</p></div>
+    <div class="card"><h3>Pay</h3><p>Outstanding, wallet, UPI / wallet / cards / net banking, payment history, ledger.</p></div>
+    <div class="card"><h3>Plan</h3><p>Browse rental plans and select or change the current plan.</p></div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <h3>More</h3>
+    <p>Profile · Agreements &amp; KYC (camera or gallery) · Book a ride at nearby hubs · Charging stations · Help &amp; support · Feedback · Refer &amp; earn · Workshop appointments</p>
+  </div>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Mobile journeys</p>
+  <h2>What the rider can complete on the phone</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3>Identity</h3>
+      <ul>
+        <li>Register / sign in against a company.</li>
+        <li>Upload Aadhaar, PAN, driving licence and selfie.</li>
+        <li>Read rental agreements issued by operations.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Use the vehicle</h3>
+      <ul>
+        <li>See the assigned vehicle after KYC + admin assignment.</li>
+        <li>Book a nearby hub vehicle and start an active ride.</li>
+        <li>Find charging stations.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Money</h3>
+      <ul>
+        <li>Pay dues through the tenant’s gateway.</li>
+        <li>Keep a wallet and view the ledger.</li>
+        <li>Apply a referral code and share their own.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Care</h3>
+      <ul>
+        <li>Send breakdowns to Command Center.</li>
+        <li>Book or cancel workshop slots.</li>
+        <li>Open support tickets and rate the experience.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Architecture</p>
+  <h2>High-level system context</h2>
+  <div class="mermaid">
+flowchart LR
+  subgraph Clients
+    WEB[Admin web<br/>Next.js]
+    AND[Android rider]
+    IOS[iOS rider]
+  end
+  subgraph Cloud["DigitalOcean App Platform"]
+    API[Platform API<br/>NestJS /api]
+    LOC[India location<br/>HTTP :4100]
+  end
+  subgraph Data
+    MONGO[(MongoDB<br/>tenants, fleet, GPS)]
+    SQL[(SQLite<br/>india places)]
+  end
+  subgraph Field
+    TEL[Telemetry droplet<br/>HTTP + GPS TCP]
+    GPS[GPS devices<br/>WanWay / GT06]
+    GW[Payment gateways]
+  end
+  WEB --> API
+  AND --> API
+  IOS --> API
+  API --> MONGO
+  API --> LOC
+  LOC --> SQL
+  TEL --> MONGO
+  GPS --> TEL
+  API --> GW
+  API --> TEL
+  </div>
+  <p class="note">Admin UI is proxied to the API. App Platform serves HTTPS only. Device TCP ports stay on the telemetry droplet.</p>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Architecture</p>
+  <h2>API modules (modular monolith)</h2>
+  <div class="mermaid">
+flowchart TB
+  AUTH[Auth · JWT · OTP · admin login]
+  TEN[Tenants · branding]
+  CUS[Customers / KYC]
+  FLT[Fleet · hubs · vehicles]
+  IOT[IoT · GPS integrations]
+  BKG[Bookings · rides]
+  PAY[Payments · wallets · plans]
+  OPS[Breakdowns · service]
+  ENG[Engagement · agreements]
+  SUP[Support · tickets]
+  GEO[Geo search / places]
+  RID[Rider facade]
+  AUTH --> TEN
+  RID --> CUS
+  RID --> FLT
+  RID --> BKG
+  RID --> PAY
+  RID --> OPS
+  RID --> ENG
+  RID --> SUP
+  FLT --> IOT
+  BKG --> IOT
+  IOT --> GEO
+  </div>
+  <p class="note">One NestJS process, clear module folders, shared MongoDB with tenant isolation on almost every collection.</p>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Architecture</p>
+  <h2>Deployment topology</h2>
+  <div class="two">
+    <div class="mermaid">
+flowchart TB
+  INET[Internet / TLS]
+  INET --> ADM[admin web :3000]
+  INET --> APIP[api :4000]
+  INET --> TCP[telemetry TCP<br/>21100 / 5001 / 8821]
+  ADM --> APIP
+  APIP --> MG[(Managed MongoDB VPC)]
+  TEL[telemetry droplet] --> MG
+  LOC[location :4100] --> SQLITE[(india.sqlite)]
+  APIP --> LOC
+  TCP --> TEL
+    </div>
+    <div class="card">
+      <h3>Hosting split</h3>
+      <ul>
+        <li><b>App Platform:</b> admin, API, location HTTP.</li>
+        <li><b>Managed MongoDB:</b> riders, fleet, bookings, GPS history.</li>
+        <li><b>Droplet:</b> WanWay / GT06 TCP ingest and telemetry config.</li>
+        <li><b>Location:</b> reverse-geocode for India; used by API and maps.</li>
+        <li>No Redis / Postgres required for this product.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Business flow</p>
+  <h2>1 · Company and rider onboarding</h2>
+  <div class="flow">
+    <div class="step"><b>01</b>SuperAdmin creates a tenant company and branding.</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>02</b>Administrator adds ops / KYC / finance users for that company.</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>03</b>Rider registers in the mobile app for the company.</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>04</b>Rider uploads KYC from camera or gallery.</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>05</b>KYC team reviews, approves or rejects with a reason.</div>
+  </div>
+  <div class="mermaid" style="margin-top:18px">
+sequenceDiagram
+  participant R as Rider app
+  participant API as Platform API
+  participant K as KYC team (web)
+  R->>API: Register / sign in
+  R->>API: Upload Aadhaar, PAN, DL, selfie
+  K->>API: Open KYC queue and view docs
+  K->>API: Approve or reject
+  API-->>R: kycStatus updated on Home
+  </div>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Business flow</p>
+  <h2>2 · Plan, vehicle assignment and rental</h2>
+  <div class="flow">
+    <div class="step"><b>01</b>Ops defines rental plans and stock at hubs.</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>02</b>After KYC approval, ops assigns a plan and a vehicle.</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>03</b>Rider sees plan, registration number and battery on Home.</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>04</b>Finance collects recurring rent via the tenant gateway.</div>
+  </div>
+  <p class="note">Assignment is blocked until KYC is approved. The parent company does not hold tenant merchant accounts — each company connects its own gateway.</p>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Business flow</p>
+  <h2>3 · Book a ride and complete a trip</h2>
+  <div class="mermaid">
+sequenceDiagram
+  participant R as Rider
+  participant API as API
+  participant M as MongoDB
+  participant D as IoT / GPS
+  R->>API: Nearby hubs (geo)
+  API->>M: Hubs + available vehicles
+  R->>API: Create booking / start ride
+  API->>D: Unlock / ignition if device linked
+  D-->>API: Live GPS + battery
+  API->>M: Ride points (6-month history)
+  R->>API: End ride
+  API->>D: Lock
+  API->>M: Fare + payment capture
+  </div>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Business flow</p>
+  <h2>4 · GPS ingest to Track Vehicle</h2>
+  <div class="grid g2">
+    <div class="mermaid">
+flowchart LR
+  DEV[Device IMEI]
+  PULL[Vendor HTTP pull<br/>Track360 / Traccar]
+  PUSH[Vendor HTTP push]
+  TCP[TCP WanWay / GT06<br/>telemetry droplet]
+  API[API IoT module]
+  DB[(gps history)]
+  MAP[Track Vehicle map]
+  DEV --> PULL
+  DEV --> PUSH
+  DEV --> TCP
+  PULL --> API
+  PUSH --> API
+  TCP --> DB
+  API --> DB
+  DB --> MAP
+    </div>
+    <div class="card">
+      <h3>Operator actions on the map</h3>
+      <ul>
+        <li>Watch the live fleet.</li>
+        <li>Replay moving history (speed &gt; 0).</li>
+        <li>Search a place and drop a geofence or POI.</li>
+        <li>Click a vehicle to use its coordinates.</li>
+        <li>Investigate last-known India locality on active rides.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Business flow</p>
+  <h2>5 · Breakdown, service and support</h2>
+  <div class="mermaid">
+flowchart TB
+  R[Rider reports issue in app]
+  CC[Command Center queue on web]
+  ST[Service team]
+  WS[Workshop slot]
+  T[Support ticket]
+  R -->|Breakdown| CC
+  R -->|Service request| ST
+  R -->|Help & feedback| T
+  ST --> WS
+  CC --> ST
+  ST -->|Close / complete| R
+  </div>
+  <p class="note">The same records appear on rider Home (open breakdown / service) and in the web operations modules until they are closed.</p>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Business flow</p>
+  <h2>6 · Payments</h2>
+  <div class="flow">
+    <div class="step"><b>01</b>Company admin stores gateway keys under Finance → Gateway (test or live).</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>02</b>Platform creates checkout for dues, bookings or wallet top-up.</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>03</b>Rider pays with UPI, wallet, cards or net banking.</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>04</b>Ledger and payment history update; promotions can apply.</div>
+  </div>
+  <p class="note">MoventraX does not collect on behalf of tenant companies. Each merchant account stays with the rental operator.</p>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Security &amp; roles</p>
+  <h2>Who can do what</h2>
+  <table>
+    <thead><tr><th>Role</th><th>Intent</th></tr></thead>
+    <tbody>
+      <tr><td>SuperAdmin</td><td>All modules, organizations, cross-tenant branding and integrations.</td></tr>
+      <tr><td>Administrator</td><td>Company-wide configuration, users, plans, finance, IoT.</td></tr>
+      <tr><td>Operations</td><td>Riders, vehicles, hubs, assignment, bookings, GPS track.</td></tr>
+      <tr><td>KYC Team</td><td>Document review only (plus dashboard).</td></tr>
+      <tr><td>Command Center</td><td>Live rides, breakdowns, support tickets.</td></tr>
+      <tr><td>Service Team</td><td>Workshops, appointments, vehicle service.</td></tr>
+      <tr><td>Finance</td><td>Wallets, gateway, promotions, reports.</td></tr>
+    </tbody>
+  </table>
+  <p class="note">JWT for admin and rider sessions. Tenant id is enforced in the API so one company cannot read another company’s fleet or GPS.</p>
+  <div class="bar"><span>MoventraX</span><span></span></div>
+</section>
+
+<section class="slide">
+  <p class="kicker">Close</p>
+  <h2>MoventraX in one page</h2>
+  <div class="grid g3">
+    <div class="card">
+      <h3>Web</h3>
+      <p>Full EV rental operations desk: companies, KYC, fleet, live track, geofence, bookings, money, service and audit.</p>
+    </div>
+    <div class="card">
+      <h3>Mobile</h3>
+      <p>Rider companion: identity, plan, vehicle, pay, book, charge, breakdown, workshop, tickets, referrals.</p>
+    </div>
+    <div class="card">
+      <h3>Platform</h3>
+      <p>Multi-tenant API, MongoDB, India geocoding, GPS telemetry, per-tenant payment gateways.</p>
+    </div>
+  </div>
+  <p class="lede" style="margin-top:28px">Present this file in a browser: arrow keys or the buttons below. Print to PDF if a handout is needed.</p>
+  <div class="bar"><span>MoventraX</span><span>Thank you</span></div>
+</section>
+
+</div>
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+  const slides = [...document.querySelectorAll(".slide")];
+  let i = 0;
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, idx) => s.classList.toggle("on", idx === i));
+    document.querySelectorAll("[data-pos]").forEach((el) => { el.textContent = (i + 1) + " / " + slides.length; });
+  }
+  slides.forEach((s) => {
+    const bar = s.querySelector(".bar");
+    if (!bar) return;
+    const right = document.createElement("span");
+    right.innerHTML = '<span data-pos></span> <span class="nav"><button type="button" data-prev>Prev</button> <button type="button" data-next>Next</button></span>';
+    const last = bar.lastElementChild;
+    if (last && !last.textContent) bar.replaceChild(right, last);
+    else bar.appendChild(right);
+  });
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-next]")) show(i + 1);
+    if (e.target.closest("[data-prev]")) show(i - 1);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (["ArrowRight", "PageDown", " "].includes(e.key)) { e.preventDefault(); show(i + 1); }
+    if (["ArrowLeft", "PageUp"].includes(e.key)) { e.preventDefault(); show(i - 1); }
+    if (e.key === "Home") show(0);
+    if (e.key === "End") show(slides.length - 1);
+  });
+  show(0);
+</script>
+</body>
+</html>
