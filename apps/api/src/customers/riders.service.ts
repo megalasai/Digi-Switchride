@@ -511,7 +511,7 @@ export class RidersService implements OnModuleInit {
     data: { phone: string; fullName: string; email?: string },
     actor?: AuditActor | null,
     retryOnDuplicate = false,
-  ) {
+  ): Promise<ReturnType<RidersService['toRiderSummary']>> {
     try {
       const customer = await this.customerModel.create({
         phone: data.phone,
@@ -553,7 +553,7 @@ export class RidersService implements OnModuleInit {
         const field = keys.find((k) => k !== 'tenantId');
         if (!hasTenant && field && ['phone', 'username', 'email', 'referralCode'].includes(field)) {
           try {
-            await coll.dropIndex(idx.name);
+            if (idx.name) await coll.dropIndex(idx.name);
           } catch {
             /* already gone */
           }
