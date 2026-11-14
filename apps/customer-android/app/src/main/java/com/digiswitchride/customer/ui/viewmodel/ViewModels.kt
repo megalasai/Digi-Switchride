@@ -114,9 +114,10 @@ class AuthViewModel @Inject constructor(
                 apiSettings.setTenantSlug(_tenantSlug.value)
                 val slug = _tenantSlug.value.trim().lowercase()
                 val normalizedPhone = phone?.trim()?.filter { it.isDigit() }?.takeLast(10)?.takeIf { it.length == 10 }
+                val resolvedUsername = username.trim().ifEmpty { normalizedPhone.orEmpty() }
                 val tokens = api.register(
                     RegisterRequest(
-                        username.trim(),
+                        resolvedUsername,
                         password,
                         fullName?.trim()?.takeIf { it.isNotEmpty() },
                         normalizedPhone,

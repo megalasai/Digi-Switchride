@@ -2,14 +2,14 @@ import { ConflictException, Injectable, NotFoundException, BadRequestException }
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Customer, CustomerDocument, KycSubmission, KycSubmissionDocument } from '../schemas/customer.schema';
-import { maskAadhaar } from '../common/helpers';
+import { maskAadhaar, resolveRiderUsername } from '../common/helpers';
 
 @Injectable()
 export class ProfileService {
   constructor(@InjectModel(Customer.name) private customerModel: Model<CustomerDocument>) {}
 
-  async createCustomer(data: { username: string; phone: string; fullName: string; email?: string }) {
-    const username = data.username.trim().toLowerCase();
+  async createCustomer(data: { username?: string; phone: string; fullName: string; email?: string }) {
+    const username = resolveRiderUsername(data.username, data.phone);
     if (await this.customerModel.findOne({ username })) {
       throw new ConflictException('A rider with this username already exists in this company');
     }

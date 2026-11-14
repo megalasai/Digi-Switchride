@@ -498,7 +498,7 @@ export interface UpdatePromotion {
 }
 
 export interface CreateCustomer {
-  username: string;
+  username?: string;
   phone: string;
   fullName: string;
   email?: string;

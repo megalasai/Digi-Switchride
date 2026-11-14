@@ -1,4 +1,4 @@
-export type RiderImportRow = { fullName: string; username: string; phone: string; email?: string };
+export type RiderImportRow = { fullName: string; username?: string; phone: string; email?: string };
 
 const HEADERS = {
   fullName: ["fullname", "full_name", "name", "ridername", "rider_name"],
@@ -51,17 +51,17 @@ function mapRows(table: string[][]): RiderImportRow[] {
   const userI = idx(HEADERS.username);
   const phoneI = idx(HEADERS.phone);
   const emailI = idx(HEADERS.email);
-  if (nameI < 0 || userI < 0 || phoneI < 0) {
-    throw new Error("The file needs columns fullName, username and phone (email optional). Download the template and keep the header row.");
+  if (nameI < 0 || phoneI < 0) {
+    throw new Error("The file needs columns fullName and phone (username and email optional). Download the template and keep the header row.");
   }
   const out: RiderImportRow[] = [];
   for (const raw of table.slice(1)) {
     const fullName = (raw[nameI] ?? "").trim();
-    const username = (raw[userI] ?? "").trim().toLowerCase();
+    const username = userI >= 0 ? (raw[userI] ?? "").trim().toLowerCase() : "";
     const phone = (raw[phoneI] ?? "").trim();
     const email = emailI >= 0 ? (raw[emailI] ?? "").trim() : "";
     if (!fullName && !username && !phone && !email) continue;
-    out.push({ fullName, username, phone, email: email || undefined });
+    out.push({ fullName, username: username || undefined, phone, email: email || undefined });
   }
   return out;
 }
@@ -153,5 +153,5 @@ export async function parseRiderFile(file: File): Promise<RiderImportRow[]> {
 }
 
 export function riderTemplateCsv() {
-  return "\uFEFFfullName,username,phone,email\nPriya Sharma,priya.sharma,9876543210,priya@example.com\n";
+  return "\uFEFFfullName,username,phone,email\nPriya Sharma,priya.sharma,9876543210,priya@example.com\nAmit Kumar,,9876501234,\n";
 }

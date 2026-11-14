@@ -40,6 +40,7 @@ export default function RidersPage() {
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [usePhoneUsername, setUsePhoneUsername] = useState(true);
 
   useEffect(() => {
     const t = setTimeout(() => setSearch(searchInput.trim()), 300);
@@ -69,6 +70,7 @@ export default function RidersPage() {
   const openCreate = () => {
     setEditId(null);
     setForm(emptyForm);
+    setUsePhoneUsername(true);
     setFieldErrors({});
     setShowForm(true);
     setError("");
@@ -76,7 +78,9 @@ export default function RidersPage() {
 
   const openEdit = (r: Rider) => {
     setEditId(r.id);
+    const phoneDigits = (r.phone ?? "").replace(/\D/g, "").slice(-10);
     setForm({ username: r.username ?? "", phone: r.phone, fullName: r.fullName ?? "", email: r.email ?? "", accountStatus: r.accountStatus, tenantId: r.tenantId ?? "" });
+    setUsePhoneUsername(!r.username || r.username === phoneDigits);
     setFieldErrors({});
     setShowForm(true);
     setError("");
@@ -84,7 +88,7 @@ export default function RidersPage() {
 
   const validate = () => {
     const next = {
-      username: validateUsername(form.username),
+      username: usePhoneUsername ? "" : validateUsername(form.username, true),
       phone: validatePhone(form.phone),
       fullName: validateFullName(form.fullName),
       email: validateEmail(form.email),
@@ -114,7 +118,7 @@ export default function RidersPage() {
           return;
         }
         await api.updateRider(editId, {
-          username: form.username,
+          username: usePhoneUsername ? undefined : form.username,
           phone: form.phone,
           fullName: form.fullName,
           email: form.email || undefined,
@@ -124,7 +128,7 @@ export default function RidersPage() {
         });
         setSuccess("Rider updated");
       } else {
-        await api.createRider({ username: form.username, phone: form.phone, fullName: form.fullName, email: form.email || undefined, tenantId: form.tenantId || undefined });
+        await api.createRider({ username: usePhoneUsername ? undefined : form.username, phone: form.phone, fullName: form.fullName, email: form.email || undefined, tenantId: form.tenantId || undefined });
         setSuccess("Rider created");
       }
       setShowForm(false);
@@ -179,9 +183,9 @@ export default function RidersPage() {
                       setImporting(true);
                       try {
                         const parsed = await parseRiderFile(file);
-                        if (!parsed.length) throw new Error("No rider rows found. Keep the header row: fullName, username, phone, email.");
+                        if (!parsed.length) throw new Error("No rider rows found. Keep the header row: fullName, phone (username and email optional).");
                         const invalid = parsed.map((row, i) => {
-                          const username = validateUsername(row.username);
+                          const username = validateUsername(row.username ?? "");
                           const phone = validatePhone(row.phone);
                           const name = validateFullName(row.fullName);
                           const email = validateEmail(row.email ?? "");
@@ -243,12 +247,18 @@ export default function RidersPage() {
         <FormPanel title={editId ? "Edit rider" : "Create rider"}>
           <FormModeLabel editing={!!editId} />
           <form onSubmit={handleSubmit} className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2" noValidate>
-            <Field label="Username" error={fieldErrors.username} hint="3–32 letters, numbers, dots or underscores">
-              <Input invalid={!!fieldErrors.username} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} autoComplete="off" />
-            </Field>
             <Field label="Mobile number" error={fieldErrors.phone} hint="10-digit Indian mobile">
               <Input invalid={!!fieldErrors.phone} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             </Field>
+            <label className="flex items-center gap-2 text-sm text-text-primary md:col-span-2">
+              <input type="checkbox" checked={usePhoneUsername} onChange={(e) => setUsePhoneUsername(e.target.checked)} />
+              Use mobile number as username
+            </label>
+            {!usePhoneUsername && (
+              <Field label="Username" error={fieldErrors.username} hint="3–32 letters, numbers, dots or underscores">
+                <Input invalid={!!fieldErrors.username} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} autoComplete="off" />
+              </Field>
+            )}
             <Field label="Full name" error={fieldErrors.fullName}>
               <Input invalid={!!fieldErrors.fullName} value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
             </Field>

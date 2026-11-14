@@ -28,6 +28,7 @@ fun LoginScreen(onAuthenticated: () -> Unit, viewModel: AuthViewModel = hiltView
     var password by remember { mutableStateOf("") }
     var fullName by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
+    var usePhoneUsername by remember { mutableStateOf(true) }
     val state by viewModel.state.collectAsState()
     val tenantSlug by viewModel.tenantSlug.collectAsState()
 
@@ -58,15 +59,17 @@ fun LoginScreen(onAuthenticated: () -> Unit, viewModel: AuthViewModel = hiltView
                     )
                     Spacer(Modifier.height(16.dp))
 
-                    OutlinedTextField(
-                        value = username,
-                        onValueChange = { username = it },
-                        label = { Text("Username") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                    )
-                    Spacer(Modifier.height(12.dp))
+                    if (!isRegister || !usePhoneUsername) {
+                        OutlinedTextField(
+                            value = username,
+                            onValueChange = { username = it },
+                            label = { Text(if (isRegister) "Username" else "Username or mobile") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                        )
+                        Spacer(Modifier.height(12.dp))
+                    }
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it },
@@ -91,12 +94,17 @@ fun LoginScreen(onAuthenticated: () -> Unit, viewModel: AuthViewModel = hiltView
                         OutlinedTextField(
                             value = phone,
                             onValueChange = { phone = it.filter { ch -> ch.isDigit() }.take(10) },
-                            label = { Text("Mobile (optional)") },
+                            label = { Text("Mobile") },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                             shape = RoundedCornerShape(12.dp),
                         )
+                        Spacer(Modifier.height(8.dp))
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Checkbox(checked = usePhoneUsername, onCheckedChange = { usePhoneUsername = it })
+                            Text("Use mobile number as username", style = MaterialTheme.typography.bodyMedium)
+                        }
                     }
                     if (state.organizationsLoading) {
                         Spacer(Modifier.height(12.dp))
@@ -139,11 +147,18 @@ fun LoginScreen(onAuthenticated: () -> Unit, viewModel: AuthViewModel = hiltView
                     PrimaryButton(
                         text = if (isRegister) "Create account" else "Sign in",
                         onClick = {
-                            if (isRegister) viewModel.register(username, password, fullName, phone)
+                            if (isRegister) viewModel.register(
+                                if (usePhoneUsername) "" else username,
+                                password,
+                                fullName,
+                                phone,
+                            )
                             else viewModel.login(username, password)
                         },
                         loading = state.isLoading,
-                        enabled = username.isNotBlank() && password.length >= 6,
+                        enabled = password.length >= 6 && if (isRegister) {
+                            phone.length == 10 && (usePhoneUsername || username.isNotBlank())
+                        } else username.isNotBlank(),
                     )
                     TextButton(
                         onClick = {

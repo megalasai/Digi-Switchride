@@ -109,10 +109,11 @@ export class UpdateAdminUserDto {
 const USERNAME = '^[a-zA-Z0-9._]{3,32}$';
 
 export class CreateCustomerDto {
+  @IsOptional()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
-  @IsString()
+  @ValidateIf((_, v) => v != null && v !== '')
   @Matches(new RegExp(USERNAME), { message: 'Username must be 3–32 letters, numbers, dots or underscores' })
-  username!: string;
+  username?: string;
 
   @IsString()
   @Matches(new RegExp(PHONE), { message: 'Enter a valid 10-digit Indian mobile number' })
@@ -134,10 +135,11 @@ export class CreateCustomerDto {
 }
 
 export class ImportRiderRowDto {
+  @IsOptional()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
-  @IsString()
+  @ValidateIf((_, v) => v != null && v !== '')
   @Matches(new RegExp(USERNAME), { message: 'Username must be 3–32 letters, numbers, dots or underscores' })
-  username!: string;
+  username?: string;
 
   @IsString()
   @Matches(new RegExp(PHONE), { message: 'Enter a valid 10-digit Indian mobile number' })

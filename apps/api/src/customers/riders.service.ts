@@ -11,7 +11,7 @@ import { Customer, CustomerDocument, KycSubmission, KycSubmissionDocument } from
 import { Vehicle, VehicleDocument } from '../schemas/fleet.schema';
 import { Booking, BookingDocument, Payment, PaymentDocument, Ride, RideDocument } from '../schemas/booking.schema';
 import { RentalPlan, RentalPlanDocument, WalletTransaction, WalletTransactionDocument } from '../schemas/rental.schema';
-import { isValidUsername, normalizeIndiaPhone, normalizeUsername, phoneLookupValues } from '../common/helpers';
+import { isValidUsername, normalizeIndiaPhone, normalizeUsername, phoneLookupValues, resolveRiderUsername } from '../common/helpers';
 import { ProfileService } from './customers.service';
 import { findByEitherId, removeByEitherId } from '../common/mongo-id';
 
@@ -34,7 +34,7 @@ export class RidersService implements OnModuleInit {
 
   async onModuleInit() {
     await this.sanitizeBlankRiderIdentities();
-    await this.purgeRidersWithoutUsername();
+    await this.backfillMissingUsernames();
     await this.purgeRidersNotInAnyCompany();
     await this.rebuildCustomerIdentityIndexes();
     const count = await this.planModel.countDocuments();
@@ -102,15 +102,15 @@ export class RidersService implements OnModuleInit {
     };
   }
 
-  async create(data: { username: string; phone: string; fullName: string; email?: string; tenantId?: string }, actor?: AuditActor | null) {
+  async create(data: { username?: string; phone: string; fullName: string; email?: string; tenantId?: string }, actor?: AuditActor | null) {
     return runInWriteTenant(data.tenantId, async () => {
-      const username = normalizeUsername(data.username || '');
-      if (!isValidUsername(username)) {
-        throw new BadRequestException('Enter a username of 3–32 letters, numbers, dots or underscores');
-      }
       const phone = normalizeIndiaPhone(data.phone);
       if (!/^[6-9]\d{9}$/.test(phone)) {
         throw new BadRequestException('Enter a valid 10-digit Indian mobile number');
+      }
+      const username = resolveRiderUsername(data.username, phone);
+      if (!isValidUsername(username)) {
+        throw new BadRequestException('Enter a username of 3–32 letters, numbers, dots or underscores, or leave it blank to use the mobile number');
       }
       const phones = phoneLookupValues(phone);
       const tenantId = resolveWriteTenantId(data.tenantId);
@@ -146,7 +146,7 @@ export class RidersService implements OnModuleInit {
   }
 
   async importRows(
-    data: { rows: { username: string; phone: string; fullName: string; email?: string }[]; tenantId?: string },
+    data: { rows: { username?: string; phone: string; fullName: string; email?: string }[]; tenantId?: string },
     actor?: AuditActor | null,
   ) {
     const created: ReturnType<RidersService['toRiderSummary']>[] = [];
@@ -571,12 +571,24 @@ export class RidersService implements OnModuleInit {
     }
   }
 
-  private async purgeRidersWithoutUsername() {
+  private async backfillMissingUsernames() {
     await runWithoutTenant(async () => {
-      const result = await this.customerModel.collection.deleteMany({
-        $or: [{ username: { $exists: false } }, { username: null }, { username: '' }],
-      });
-      this.logger.log(`Removed ${result.deletedCount ?? 0} rider(s) that had no username`);
+      const missing = await this.customerModel.collection
+        .find({ $or: [{ username: { $exists: false } }, { username: null }, { username: '' }] })
+        .toArray();
+      let filled = 0;
+      let removed = 0;
+      for (const row of missing) {
+        const phone = normalizeIndiaPhone(String(row.phone ?? ''));
+        if (/^[6-9]\d{9}$/.test(phone)) {
+          await this.customerModel.collection.updateOne({ _id: row._id }, { $set: { username: phone, phone } });
+          filled += 1;
+        } else {
+          await this.customerModel.collection.deleteOne({ _id: row._id });
+          removed += 1;
+        }
+      }
+      this.logger.log(`Set mobile as username for ${filled} rider(s); removed ${removed} rider(s) with no username or mobile`);
     });
   }
 

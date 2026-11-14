@@ -8,7 +8,7 @@ import { normalizeAdminRole, PARENT_COMPANY_NAME, type AdminRole } from '@digi-s
 import { AuditService, type AuditActor } from '../audit/audit.service';
 import { Customer, CustomerDocument, OtpRecord, OtpRecordDocument, RefreshToken, RefreshTokenDocument } from '../schemas/customer.schema';
 import { AdminUser, AdminUserDocument } from '../schemas/admin.schema';
-import { generateOtp, hashOtp, hashPassword, normalizeIndiaPhone, phoneLookupValues } from '../common/helpers';
+import { generateOtp, hashOtp, hashPassword, isValidUsername, normalizeIndiaPhone, phoneLookupValues, resolveRiderUsername } from '../common/helpers';
 import { AdminLoginDto, CreateAdminUserDto } from './dto/admin-auth.dto';
 import { SendOtpDto, VerifyOtpDto, CustomerRegisterDto, CustomerLoginDto } from './dto/auth.dto';
 import { TenantsService } from '../tenants/tenants.service';
@@ -83,25 +83,38 @@ export class AuthService implements OnModuleInit {
     await record.save();
 
     const phones = phoneLookupValues(dto.phone);
-    const customer = await this.customerModel.findOne({ phone: { $in: phones } });
-    if (!customer?.username) {
-      throw new UnauthorizedException('No rider account for this number. Ask your operator to add you with a username first.');
+    const phone = normalizeIndiaPhone(dto.phone);
+    let customer = await this.customerModel.findOne({ phone: { $in: phones } });
+    if (!customer) {
+      customer = await this.customerModel.create({
+        username: phone,
+        phone,
+        kycStatus: 'NotSubmitted',
+        accountStatus: 'Active',
+      });
+      return this.issueCustomerTokens(customer, true);
     }
-
+    if (!customer.username) {
+      customer.username = resolveRiderUsername(undefined, phone);
+      await customer.save();
+    }
     return this.issueCustomerTokens(customer, false);
   }
 
   async registerCustomer(dto: CustomerRegisterDto) {
     return this.withCustomerTenant(dto.tenantSlug, async () => {
       const salt = this.passwordSalt();
-      const username = dto.username.trim().toLowerCase();
+      let phone: string | undefined;
+      if (dto.phone?.trim()) phone = normalizeIndiaPhone(dto.phone);
+      const username = resolveRiderUsername(dto.username, phone || '');
+      if (!isValidUsername(username)) {
+        throw new BadRequestException('Enter a username, or a mobile number to use as the username');
+      }
       const passwordHash = hashPassword(dto.password, salt);
       const existing = await this.customerModel.findOne({ username });
       if (existing) throw new ConflictException('Username already taken');
 
-      let phone: string | undefined;
-      if (dto.phone?.trim()) {
-        phone = normalizeIndiaPhone(dto.phone);
+      if (phone) {
         const phoneTaken = await this.customerModel.findOne({ phone: { $in: phoneLookupValues(phone) } });
         if (phoneTaken) {
           if (phoneTaken.username && phoneTaken.username !== username) {
@@ -133,7 +146,11 @@ export class AuthService implements OnModuleInit {
     return this.withCustomerTenant(dto.tenantSlug, async () => {
       const salt = this.passwordSalt();
       const username = dto.username.trim().toLowerCase();
-      const customer = await this.customerModel.findOne({ username, accountStatus: 'Active' });
+      const phones = phoneLookupValues(username);
+      const customer = await this.customerModel.findOne({
+        accountStatus: 'Active',
+        $or: [{ username }, { phone: { $in: phones } }],
+      });
       if (!customer?.passwordHash || customer.passwordHash !== hashPassword(dto.password, salt)) {
         throw new UnauthorizedException('Invalid username or password');
       }

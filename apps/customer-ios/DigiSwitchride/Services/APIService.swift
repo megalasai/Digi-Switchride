@@ -1,6 +1,6 @@
 import Foundation
 
-struct RegisterRequest: Codable { let username: String; let password: String; let fullName: String? }
+struct RegisterRequest: Codable { let username: String?; let password: String; let fullName: String?; let phone: String? }
 struct LoginRequest: Codable { let username: String; let password: String }
 struct AuthTokens: Codable { let accessToken: String; let refreshToken: String; let expiresIn: Int; let isNewUser: Bool }
 struct CustomerProfile: Codable {
@@ -95,8 +95,8 @@ class APIService {
         return try JSONDecoder().decode(T.self, from: data)
     }
 
-    func register(username: String, password: String, fullName: String?) async throws -> AuthTokens {
-        try await request("POST", "/auth/register", body: RegisterRequest(username: username, password: password, fullName: fullName))
+    func register(username: String?, password: String, fullName: String?, phone: String?) async throws -> AuthTokens {
+        try await request("POST", "/auth/register", body: RegisterRequest(username: username, password: password, fullName: fullName, phone: phone))
     }
     func login(username: String, password: String) async throws -> AuthTokens {
         try await request("POST", "/auth/login", body: LoginRequest(username: username, password: password))
@@ -160,14 +160,17 @@ class AuthManager: ObservableObject {
         isLoading = false
     }
 
-    func register(username: String, password: String, fullName: String?) async {
+    func register(username: String, password: String, fullName: String?, phone: String?) async {
         isLoading = true
         error = nil
         do {
+            let trimmedUser = username.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedPhone = phone?.trimmingCharacters(in: .whitespacesAndNewlines)
             let tokens = try await APIService.shared.register(
-                username: username.trimmingCharacters(in: .whitespacesAndNewlines),
+                username: trimmedUser.isEmpty ? nil : trimmedUser,
                 password: password,
-                fullName: fullName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true ? nil : fullName
+                fullName: fullName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true ? nil : fullName,
+                phone: trimmedPhone?.isEmpty == true ? nil : trimmedPhone
             )
             APIService.shared.accessToken = tokens.accessToken
             KeychainHelper.save(key: "refresh_token", value: tokens.refreshToken)

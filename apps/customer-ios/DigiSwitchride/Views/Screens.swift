@@ -6,6 +6,8 @@ struct LoginView: View {
     @State private var username = ""
     @State private var password = ""
     @State private var fullName = ""
+    @State private var phone = ""
+    @State private var usePhoneUsername = true
 
     var body: some View {
         ScrollView {
@@ -14,19 +16,23 @@ struct LoginView: View {
                 BrandHeader(title: "MoventraX", subtitle: "Your vehicle, plan, payments and support")
                 VStack(spacing: 16) {
                     Text(isRegister ? "Create account" : "Sign in").font(.title2.bold()).frame(maxWidth: .infinity, alignment: .leading)
-                    TextField("Username", text: $username).textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder)
+                    if !isRegister || !usePhoneUsername {
+                        TextField(isRegister ? "Username" : "Username or mobile", text: $username).textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder)
+                    }
                     SecureField("Password", text: $password).textFieldStyle(.roundedBorder)
                     if isRegister {
                         TextField("Full name (optional)", text: $fullName).textFieldStyle(.roundedBorder)
+                        TextField("Mobile", text: $phone).keyboardType(.phonePad).textFieldStyle(.roundedBorder)
+                        Toggle("Use mobile number as username", isOn: $usePhoneUsername)
                     }
                     Button {
                         Task {
-                            if isRegister { await auth.register(username: username, password: password, fullName: fullName) }
+                            if isRegister { await auth.register(username: usePhoneUsername ? "" : username, password: password, fullName: fullName, phone: phone) }
                             else { await auth.login(username: username, password: password) }
                         }
                     } label: { Text(isRegister ? "Create account" : "Sign in") }
                     .buttonStyle(PrimaryButtonStyle(loading: auth.isLoading))
-                    .disabled(auth.isLoading || username.isEmpty || password.count < 6)
+                    .disabled(auth.isLoading || password.count < 6 || (isRegister ? (phone.filter(\.isNumber).count != 10 || (!usePhoneUsername && username.isEmpty)) : username.isEmpty))
                     Button(isRegister ? "Already have an account? Sign in" : "New here? Create an account") {
                         isRegister.toggle(); auth.error = nil
                     }.font(.footnote)

@@ -1,4 +1,5 @@
-import { IsOptional, IsString, Length, Matches, MinLength } from 'class-validator';
+import { IsOptional, IsString, Length, Matches, MinLength, ValidateIf } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class SendOtpDto {
   @IsString()
@@ -16,9 +17,11 @@ export class VerifyOtpDto {
 }
 
 export class CustomerRegisterDto {
-  @IsString()
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
+  @ValidateIf((_, v) => v != null && v !== '')
   @Matches(/^[a-zA-Z0-9._]{3,32}$/, { message: 'Username must be 3–32 letters, numbers, dots or underscores' })
-  username!: string;
+  username?: string;
 
   @IsString()
   @MinLength(6)

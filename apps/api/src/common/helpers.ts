@@ -71,6 +71,12 @@ export function isValidUsername(value: string): boolean {
   return /^[a-z0-9._]{3,32}$/.test(normalizeUsername(value));
 }
 
+export function resolveRiderUsername(username: string | undefined, phone: string): string {
+  const explicit = normalizeUsername(username || '');
+  if (explicit) return explicit;
+  return normalizeIndiaPhone(phone);
+}
+
 export function normalizeIndiaPhone(phone: string): string {
   const digits = phone.replace(/\D/g, '');
   if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
