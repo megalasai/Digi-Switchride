@@ -74,12 +74,13 @@ export const api = {
       body: JSON.stringify(data),
       headers: tenantId ? { "X-Tenant-Id": tenantId } : {},
     }),
-  riders: (params?: { search?: string; kycStatus?: string; accountStatus?: string; page?: number }) => {
+  riders: (params?: { search?: string; kycStatus?: string; accountStatus?: string; page?: number; pageSize?: number }) => {
     const q = new URLSearchParams();
     if (params?.search) q.set("search", params.search);
     if (params?.kycStatus) q.set("kycStatus", params.kycStatus);
     if (params?.accountStatus) q.set("accountStatus", params.accountStatus);
     if (params?.page) q.set("page", String(params.page));
+    q.set("pageSize", String(params?.pageSize ?? 100));
     return request<{ items: Rider[]; totalCount: number }>(`/admin/riders?${q}`);
   },
   riderProfile: (id: string) => request<RiderProfile>(`/admin/riders/${id}`),

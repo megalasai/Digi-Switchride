@@ -70,6 +70,11 @@ export function normalizeIndiaPhone(phone: string): string {
   return digits;
 }
 
+export function phoneLookupValues(phone: string): string[] {
+  const ten = normalizeIndiaPhone(phone);
+  return [...new Set([phone.trim(), ten, `91${ten}`, `+91${ten}`, `0${ten}`].filter(Boolean))];
+}
+
 export function normalizeVehicleRegistration(value: string): string {
   return value.replace(/[\s-]/g, '').toUpperCase();
 }

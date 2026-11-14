@@ -5,13 +5,13 @@ import { Model } from 'mongoose';
 import type { AccountStatus } from '@digi-switchride/shared';
 import type { AuditActor } from '../audit/audit.service';
 import { AuditService } from '../audit/audit.service';
-import { runInWriteTenant } from '../common/tenant-write';
+import { resolveWriteTenantId, runInWriteTenant } from '../common/tenant-write';
 import { runWithoutTenant } from '../common/tenant-als';
 import { Customer, CustomerDocument, KycSubmission, KycSubmissionDocument } from '../schemas/customer.schema';
 import { Vehicle, VehicleDocument } from '../schemas/fleet.schema';
 import { Booking, BookingDocument, Payment, PaymentDocument, Ride, RideDocument } from '../schemas/booking.schema';
 import { RentalPlan, RentalPlanDocument, WalletTransaction, WalletTransactionDocument } from '../schemas/rental.schema';
-import { normalizeIndiaPhone } from '../common/helpers';
+import { normalizeIndiaPhone, phoneLookupValues } from '../common/helpers';
 import { ProfileService } from './customers.service';
 import { findByEitherId, removeByEitherId } from '../common/mongo-id';
 
@@ -82,7 +82,7 @@ export class RidersService implements OnModuleInit {
       ];
     }
     const page = params.page ?? 1;
-    const pageSize = Math.min(params.pageSize ?? 20, 100);
+    const pageSize = Math.min(params.pageSize ?? 100, 200);
     const totalCount = await this.customerModel.countDocuments(filter);
     const items = await this.customerModel
       .find(filter)
@@ -103,32 +103,31 @@ export class RidersService implements OnModuleInit {
       if (!/^[6-9]\d{9}$/.test(phone)) {
         throw new BadRequestException('Enter a valid 10-digit Indian mobile number');
       }
-      const existing = await this.customerModel.findOne({ phone });
-      if (existing) throw new ConflictException('A rider with this mobile number already exists in this company');
-      try {
-        const customer = await this.customerModel.create({
-          phone,
-          fullName: data.fullName.trim(),
-          email: data.email?.trim() || undefined,
-          kycStatus: 'NotSubmitted',
-          accountStatus: 'Active',
-          walletBalance: 0,
-          referralCode: await this.nextReferralCode(phone),
-        });
-        const result = this.toRiderSummary(customer);
+      const phones = phoneLookupValues(phone);
+      const tenantId = resolveWriteTenantId(data.tenantId);
+      const sameCompany = await this.customerModel.findOne({ phone: { $in: phones } });
+      if (sameCompany) {
+        throw new ConflictException('A rider with this mobile number already exists in this company');
+      }
+      const elsewhere = await runWithoutTenant(() => this.customerModel.find({ phone: { $in: phones } }).limit(20));
+      const orphan = elsewhere.find((row) => !String((row as { tenantId?: string }).tenantId || ''));
+      if (orphan) {
+        (orphan as { tenantId?: string }).tenantId = tenantId;
+        orphan.fullName = data.fullName.trim();
+        if (data.email?.trim()) orphan.email = data.email.trim();
+        if (!orphan.referralCode) orphan.referralCode = await this.nextReferralCode(phone);
+        await orphan.save();
+        const result = this.toRiderSummary(orphan);
         await this.auditService.record({
           actor,
           action: 'rider.create',
           entityType: 'Rider',
           entityId: result.id,
-          after: { phone: result.phone, fullName: result.fullName, email: result.email },
+          after: { phone: result.phone, fullName: result.fullName, email: result.email, adopted: true },
         });
         return result;
-      } catch (err) {
-        const message = mongoDuplicateMessage(err);
-        if (message) throw new ConflictException(message);
-        throw err;
       }
+      return this.insertRider({ phone, fullName: data.fullName.trim(), email: data.email?.trim() || undefined }, actor, true);
     });
   }
 
@@ -508,13 +507,65 @@ export class RidersService implements OnModuleInit {
     return `MX${Date.now().toString(36).toUpperCase()}${digits}`;
   }
 
+  private async insertRider(
+    data: { phone: string; fullName: string; email?: string },
+    actor?: AuditActor | null,
+    retryOnDuplicate = false,
+  ) {
+    try {
+      const customer = await this.customerModel.create({
+        phone: data.phone,
+        fullName: data.fullName,
+        email: data.email,
+        kycStatus: 'NotSubmitted',
+        accountStatus: 'Active',
+        walletBalance: 0,
+        referralCode: await this.nextReferralCode(data.phone),
+      });
+      const result = this.toRiderSummary(customer);
+      await this.auditService.record({
+        actor,
+        action: 'rider.create',
+        entityType: 'Rider',
+        entityId: result.id,
+        after: { phone: result.phone, fullName: result.fullName, email: result.email },
+      });
+      return result;
+    } catch (err) {
+      if (retryOnDuplicate && mongoDuplicateMessage(err)) {
+        await this.dropLegacyCustomerUniques();
+        return this.insertRider(data, actor, false);
+      }
+      const message = mongoDuplicateMessage(err);
+      if (message) throw new ConflictException(message);
+      throw err;
+    }
+  }
+
   private async dropLegacyCustomerUniques() {
     const coll = this.customerModel.collection;
-    for (const name of ['phone_1', 'username_1', 'email_1', 'referralCode_1']) {
-      try {
-        await coll.dropIndex(name);
-      } catch {
-        /* already gone */
+    try {
+      const indexes = await coll.indexes();
+      for (const idx of indexes) {
+        if (!idx.unique || idx.name === '_id_') continue;
+        const keys = Object.keys(idx.key ?? {});
+        const hasTenant = keys.includes('tenantId');
+        const field = keys.find((k) => k !== 'tenantId');
+        if (!hasTenant && field && ['phone', 'username', 'email', 'referralCode'].includes(field)) {
+          try {
+            await coll.dropIndex(idx.name);
+          } catch {
+            /* already gone */
+          }
+        }
+      }
+    } catch {
+      for (const name of ['phone_1', 'username_1', 'email_1', 'referralCode_1']) {
+        try {
+          await coll.dropIndex(name);
+        } catch {
+          /* already gone */
+        }
       }
     }
   }
