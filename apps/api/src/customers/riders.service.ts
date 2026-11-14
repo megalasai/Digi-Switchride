@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { mongoDuplicateMessage } from '../common/mongo-error';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -17,6 +17,8 @@ import { findByEitherId, removeByEitherId } from '../common/mongo-id';
 
 @Injectable()
 export class RidersService implements OnModuleInit {
+  private readonly logger = new Logger(RidersService.name);
+
   constructor(
     @InjectModel(Customer.name) private customerModel: Model<CustomerDocument>,
     @InjectModel(KycSubmission.name) private kycModel: Model<KycSubmissionDocument>,
@@ -32,6 +34,7 @@ export class RidersService implements OnModuleInit {
 
   async onModuleInit() {
     await this.dropLegacyCustomerUniques();
+    await this.purgeRidersNotInAnyCompany();
     const count = await this.planModel.countDocuments();
     if (count === 0) {
       await this.planModel.insertMany([
@@ -540,6 +543,24 @@ export class RidersService implements OnModuleInit {
       if (message) throw new ConflictException(message);
       throw err;
     }
+  }
+
+  private async purgeRidersNotInAnyCompany() {
+    await runWithoutTenant(async () => {
+      const tenants = await this.customerModel.db.collection('tenants').find({}, { projection: { _id: 1 } }).toArray();
+      const tenantIds = tenants.flatMap((row) => {
+        const id = row._id;
+        return id ? [String(id), id] : [];
+      });
+      if (!tenantIds.length) {
+        this.logger.warn('Skipped hidden-rider cleanup because no companies were found');
+        return;
+      }
+      const result = await this.customerModel.collection.deleteMany({
+        $or: [{ tenantId: { $exists: false } }, { tenantId: null }, { tenantId: '' }, { tenantId: { $nin: tenantIds } }],
+      });
+      this.logger.log(`Removed ${result.deletedCount ?? 0} rider(s) that are not attached to a company in the app`);
+    });
   }
 
   private async dropLegacyCustomerUniques() {

@@ -14,7 +14,6 @@ const TENANT_COLLECTIONS = [
   'vehicles',
   'rental_hubs',
   'iot_devices',
-  'customers',
   'admin_users',
   'branding',
   'bookings',
