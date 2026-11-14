@@ -283,6 +283,8 @@ export class TenantsService implements OnModuleInit {
       await this.dropLegacyUnique('vehicles', 'registrationNumber_1');
       await this.dropLegacyUnique('customers', 'username_1');
       await this.dropLegacyUnique('customers', 'phone_1');
+      await this.dropLegacyUnique('customers', 'referralCode_1');
+      await this.dropLegacyUnique('customers', 'email_1');
       await this.dropLegacyUnique('admin_users', 'email_1');
     });
   }

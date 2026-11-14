@@ -16,13 +16,14 @@ import { ACCESS, canAccess } from "@/lib/access";
 import { api, Rider } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { CompanyCell, CompanyField, useCompanies } from "@/lib/companies";
+import { parseRiderFile, riderTemplateCsv } from "@/lib/rider-spreadsheet";
 import { validateEmail, validateFullName, validatePhone } from "@/lib/validation";
 
 const emptyForm = { phone: "", fullName: "", email: "", accountStatus: "Active", tenantId: "" };
 
 export default function RidersPage() {
   const { user } = useAuth();
-  const { workingName, isSuper } = useCompanies();
+  const { workingName, isSuper, workingId } = useCompanies();
   const canWrite = canAccess(user?.role, ACCESS.ridersWrite);
   const [riders, setRiders] = useState<Rider[]>([]);
   const [total, setTotal] = useState(0);
@@ -37,6 +38,7 @@ export default function RidersPage() {
   const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
   const [form, setForm] = useState(emptyForm);
 
   useEffect(() => {
@@ -148,9 +150,69 @@ export default function RidersPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Input className="w-56" placeholder="Search name, phone, email" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
             {canWrite && (
-              <Button variant={showForm && !editId ? "secondary" : "primary"} onClick={() => (showForm && !editId ? setShowForm(false) : openCreate())}>
-                {showForm && !editId ? "Cancel" : "Add rider"}
-              </Button>
+              <>
+                <Button variant="secondary" type="button" onClick={() => {
+                  const blob = new Blob([riderTemplateCsv()], { type: "text/csv;charset=utf-8" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "MoventraX-riders-template.csv";
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}>
+                  Excel template
+                </Button>
+                <label className="inline-flex cursor-pointer items-center">
+                  <input
+                    type="file"
+                    accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    className="hidden"
+                    disabled={importing}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (!file) return;
+                      setError("");
+                      setSuccess("");
+                      setImporting(true);
+                      try {
+                        const parsed = await parseRiderFile(file);
+                        if (!parsed.length) throw new Error("No rider rows found. Keep the header row: fullName, phone, email.");
+                        const invalid = parsed.map((row, i) => {
+                          const phone = validatePhone(row.phone);
+                          const name = validateFullName(row.fullName);
+                          const email = validateEmail(row.email ?? "");
+                          return phone || name || email ? `Row ${i + 2}: ${phone || name || email}` : "";
+                        }).filter(Boolean);
+                        if (invalid.length) throw new Error(invalid.slice(0, 8).join(" "));
+                        const tenantId = form.tenantId || workingId || undefined;
+                        if (isSuper && !tenantId) {
+                          throw new Error("Select an organization in the header (Working in) or the Add rider form before uploading.");
+                        }
+                        const result = await api.importRiders({
+                          rows: parsed,
+                          tenantId,
+                        });
+                        setSuccess(`Imported ${result.createdCount} rider${result.createdCount === 1 ? "" : "s"}${result.errorCount ? `. ${result.errorCount} row(s) failed.` : "."}`);
+                        if (result.errors.length) {
+                          setError(result.errors.slice(0, 8).map((err) => `Row ${err.row}${err.phone ? ` (${err.phone})` : ""}: ${err.message}`).join(" "));
+                        }
+                        load();
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Upload failed");
+                      } finally {
+                        setImporting(false);
+                      }
+                    }}
+                  />
+                  <span className="inline-flex h-10 items-center rounded-xl border border-border bg-white px-4 text-sm font-semibold text-text-primary">
+                    {importing ? "Uploading…" : "Upload Excel"}
+                  </span>
+                </label>
+                <Button variant={showForm && !editId ? "secondary" : "primary"} onClick={() => (showForm && !editId ? setShowForm(false) : openCreate())}>
+                  {showForm && !editId ? "Cancel" : "Add rider"}
+                </Button>
+              </>
             )}
           </div>
         }

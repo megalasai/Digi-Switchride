@@ -1,4 +1,6 @@
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsDateString,
@@ -14,8 +16,9 @@ import {
   Min,
   MinLength,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ADMIN_ROLES,
   ACCOUNT_STATUSES,
@@ -119,7 +122,36 @@ export class CreateCustomerDto {
   email?: string;
 
   @IsOptional()
-  @IsMongoId()
+  @IsString()
+  tenantId?: string;
+}
+
+export class ImportRiderRowDto {
+  @IsString()
+  @Matches(new RegExp(PHONE), { message: 'Enter a valid 10-digit Indian mobile number' })
+  phone!: string;
+
+  @IsString()
+  @MinLength(2)
+  @MaxLength(80)
+  fullName!: string;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v != null && v !== '')
+  @IsEmail()
+  email?: string;
+}
+
+export class ImportRidersDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => ImportRiderRowDto)
+  rows!: ImportRiderRowDto[];
+
+  @IsOptional()
+  @IsString()
   tenantId?: string;
 }
 
@@ -148,7 +180,7 @@ export class UpdateCustomerDto {
   forceUnassign?: boolean;
 
   @IsOptional()
-  @IsMongoId()
+  @IsString()
   tenantId?: string;
 }
 

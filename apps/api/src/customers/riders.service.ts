@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { mongoDuplicateMessage } from '../common/mongo-error';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import type { AccountStatus } from '@digi-switchride/shared';
@@ -30,6 +31,7 @@ export class RidersService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    await this.dropLegacyCustomerUniques();
     const count = await this.planModel.countDocuments();
     if (count === 0) {
       await this.planModel.insertMany([
@@ -97,28 +99,59 @@ export class RidersService implements OnModuleInit {
 
   async create(data: { phone: string; fullName: string; email?: string; tenantId?: string }, actor?: AuditActor | null) {
     return runInWriteTenant(data.tenantId, async () => {
-    const phone = normalizeIndiaPhone(data.phone);
-    const existing = await this.customerModel.findOne({ phone });
-    if (existing) throw new ConflictException('Rider with this phone already exists');
-    const customer = await this.customerModel.create({
-      phone,
-      fullName: data.fullName.trim(),
-      email: data.email?.trim() || undefined,
-      kycStatus: 'NotSubmitted',
-      accountStatus: 'Active',
-      walletBalance: 0,
-      referralCode: await this.nextReferralCode(phone),
+      const phone = normalizeIndiaPhone(data.phone);
+      if (!/^[6-9]\d{9}$/.test(phone)) {
+        throw new BadRequestException('Enter a valid 10-digit Indian mobile number');
+      }
+      const existing = await this.customerModel.findOne({ phone });
+      if (existing) throw new ConflictException('A rider with this mobile number already exists in this company');
+      try {
+        const customer = await this.customerModel.create({
+          phone,
+          fullName: data.fullName.trim(),
+          email: data.email?.trim() || undefined,
+          kycStatus: 'NotSubmitted',
+          accountStatus: 'Active',
+          walletBalance: 0,
+          referralCode: await this.nextReferralCode(phone),
+        });
+        const result = this.toRiderSummary(customer);
+        await this.auditService.record({
+          actor,
+          action: 'rider.create',
+          entityType: 'Rider',
+          entityId: result.id,
+          after: { phone: result.phone, fullName: result.fullName, email: result.email },
+        });
+        return result;
+      } catch (err) {
+        const message = mongoDuplicateMessage(err);
+        if (message) throw new ConflictException(message);
+        throw err;
+      }
     });
-    const result = this.toRiderSummary(customer);
-    await this.auditService.record({
-      actor,
-      action: 'rider.create',
-      entityType: 'Rider',
-      entityId: result.id,
-      after: { phone: result.phone, fullName: result.fullName, email: result.email },
-    });
-    return result;
-    });
+  }
+
+  async importRows(
+    data: { rows: { phone: string; fullName: string; email?: string }[]; tenantId?: string },
+    actor?: AuditActor | null,
+  ) {
+    const created: ReturnType<RidersService['toRiderSummary']>[] = [];
+    const errors: { row: number; phone?: string; message: string }[] = [];
+    for (let i = 0; i < data.rows.length; i++) {
+      const row = data.rows[i];
+      try {
+        created.push(await this.create({ ...row, tenantId: data.tenantId }, actor));
+      } catch (err) {
+        const message =
+          err instanceof BadRequestException || err instanceof ConflictException
+            ? (err.getResponse() as { message?: string | string[] }).message
+            : mongoDuplicateMessage(err);
+        const text = Array.isArray(message) ? message.join(', ') : message || (err instanceof Error ? err.message : 'Failed');
+        errors.push({ row: i + 2, phone: row.phone, message: String(text) });
+      }
+    }
+    return { createdCount: created.length, errorCount: errors.length, created, errors };
   }
 
   async update(
@@ -467,12 +500,23 @@ export class RidersService implements OnModuleInit {
 
   private async nextReferralCode(phone: string) {
     const digits = phone.replace(/\D/g, '').slice(-4) || '0000';
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 12; i++) {
       const code = `SR${digits}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-      const taken = await this.customerModel.findOne({ referralCode: code });
+      const taken = await runWithoutTenant(() => this.customerModel.findOne({ referralCode: code }));
       if (!taken) return code;
     }
-    return `SR${Date.now().toString(36).toUpperCase().slice(-8)}`;
+    return `MX${Date.now().toString(36).toUpperCase()}${digits}`;
+  }
+
+  private async dropLegacyCustomerUniques() {
+    const coll = this.customerModel.collection;
+    for (const name of ['phone_1', 'username_1', 'email_1', 'referralCode_1']) {
+      try {
+        await coll.dropIndex(name);
+      } catch {
+        /* already gone */
+      }
+    }
   }
 
   private toPlan(p: RentalPlanDocument) {

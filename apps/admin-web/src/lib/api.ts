@@ -85,6 +85,11 @@ export const api = {
   riderProfile: (id: string) => request<RiderProfile>(`/admin/riders/${id}`),
   createRider: (data: CreateCustomer) =>
     request<Rider>("/admin/riders", { method: "POST", body: JSON.stringify(data) }),
+  importRiders: (data: { rows: { phone: string; fullName: string; email?: string }[]; tenantId?: string }) =>
+    request<{ createdCount: number; errorCount: number; created: Rider[]; errors: { row: number; phone?: string; message: string }[] }>(
+      "/admin/riders/import",
+      { method: "POST", body: JSON.stringify(data) },
+    ),
   updateRider: (id: string, data: UpdateCustomer) =>
     request<Rider>(`/admin/riders/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteRider: (id: string) => request<{ deleted: boolean }>(`/admin/riders/${id}`, { method: "DELETE" }),

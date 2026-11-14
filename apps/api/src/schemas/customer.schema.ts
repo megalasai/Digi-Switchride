@@ -43,7 +43,7 @@ export class Customer {
   @Prop({ default: 0 })
   walletBalance!: number;
 
-  @Prop({ trim: true, unique: true, sparse: true })
+  @Prop({ trim: true, sparse: true })
   referralCode?: string;
 
   @Prop({ type: String })
@@ -54,6 +54,7 @@ export const CustomerSchema = SchemaFactory.createForClass(Customer);
 CustomerSchema.plugin(tenantPlugin);
 CustomerSchema.index({ tenantId: 1, phone: 1 }, { unique: true, sparse: true });
 CustomerSchema.index({ tenantId: 1, username: 1 }, { unique: true, sparse: true });
+CustomerSchema.index({ tenantId: 1, referralCode: 1 }, { unique: true, sparse: true });
 CustomerSchema.index({ accountStatus: 1, kycStatus: 1 });
 CustomerSchema.index({ assignedVehicleId: 1 }, { sparse: true });
 

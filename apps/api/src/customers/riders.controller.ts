@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards 
 import { AuthGuard } from '@nestjs/passport';
 import { AdminGuard, RolesGuard } from '../auth/admin.guard';
 import { Roles } from '../auth/roles.decorator';
-import { AssignRiderPlanDto, CreateCustomerDto, CreateRentalPlanDto, UpdateCustomerDto, UpdateRentalPlanDto, WalletAdjustDto } from '../auth/dto/admin-auth.dto';
+import { AssignRiderPlanDto, CreateCustomerDto, CreateRentalPlanDto, ImportRidersDto, UpdateCustomerDto, UpdateRentalPlanDto, WalletAdjustDto } from '../auth/dto/admin-auth.dto';
 import { actorFromRequest } from '../common/actor';
 import { RidersService } from './riders.service';
 import { KycService } from './customers.service';
@@ -31,6 +31,12 @@ export class RidersAdminController {
   @Roles('SuperAdmin', 'Administrator', 'Operations')
   create(@Req() req: Parameters<typeof actorFromRequest>[0], @Body() body: CreateCustomerDto) {
     return this.ridersService.create(body, actorFromRequest(req));
+  }
+
+  @Post('import')
+  @Roles('SuperAdmin', 'Administrator', 'Operations')
+  importRows(@Req() req: Parameters<typeof actorFromRequest>[0], @Body() body: ImportRidersDto) {
+    return this.ridersService.importRows(body, actorFromRequest(req));
   }
 
   @Get('plans')
