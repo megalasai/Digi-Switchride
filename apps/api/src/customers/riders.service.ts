@@ -11,7 +11,7 @@ import { Customer, CustomerDocument, KycSubmission, KycSubmissionDocument } from
 import { Vehicle, VehicleDocument } from '../schemas/fleet.schema';
 import { Booking, BookingDocument, Payment, PaymentDocument, Ride, RideDocument } from '../schemas/booking.schema';
 import { RentalPlan, RentalPlanDocument, WalletTransaction, WalletTransactionDocument } from '../schemas/rental.schema';
-import { normalizeIndiaPhone, phoneLookupValues } from '../common/helpers';
+import { isValidUsername, normalizeIndiaPhone, normalizeUsername, phoneLookupValues } from '../common/helpers';
 import { ProfileService } from './customers.service';
 import { findByEitherId, removeByEitherId } from '../common/mongo-id';
 
@@ -34,6 +34,7 @@ export class RidersService implements OnModuleInit {
 
   async onModuleInit() {
     await this.sanitizeBlankRiderIdentities();
+    await this.purgeRidersWithoutUsername();
     await this.purgeRidersNotInAnyCompany();
     await this.rebuildCustomerIdentityIndexes();
     const count = await this.planModel.countDocuments();
@@ -101,14 +102,22 @@ export class RidersService implements OnModuleInit {
     };
   }
 
-  async create(data: { phone: string; fullName: string; email?: string; tenantId?: string }, actor?: AuditActor | null) {
+  async create(data: { username: string; phone: string; fullName: string; email?: string; tenantId?: string }, actor?: AuditActor | null) {
     return runInWriteTenant(data.tenantId, async () => {
+      const username = normalizeUsername(data.username || '');
+      if (!isValidUsername(username)) {
+        throw new BadRequestException('Enter a username of 3–32 letters, numbers, dots or underscores');
+      }
       const phone = normalizeIndiaPhone(data.phone);
       if (!/^[6-9]\d{9}$/.test(phone)) {
         throw new BadRequestException('Enter a valid 10-digit Indian mobile number');
       }
       const phones = phoneLookupValues(phone);
       const tenantId = resolveWriteTenantId(data.tenantId);
+      const sameUser = await this.customerModel.findOne({ username });
+      if (sameUser) {
+        throw new ConflictException('A rider with this username already exists in this company');
+      }
       const sameCompany = await this.customerModel.findOne({ phone: { $in: phones } });
       if (sameCompany) {
         throw new ConflictException('A rider with this mobile number already exists in this company');
@@ -117,6 +126,7 @@ export class RidersService implements OnModuleInit {
       const orphan = elsewhere.find((row) => !String((row as { tenantId?: string }).tenantId || ''));
       if (orphan) {
         (orphan as { tenantId?: string }).tenantId = tenantId;
+        orphan.username = username;
         orphan.fullName = data.fullName.trim();
         if (data.email?.trim()) orphan.email = data.email.trim();
         if (!orphan.referralCode) orphan.referralCode = await this.nextReferralCode(phone);
@@ -127,16 +137,16 @@ export class RidersService implements OnModuleInit {
           action: 'rider.create',
           entityType: 'Rider',
           entityId: result.id,
-          after: { phone: result.phone, fullName: result.fullName, email: result.email, adopted: true },
+          after: { phone: result.phone, username: result.username, fullName: result.fullName, email: result.email, adopted: true },
         });
         return result;
       }
-      return this.insertRider({ phone, fullName: data.fullName.trim(), email: data.email?.trim() || undefined }, actor, true);
+      return this.insertRider({ username, phone, fullName: data.fullName.trim(), email: data.email?.trim() || undefined }, actor, true);
     });
   }
 
   async importRows(
-    data: { rows: { phone: string; fullName: string; email?: string }[]; tenantId?: string },
+    data: { rows: { username: string; phone: string; fullName: string; email?: string }[]; tenantId?: string },
     actor?: AuditActor | null,
   ) {
     const created: ReturnType<RidersService['toRiderSummary']>[] = [];
@@ -160,6 +170,7 @@ export class RidersService implements OnModuleInit {
   async update(
     riderId: string,
     data: {
+      username?: string;
       phone?: string;
       fullName?: string;
       email?: string;
@@ -185,6 +196,18 @@ export class RidersService implements OnModuleInit {
         );
       });
       (customer as { tenantId?: string }).tenantId = data.tenantId;
+    }
+
+    if (data.username != null) {
+      const username = normalizeUsername(data.username);
+      if (!isValidUsername(username)) {
+        throw new BadRequestException('Enter a username of 3–32 letters, numbers, dots or underscores');
+      }
+      if (username !== customer.username) {
+        const taken = await this.customerModel.findOne({ username });
+        if (taken) throw new ConflictException('A rider with this username already exists in this company');
+        customer.username = username;
+      }
     }
 
     if (data.phone && normalizeIndiaPhone(data.phone) !== customer.phone) {
@@ -512,12 +535,13 @@ export class RidersService implements OnModuleInit {
   }
 
   private async insertRider(
-    data: { phone: string; fullName: string; email?: string },
+    data: { username: string; phone: string; fullName: string; email?: string },
     actor?: AuditActor | null,
     retryOnDuplicate = false,
   ): Promise<ReturnType<RidersService['toRiderSummary']>> {
     try {
       const customer = await this.customerModel.create({
+        username: data.username,
         phone: data.phone,
         fullName: data.fullName,
         ...(data.email ? { email: data.email } : {}),
@@ -532,7 +556,7 @@ export class RidersService implements OnModuleInit {
         action: 'rider.create',
         entityType: 'Rider',
         entityId: result.id,
-        after: { phone: result.phone, fullName: result.fullName, email: result.email },
+        after: { phone: result.phone, username: result.username, fullName: result.fullName, email: result.email },
       });
       return result;
     } catch (err) {
@@ -545,6 +569,15 @@ export class RidersService implements OnModuleInit {
       if (message) throw new ConflictException(message);
       throw err;
     }
+  }
+
+  private async purgeRidersWithoutUsername() {
+    await runWithoutTenant(async () => {
+      const result = await this.customerModel.collection.deleteMany({
+        $or: [{ username: { $exists: false } }, { username: null }, { username: '' }],
+      });
+      this.logger.log(`Removed ${result.deletedCount ?? 0} rider(s) that had no username`);
+    });
   }
 
   private async purgeRidersNotInAnyCompany() {

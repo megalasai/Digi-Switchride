@@ -7,8 +7,8 @@ export type CustomerDocument = HydratedDocument<Customer>;
 
 @Schema({ timestamps: true, collection: 'customers' })
 export class Customer {
-  @Prop({ trim: true, lowercase: true })
-  username?: string;
+  @Prop({ required: true, trim: true, lowercase: true })
+  username!: string;
 
   @Prop()
   passwordHash?: string;

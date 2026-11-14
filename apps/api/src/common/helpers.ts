@@ -63,6 +63,14 @@ export function readLatLng(location: unknown): { lat: number; lng: number } | nu
   return null;
 }
 
+export function normalizeUsername(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+export function isValidUsername(value: string): boolean {
+  return /^[a-z0-9._]{3,32}$/.test(normalizeUsername(value));
+}
+
 export function normalizeIndiaPhone(phone: string): string {
   const digits = phone.replace(/\D/g, '');
   if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);

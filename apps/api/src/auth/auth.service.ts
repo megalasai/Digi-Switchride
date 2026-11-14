@@ -83,14 +83,12 @@ export class AuthService implements OnModuleInit {
     await record.save();
 
     const phones = phoneLookupValues(dto.phone);
-    let customer = await this.customerModel.findOne({ phone: { $in: phones } });
-    const isNewUser = !customer;
-
-    if (!customer) {
-      customer = await this.customerModel.create({ phone: normalizeIndiaPhone(dto.phone) });
+    const customer = await this.customerModel.findOne({ phone: { $in: phones } });
+    if (!customer?.username) {
+      throw new UnauthorizedException('No rider account for this number. Ask your operator to add you with a username first.');
     }
 
-    return this.issueCustomerTokens(customer, isNewUser);
+    return this.issueCustomerTokens(customer, false);
   }
 
   async registerCustomer(dto: CustomerRegisterDto) {

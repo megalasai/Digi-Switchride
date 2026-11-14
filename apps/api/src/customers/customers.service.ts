@@ -8,10 +8,15 @@ import { maskAadhaar } from '../common/helpers';
 export class ProfileService {
   constructor(@InjectModel(Customer.name) private customerModel: Model<CustomerDocument>) {}
 
-  async createCustomer(data: { phone: string; fullName: string; email?: string }) {
+  async createCustomer(data: { username: string; phone: string; fullName: string; email?: string }) {
+    const username = data.username.trim().toLowerCase();
+    if (await this.customerModel.findOne({ username })) {
+      throw new ConflictException('A rider with this username already exists in this company');
+    }
     const existing = await this.customerModel.findOne({ phone: data.phone });
     if (existing) throw new ConflictException('Customer with this phone already exists');
     const customer = await this.customerModel.create({
+      username,
       phone: data.phone,
       fullName: data.fullName,
       email: data.email,

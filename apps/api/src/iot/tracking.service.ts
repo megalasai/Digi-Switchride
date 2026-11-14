@@ -11,6 +11,7 @@ export const SAMPLE_TRACK = {
   registrationNumber: 'KA01SR9999',
   deviceId: 'SIM-TRACK-DEMO',
   riderPhone: '9999900001',
+  riderUsername: 'demotrack',
   riderName: 'Demo Track Rider',
   hubName: 'Indiranagar Demo Hub',
 };
@@ -141,16 +142,22 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         status: 'Active',
       }));
 
-    const rider =
-      (await this.customerModel.findOne({ phone: SAMPLE_TRACK.riderPhone })) ??
-      (await this.customerModel.create({
+    let rider = await this.customerModel.findOne({ phone: SAMPLE_TRACK.riderPhone });
+    if (rider && !rider.username) {
+      rider.username = SAMPLE_TRACK.riderUsername;
+      await rider.save();
+    }
+    if (!rider) {
+      rider = await this.customerModel.create({
+        username: SAMPLE_TRACK.riderUsername,
         phone: SAMPLE_TRACK.riderPhone,
         fullName: SAMPLE_TRACK.riderName,
         email: 'demo.track@digiswitchride.com',
         kycStatus: 'Approved',
         accountStatus: 'Active',
         address: 'Indiranagar, Bengaluru',
-      }));
+      });
+    }
 
     let vehicle = await this.vehicleModel.findOne({ registrationNumber: SAMPLE_TRACK.registrationNumber });
     if (!vehicle) {

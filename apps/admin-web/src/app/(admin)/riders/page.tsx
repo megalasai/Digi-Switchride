@@ -17,9 +17,9 @@ import { api, Rider } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { CompanyCell, CompanyField, useCompanies } from "@/lib/companies";
 import { parseRiderFile, riderTemplateCsv } from "@/lib/rider-spreadsheet";
-import { validateEmail, validateFullName, validatePhone } from "@/lib/validation";
+import { validateEmail, validateFullName, validatePhone, validateUsername } from "@/lib/validation";
 
-const emptyForm = { phone: "", fullName: "", email: "", accountStatus: "Active", tenantId: "" };
+const emptyForm = { username: "", phone: "", fullName: "", email: "", accountStatus: "Active", tenantId: "" };
 
 export default function RidersPage() {
   const { user } = useAuth();
@@ -76,7 +76,7 @@ export default function RidersPage() {
 
   const openEdit = (r: Rider) => {
     setEditId(r.id);
-    setForm({ phone: r.phone, fullName: r.fullName ?? "", email: r.email ?? "", accountStatus: r.accountStatus, tenantId: r.tenantId ?? "" });
+    setForm({ username: r.username ?? "", phone: r.phone, fullName: r.fullName ?? "", email: r.email ?? "", accountStatus: r.accountStatus, tenantId: r.tenantId ?? "" });
     setFieldErrors({});
     setShowForm(true);
     setError("");
@@ -84,12 +84,13 @@ export default function RidersPage() {
 
   const validate = () => {
     const next = {
+      username: validateUsername(form.username),
       phone: validatePhone(form.phone),
       fullName: validateFullName(form.fullName),
       email: validateEmail(form.email),
     };
     setFieldErrors(next);
-    return !next.phone && !next.fullName && !next.email;
+    return !next.username && !next.phone && !next.fullName && !next.email;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -113,6 +114,7 @@ export default function RidersPage() {
           return;
         }
         await api.updateRider(editId, {
+          username: form.username,
           phone: form.phone,
           fullName: form.fullName,
           email: form.email || undefined,
@@ -122,7 +124,7 @@ export default function RidersPage() {
         });
         setSuccess("Rider updated");
       } else {
-        await api.createRider({ phone: form.phone, fullName: form.fullName, email: form.email || undefined, tenantId: form.tenantId || undefined });
+        await api.createRider({ username: form.username, phone: form.phone, fullName: form.fullName, email: form.email || undefined, tenantId: form.tenantId || undefined });
         setSuccess("Rider created");
       }
       setShowForm(false);
@@ -177,12 +179,13 @@ export default function RidersPage() {
                       setImporting(true);
                       try {
                         const parsed = await parseRiderFile(file);
-                        if (!parsed.length) throw new Error("No rider rows found. Keep the header row: fullName, phone, email.");
+                        if (!parsed.length) throw new Error("No rider rows found. Keep the header row: fullName, username, phone, email.");
                         const invalid = parsed.map((row, i) => {
+                          const username = validateUsername(row.username);
                           const phone = validatePhone(row.phone);
                           const name = validateFullName(row.fullName);
                           const email = validateEmail(row.email ?? "");
-                          return phone || name || email ? `Row ${i + 2}: ${phone || name || email}` : "";
+                          return username || phone || name || email ? `Row ${i + 2}: ${username || phone || name || email}` : "";
                         }).filter(Boolean);
                         if (invalid.length) throw new Error(invalid.slice(0, 8).join(" "));
                         const tenantId = form.tenantId || workingId || undefined;
@@ -240,6 +243,9 @@ export default function RidersPage() {
         <FormPanel title={editId ? "Edit rider" : "Create rider"}>
           <FormModeLabel editing={!!editId} />
           <form onSubmit={handleSubmit} className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2" noValidate>
+            <Field label="Username" error={fieldErrors.username} hint="3–32 letters, numbers, dots or underscores">
+              <Input invalid={!!fieldErrors.username} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} autoComplete="off" />
+            </Field>
             <Field label="Mobile number" error={fieldErrors.phone} hint="10-digit Indian mobile">
               <Input invalid={!!fieldErrors.phone} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             </Field>
@@ -283,6 +289,7 @@ export default function RidersPage() {
             <Table>
               <TableHead>
                 <TableHeaderCell>Name</TableHeaderCell>
+                <TableHeaderCell>Username</TableHeaderCell>
                 <TableHeaderCell>Company</TableHeaderCell>
                 <TableHeaderCell>Phone</TableHeaderCell>
                 <TableHeaderCell>KYC</TableHeaderCell>
@@ -294,6 +301,7 @@ export default function RidersPage() {
                 {riders.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell className="font-semibold">{r.fullName ?? "—"}</TableCell>
+                    <TableCell>{r.username ?? "—"}</TableCell>
                     <TableCell><CompanyCell tenantId={r.tenantId} /></TableCell>
                     <TableCell>{r.phone}</TableCell>
                     <TableCell><Badge status={r.kycStatus} /></TableCell>

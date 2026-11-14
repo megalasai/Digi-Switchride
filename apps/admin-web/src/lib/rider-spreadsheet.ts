@@ -1,7 +1,8 @@
-export type RiderImportRow = { fullName: string; phone: string; email?: string };
+export type RiderImportRow = { fullName: string; username: string; phone: string; email?: string };
 
 const HEADERS = {
   fullName: ["fullname", "full_name", "name", "ridername", "rider_name"],
+  username: ["username", "user_name", "userid", "user_id", "login"],
   phone: ["phone", "mobile", "mobilenumber", "mobile_number", "phonenumber", "phone_number"],
   email: ["email", "emailid", "email_id"],
 };
@@ -47,18 +48,20 @@ function mapRows(table: string[][]): RiderImportRow[] {
   const header = table[0].map(normHeader);
   const idx = (aliases: string[]) => header.findIndex((h) => aliases.includes(h));
   const nameI = idx(HEADERS.fullName);
+  const userI = idx(HEADERS.username);
   const phoneI = idx(HEADERS.phone);
   const emailI = idx(HEADERS.email);
-  if (nameI < 0 || phoneI < 0) {
-    throw new Error("The file needs columns fullName and phone (email optional). Download the template and keep the header row.");
+  if (nameI < 0 || userI < 0 || phoneI < 0) {
+    throw new Error("The file needs columns fullName, username and phone (email optional). Download the template and keep the header row.");
   }
   const out: RiderImportRow[] = [];
   for (const raw of table.slice(1)) {
     const fullName = (raw[nameI] ?? "").trim();
+    const username = (raw[userI] ?? "").trim().toLowerCase();
     const phone = (raw[phoneI] ?? "").trim();
     const email = emailI >= 0 ? (raw[emailI] ?? "").trim() : "";
-    if (!fullName && !phone && !email) continue;
-    out.push({ fullName, phone, email: email || undefined });
+    if (!fullName && !username && !phone && !email) continue;
+    out.push({ fullName, username, phone, email: email || undefined });
   }
   return out;
 }
@@ -150,5 +153,5 @@ export async function parseRiderFile(file: File): Promise<RiderImportRow[]> {
 }
 
 export function riderTemplateCsv() {
-  return "\uFEFFfullName,phone,email\nPriya Sharma,9876543210,priya@example.com\n";
+  return "\uFEFFfullName,username,phone,email\nPriya Sharma,priya.sharma,9876543210,priya@example.com\n";
 }

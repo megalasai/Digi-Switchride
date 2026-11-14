@@ -16,6 +16,13 @@ export function validatePhone(value: string) {
   return "";
 }
 
+export function validateUsername(value: string) {
+  const username = value.trim().toLowerCase();
+  if (!username) return "Username is required";
+  if (!/^[a-z0-9._]{3,32}$/.test(username)) return "Username must be 3–32 letters, numbers, dots or underscores";
+  return "";
+}
+
 export function validateFullName(value: string) {
   const name = value.trim();
   if (name.length < 2) return "Name must be at least 2 characters";

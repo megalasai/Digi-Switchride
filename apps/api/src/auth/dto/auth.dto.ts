@@ -17,7 +17,7 @@ export class VerifyOtpDto {
 
 export class CustomerRegisterDto {
   @IsString()
-  @MinLength(3)
+  @Matches(/^[a-zA-Z0-9._]{3,32}$/, { message: 'Username must be 3–32 letters, numbers, dots or underscores' })
   username!: string;
 
   @IsString()

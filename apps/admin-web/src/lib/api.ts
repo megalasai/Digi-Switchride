@@ -446,6 +446,7 @@ export interface UpdateAdminUser {
 }
 
 export interface UpdateCustomer {
+  username?: string;
   phone?: string;
   fullName?: string;
   email?: string;
@@ -497,6 +498,7 @@ export interface UpdatePromotion {
 }
 
 export interface CreateCustomer {
+  username: string;
   phone: string;
   fullName: string;
   email?: string;
@@ -505,6 +507,7 @@ export interface CreateCustomer {
 
 export interface Customer {
   id: string;
+  username?: string;
   phone: string;
   email?: string;
   fullName?: string;

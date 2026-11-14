@@ -106,7 +106,14 @@ export class UpdateAdminUserDto {
   hubIds?: string[];
 }
 
+const USERNAME = '^[a-zA-Z0-9._]{3,32}$';
+
 export class CreateCustomerDto {
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
+  @IsString()
+  @Matches(new RegExp(USERNAME), { message: 'Username must be 3–32 letters, numbers, dots or underscores' })
+  username!: string;
+
   @IsString()
   @Matches(new RegExp(PHONE), { message: 'Enter a valid 10-digit Indian mobile number' })
   phone!: string;
@@ -127,6 +134,11 @@ export class CreateCustomerDto {
 }
 
 export class ImportRiderRowDto {
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
+  @IsString()
+  @Matches(new RegExp(USERNAME), { message: 'Username must be 3–32 letters, numbers, dots or underscores' })
+  username!: string;
+
   @IsString()
   @Matches(new RegExp(PHONE), { message: 'Enter a valid 10-digit Indian mobile number' })
   phone!: string;
@@ -156,6 +168,11 @@ export class ImportRidersDto {
 }
 
 export class UpdateCustomerDto {
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
+  @Matches(new RegExp(USERNAME), { message: 'Username must be 3–32 letters, numbers, dots or underscores' })
+  username?: string;
+
   @IsOptional()
   @Matches(new RegExp(PHONE), { message: 'Enter a valid 10-digit Indian mobile number' })
   phone?: string;
