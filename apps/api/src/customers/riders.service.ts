@@ -33,8 +33,9 @@ export class RidersService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await this.dropLegacyCustomerUniques();
+    await this.sanitizeBlankRiderIdentities();
     await this.purgeRidersNotInAnyCompany();
+    await this.rebuildCustomerIdentityIndexes();
     const count = await this.planModel.countDocuments();
     if (count === 0) {
       await this.planModel.insertMany([
@@ -519,7 +520,7 @@ export class RidersService implements OnModuleInit {
       const customer = await this.customerModel.create({
         phone: data.phone,
         fullName: data.fullName,
-        email: data.email,
+        ...(data.email ? { email: data.email } : {}),
         kycStatus: 'NotSubmitted',
         accountStatus: 'Active',
         walletBalance: 0,
@@ -536,7 +537,8 @@ export class RidersService implements OnModuleInit {
       return result;
     } catch (err) {
       if (retryOnDuplicate && mongoDuplicateMessage(err)) {
-        await this.dropLegacyCustomerUniques();
+        await this.sanitizeBlankRiderIdentities();
+        await this.rebuildCustomerIdentityIndexes();
         return this.insertRider(data, actor, false);
       }
       const message = mongoDuplicateMessage(err);
@@ -563,32 +565,57 @@ export class RidersService implements OnModuleInit {
     });
   }
 
-  private async dropLegacyCustomerUniques() {
+  private async sanitizeBlankRiderIdentities() {
+    await runWithoutTenant(async () => {
+      const coll = this.customerModel.collection;
+      await coll.updateMany({ $or: [{ username: null }, { username: '' }] }, { $unset: { username: 1 } });
+      await coll.updateMany({ $or: [{ email: null }, { email: '' }] }, { $unset: { email: 1 } });
+    });
+  }
+
+  private async rebuildCustomerIdentityIndexes() {
     const coll = this.customerModel.collection;
+    const drop = async (name?: string) => {
+      if (!name || name === '_id_') return;
+      try {
+        await coll.dropIndex(name);
+      } catch {
+        /* already gone */
+      }
+    };
     try {
       const indexes = await coll.indexes();
       for (const idx of indexes) {
         if (!idx.unique || idx.name === '_id_') continue;
-        const keys = Object.keys(idx.key ?? {});
-        const hasTenant = keys.includes('tenantId');
-        const field = keys.find((k) => k !== 'tenantId');
-        if (!hasTenant && field && ['phone', 'username', 'email', 'referralCode'].includes(field)) {
-          try {
-            if (idx.name) await coll.dropIndex(idx.name);
-          } catch {
-            /* already gone */
-          }
-        }
+        const partial = idx.partialFilterExpression as Record<string, unknown> | undefined;
+        if (idx.sparse || !partial) await drop(idx.name);
       }
     } catch {
-      for (const name of ['phone_1', 'username_1', 'email_1', 'referralCode_1']) {
-        try {
-          await coll.dropIndex(name);
-        } catch {
-          /* already gone */
-        }
+      for (const name of [
+        'phone_1',
+        'username_1',
+        'email_1',
+        'referralCode_1',
+        'tenantId_1_phone_1',
+        'tenantId_1_username_1',
+        'tenantId_1_email_1',
+        'tenantId_1_referralCode_1',
+      ]) {
+        await drop(name);
       }
     }
+    const present = (field: string) => ({ [field]: { $type: 'string', $gt: '' } });
+    const ensure = async (key: Record<string, 1>, field: string) => {
+      try {
+        await coll.createIndex(key, { unique: true, partialFilterExpression: present(field), background: true });
+      } catch (err) {
+        this.logger.warn(`Could not ensure unique index on ${field}: ${err instanceof Error ? err.message : err}`);
+      }
+    };
+    await ensure({ tenantId: 1, phone: 1 }, 'phone');
+    await ensure({ tenantId: 1, username: 1 }, 'username');
+    await ensure({ tenantId: 1, email: 1 }, 'email');
+    await ensure({ tenantId: 1, referralCode: 1 }, 'referralCode');
   }
 
   private toPlan(p: RentalPlanDocument) {

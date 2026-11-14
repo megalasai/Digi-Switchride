@@ -7,13 +7,13 @@ export type CustomerDocument = HydratedDocument<Customer>;
 
 @Schema({ timestamps: true, collection: 'customers' })
 export class Customer {
-  @Prop({ trim: true, lowercase: true, sparse: true })
+  @Prop({ trim: true, lowercase: true })
   username?: string;
 
   @Prop()
   passwordHash?: string;
 
-  @Prop({ trim: true, sparse: true })
+  @Prop({ trim: true })
   phone?: string;
 
   @Prop({ trim: true, lowercase: true })
@@ -43,7 +43,7 @@ export class Customer {
   @Prop({ default: 0 })
   walletBalance!: number;
 
-  @Prop({ trim: true, sparse: true })
+  @Prop({ trim: true })
   referralCode?: string;
 
   @Prop({ type: String })
@@ -52,9 +52,11 @@ export class Customer {
 
 export const CustomerSchema = SchemaFactory.createForClass(Customer);
 CustomerSchema.plugin(tenantPlugin);
-CustomerSchema.index({ tenantId: 1, phone: 1 }, { unique: true, sparse: true });
-CustomerSchema.index({ tenantId: 1, username: 1 }, { unique: true, sparse: true });
-CustomerSchema.index({ tenantId: 1, referralCode: 1 }, { unique: true, sparse: true });
+const presentString = (field: string) => ({ [field]: { $type: 'string', $gt: '' } });
+CustomerSchema.index({ tenantId: 1, phone: 1 }, { unique: true, partialFilterExpression: presentString('phone') });
+CustomerSchema.index({ tenantId: 1, username: 1 }, { unique: true, partialFilterExpression: presentString('username') });
+CustomerSchema.index({ tenantId: 1, referralCode: 1 }, { unique: true, partialFilterExpression: presentString('referralCode') });
+CustomerSchema.index({ tenantId: 1, email: 1 }, { unique: true, partialFilterExpression: presentString('email') });
 CustomerSchema.index({ accountStatus: 1, kycStatus: 1 });
 CustomerSchema.index({ assignedVehicleId: 1 }, { sparse: true });
 

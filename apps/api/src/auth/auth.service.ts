@@ -8,7 +8,7 @@ import { normalizeAdminRole, PARENT_COMPANY_NAME, type AdminRole } from '@digi-s
 import { AuditService, type AuditActor } from '../audit/audit.service';
 import { Customer, CustomerDocument, OtpRecord, OtpRecordDocument, RefreshToken, RefreshTokenDocument } from '../schemas/customer.schema';
 import { AdminUser, AdminUserDocument } from '../schemas/admin.schema';
-import { generateOtp, hashOtp, hashPassword, normalizeIndiaPhone } from '../common/helpers';
+import { generateOtp, hashOtp, hashPassword, normalizeIndiaPhone, phoneLookupValues } from '../common/helpers';
 import { AdminLoginDto, CreateAdminUserDto } from './dto/admin-auth.dto';
 import { SendOtpDto, VerifyOtpDto, CustomerRegisterDto, CustomerLoginDto } from './dto/auth.dto';
 import { TenantsService } from '../tenants/tenants.service';
@@ -82,11 +82,12 @@ export class AuthService implements OnModuleInit {
     record.isUsed = true;
     await record.save();
 
-    let customer = await this.customerModel.findOne({ phone: dto.phone });
+    const phones = phoneLookupValues(dto.phone);
+    let customer = await this.customerModel.findOne({ phone: { $in: phones } });
     const isNewUser = !customer;
 
     if (!customer) {
-      customer = await this.customerModel.create({ phone: dto.phone });
+      customer = await this.customerModel.create({ phone: normalizeIndiaPhone(dto.phone) });
     }
 
     return this.issueCustomerTokens(customer, isNewUser);
@@ -96,21 +97,32 @@ export class AuthService implements OnModuleInit {
     return this.withCustomerTenant(dto.tenantSlug, async () => {
       const salt = this.passwordSalt();
       const username = dto.username.trim().toLowerCase();
+      const passwordHash = hashPassword(dto.password, salt);
       const existing = await this.customerModel.findOne({ username });
       if (existing) throw new ConflictException('Username already taken');
 
       let phone: string | undefined;
       if (dto.phone?.trim()) {
         phone = normalizeIndiaPhone(dto.phone);
-        const phoneTaken = await this.customerModel.findOne({ phone });
-        if (phoneTaken) throw new ConflictException('Mobile number already registered for this organization');
+        const phoneTaken = await this.customerModel.findOne({ phone: { $in: phoneLookupValues(phone) } });
+        if (phoneTaken) {
+          if (phoneTaken.username && phoneTaken.username !== username) {
+            throw new ConflictException('Mobile number already registered for this organization');
+          }
+          phoneTaken.username = username;
+          phoneTaken.passwordHash = passwordHash;
+          if (dto.fullName?.trim()) phoneTaken.fullName = dto.fullName.trim();
+          phoneTaken.phone = phone;
+          await phoneTaken.save();
+          return this.issueCustomerTokens(phoneTaken, false);
+        }
       }
 
       const customer = await this.customerModel.create({
         username,
-        passwordHash: hashPassword(dto.password, salt),
+        passwordHash,
         fullName: dto.fullName?.trim(),
-        phone,
+        ...(phone ? { phone } : {}),
         kycStatus: 'NotSubmitted',
         accountStatus: 'Active',
       });
