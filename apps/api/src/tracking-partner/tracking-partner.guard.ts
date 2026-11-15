@@ -12,13 +12,10 @@ export class TrackingPartnerGuard implements CanActivate {
       trackingApp?: { applicationId: string; name: string };
     }>();
     const key = readApiKey(req.headers);
-    if (!key) throw new UnauthorizedException('Send your tracking API key in the X-Api-Key header');
-    const app = await this.partners.authenticate(key);
-    const pathId = req.params?.applicationId?.trim().toLowerCase();
-    if (pathId && pathId !== app.applicationId) {
-      throw new UnauthorizedException('API key does not match this applicationId');
+    if (!key) {
+      throw new UnauthorizedException('Send the tracking API key in the X-Api-Key header or as Authorization: Bearer');
     }
-    req.trackingApp = app;
+    await this.partners.authenticate(key);
     return true;
   }
 }

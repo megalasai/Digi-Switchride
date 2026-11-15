@@ -53,6 +53,10 @@ services:
       - key: MONGODB_URI
         scope: RUN_TIME
         type: SECRET
+      - key: TRACKING_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: mtx_671be8f4dc7c5aea25e622891fe036e95b291c4b31f2c096
       - key: JWT_SECRET
         scope: RUN_TIME
         type: SECRET

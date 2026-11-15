@@ -4,6 +4,8 @@ import { AuthModule } from '../auth/auth.module';
 import { TenantsModule } from '../tenants/tenants.module';
 import { GpsTrackPoint, GpsTrackPointSchema, IoTDevice, IoTDeviceSchema, Vehicle, VehicleSchema } from '../schemas/fleet.schema';
 import {
+  TrackingAccessToken,
+  TrackingAccessTokenSchema,
   TrackingPartnerApp,
   TrackingPartnerAppSchema,
   TrackingPartnerAsset,
@@ -11,7 +13,7 @@ import {
   TrackingPartnerTenant,
   TrackingPartnerTenantSchema,
 } from '../schemas/tracking-partner.schema';
-import { TrackingPartnerAdminController, TrackingPartnerController, TrackingPartnerRegisterController } from './tracking-partner.controller';
+import { TrackingPartnerAdminController, TrackingPartnerController } from './tracking-partner.controller';
 import { TrackingPartnerGuard } from './tracking-partner.guard';
 import { TrackingPartnerService } from './tracking-partner.service';
 
@@ -23,12 +25,13 @@ import { TrackingPartnerService } from './tracking-partner.service';
       { name: TrackingPartnerApp.name, schema: TrackingPartnerAppSchema },
       { name: TrackingPartnerTenant.name, schema: TrackingPartnerTenantSchema },
       { name: TrackingPartnerAsset.name, schema: TrackingPartnerAssetSchema },
+      { name: TrackingAccessToken.name, schema: TrackingAccessTokenSchema },
       { name: IoTDevice.name, schema: IoTDeviceSchema },
       { name: Vehicle.name, schema: VehicleSchema },
       { name: GpsTrackPoint.name, schema: GpsTrackPointSchema },
     ]),
   ],
-  controllers: [TrackingPartnerAdminController, TrackingPartnerRegisterController, TrackingPartnerController],
+  controllers: [TrackingPartnerAdminController, TrackingPartnerController],
   providers: [TrackingPartnerService, TrackingPartnerGuard],
 })
 export class TrackingPartnerModule {}

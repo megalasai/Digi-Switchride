@@ -1,11 +1,15 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, OnModuleInit, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { Model } from 'mongoose';
 import { findByEitherId } from '../common/mongo-id';
 import { runWithoutTenant } from '../common/tenant-als';
+import { readSecret } from '../config/secrets';
 import { IoTDevice, IoTDeviceDocument, Vehicle, VehicleDocument, GpsTrackPoint, GpsTrackPointDocument } from '../schemas/fleet.schema';
 import {
+  TrackingAccessToken,
+  TrackingAccessTokenDocument,
   TrackingPartnerApp,
   TrackingPartnerAppDocument,
   TrackingPartnerAsset,
@@ -27,12 +31,14 @@ export class TrackingPartnerService implements OnModuleInit {
     @InjectModel(IoTDevice.name) private deviceModel: Model<IoTDeviceDocument>,
     @InjectModel(Vehicle.name) private vehicleModel: Model<VehicleDocument>,
     @InjectModel(GpsTrackPoint.name) private trackPointModel: Model<GpsTrackPointDocument>,
+    @InjectModel(TrackingAccessToken.name) private tokenModel: Model<TrackingAccessTokenDocument>,
     private tenants: TenantsService,
+    private config: ConfigService,
   ) {}
 
   async onModuleInit() {
     await this.appModel.collection.createIndex({ applicationId: 1 }, { unique: true }).catch(() => undefined);
-    await this.appModel.collection.createIndex({ apiKeyHash: 1 }, { unique: true }).catch(() => undefined);
+    await this.tokenModel.collection.createIndex({ tokenHash: 1 }, { unique: true }).catch(() => undefined);
   }
 
   async createApp(data: { applicationId: string; name: string; notes?: string; tenantIds?: string[] }) {
@@ -40,20 +46,17 @@ export class TrackingPartnerService implements OnModuleInit {
     if (await this.appModel.findOne({ applicationId })) {
       throw new ConflictException('An application with this applicationId already exists. Use your API key to update tenant and device mappings.');
     }
-    const apiKey = this.newApiKey();
     const doc = await this.appModel.create({
       applicationId,
       name: data.name.trim(),
       notes: data.notes?.trim() || undefined,
       status: 'Active',
-      apiKeyHash: hashApiKey(apiKey),
-      apiKeyPrefix: apiKey.slice(0, 12),
     });
     if (data.tenantIds?.length) {
       await this.replaceTenants(applicationId, data.tenantIds);
     }
     const tenants = await this.listTenants(applicationId);
-    return { ...this.toApp(doc), apiKey, tenants: tenants.items };
+    return { ...this.toApp(doc), tenants: tenants.items };
   }
 
   async listApps() {
@@ -74,23 +77,55 @@ export class TrackingPartnerService implements OnModuleInit {
     return this.toApp(doc);
   }
 
-  async rotateKey(applicationId: string) {
-    const doc = await this.requireApp(applicationId);
+  async rotateKey(_applicationId: string) {
+    return this.issueAccessToken('rotated');
+  }
+
+  async issueAccessToken(name: string) {
     const apiKey = this.newApiKey();
-    doc.apiKeyHash = hashApiKey(apiKey);
-    doc.apiKeyPrefix = apiKey.slice(0, 12);
-    await doc.save();
-    return { ...this.toApp(doc), apiKey };
+    const doc = await this.tokenModel.create({
+      name: name.trim() || 'customer',
+      tokenHash: hashApiKey(apiKey),
+      tokenPrefix: apiKey.slice(0, 12),
+      status: 'Active',
+    });
+    return {
+      name: doc.name,
+      tokenPrefix: doc.tokenPrefix,
+      status: doc.status,
+      apiKey,
+    };
+  }
+
+  async listAccessTokens() {
+    const rows = await this.tokenModel.find().sort({ createdAt: -1 });
+    return {
+      items: rows.map((row) => ({
+        name: row.name,
+        tokenPrefix: row.tokenPrefix,
+        status: row.status,
+        createdAt: (row as { createdAt?: Date }).createdAt ?? null,
+      })),
+    };
   }
 
   async authenticate(apiKey: string) {
-    const hash = hashApiKey(apiKey);
-    const doc = await this.appModel.findOne({ apiKeyHash: hash });
-    if (!doc || !safeEqual(doc.apiKeyHash, hash)) {
-      throw new UnauthorizedException('Invalid tracking API key');
+    const incoming = apiKey.trim();
+    const hash = hashApiKey(incoming);
+    const envKey = readSecret(this.config, 'TRACKING_API_KEY', '');
+    if (envKey && safeEqual(hashApiKey(envKey), hash)) {
+      return { applicationId: '*', name: 'shared' };
     }
-    if (doc.status !== 'Active') throw new UnauthorizedException('This tracking application is disabled');
-    return { applicationId: doc.applicationId, name: doc.name };
+    const token = await this.tokenModel.findOne({ tokenHash: hash, status: 'Active' });
+    if (token && safeEqual(token.tokenHash, hash)) {
+      return { applicationId: '*', name: token.name };
+    }
+    const legacy = await this.appModel.findOne({ apiKeyHash: hash });
+    if (legacy?.apiKeyHash && safeEqual(legacy.apiKeyHash, hash)) {
+      if (legacy.status !== 'Active') throw new UnauthorizedException('This tracking application is disabled');
+      return { applicationId: legacy.applicationId, name: legacy.name };
+    }
+    throw new UnauthorizedException('Invalid tracking API key');
   }
 
   async replaceTenants(applicationId: string, tenantIds: string[]) {
@@ -336,7 +371,7 @@ export class TrackingPartnerService implements OnModuleInit {
       name: doc.name,
       notes: doc.notes ?? null,
       status: doc.status,
-      apiKeyPrefix: doc.apiKeyPrefix,
+      apiKeyPrefix: doc.apiKeyPrefix ?? null,
       createdAt: (doc as { createdAt?: Date }).createdAt ?? null,
       updatedAt: (doc as { updatedAt?: Date }).updatedAt ?? null,
     };

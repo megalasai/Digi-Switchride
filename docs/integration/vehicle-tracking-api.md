@@ -7,7 +7,7 @@ Use this guide to connect an external product (for example a school or operation
 
 All partner calls send JSON over HTTPS. Dates are ISO-8601 UTC (`2026-11-15T08:00:00.000Z`).
 
-**Postman:** import [`MoventraX-Vehicle-Tracking.postman_collection.json`](./MoventraX-Vehicle-Tracking.postman_collection.json). Run **Register application** first (saves `apiKey`), then **Put tenant mapping** and **Put device mapping**. Default `baseUrl` is production HTTPS. For local, set `baseUrl` to `http://localhost:4000/api`.
+**Postman:** import [`MoventraX-Vehicle-Tracking.postman_collection.json`](./MoventraX-Vehicle-Tracking.postman_collection.json). Paste the shared tracking token into collection variable `apiKey`. Every request (register, mapping, live, history) sends it. Default `baseUrl` is production HTTPS. For local, set `baseUrl` to `http://localhost:4000/api`.
 
 MoventraX does **not** create your application for you. Your product sends `applicationId` and `tenantId` (and later device/vehicle rows). MoventraX stores those mappings and then serves live/history GPS.
 
@@ -27,28 +27,28 @@ The **external application** owns one-time setup. MoventraX only stores what you
 
 | Step | Who calls | What is stored |
 |------|-----------|----------------|
-| 1. Register `applicationId` | External app `POST /v1/tracking/applications` | `tracking_partner_apps` + API key (returned once) |
+| 1. Register `applicationId` | External app `POST /v1/tracking/applications` with the shared token | `tracking_partner_apps` |
 | 2. Map tenants | External app `PUT` or `POST .../tenants` | `tracking_partner_tenants` |
 | 3. Map devices / vehicles | External app `PUT` or `POST .../assets` | `tracking_partner_assets` |
-| 4. Live / history | External app `GET` with the API key | Read IoT + GPS |
+| 4. Live / history | External app `GET` | Read IoT + GPS |
 
 You choose the slug (`schoolapplication`). You send MoventraX `tenantId` values (or tenant slugs such as `digi-switchride`). After that, live APIs only return devices linked to those mappings.
 
-The API key is returned **once** on register. Store it. Later mapping and GPS calls send `X-Api-Key`.
-
 ## 2. Authentication
 
-**Register application** has no API key (you do not have one yet).
-
-Every later call, including tenant and device mapping:
+MoventraX issues **one tracking API token** privately (not created by your app). Use that same token on **every** call, including register and mapping.
 
 ```http
-X-Api-Key: mtx_your_key_here
+X-Api-Key: mtx_the_token_you_were_given
 ```
 
-`Authorization: Bearer mtx_your_key_here` is also accepted.
+or
 
-A `401` means the key is missing, wrong, disabled, or does not match the `applicationId` in the URL. A `409` on register means that `applicationId` already exists — keep using the original key and `PUT` mappings.
+```http
+Authorization: Bearer mtx_the_token_you_were_given
+```
+
+A `401` means the token is missing, wrong, or disabled. A `409` on register means that `applicationId` already exists — `PUT` tenants and devices instead.
 
 ## 3. Partner APIs
 
@@ -56,8 +56,11 @@ Replace `{applicationId}` with your slug.
 
 ### 3.0 Register application (one-time)
 
+Requires the shared tracking token.
+
 ```http
 POST /v1/tracking/applications
+X-Api-Key: mtx_the_token_you_were_given
 ```
 
 Body can include `tenantIds` so application + tenant mapping is created in one call.
@@ -235,6 +238,7 @@ https://fleetel-switchride-pmxt5.ondigitalocean.app
 ```bash
 BASE=https://fleetel-switchride-pmxt5.ondigitalocean.app/api
 APP=schoolapplication
+KEY=mtx_the_token_moventrax_shared_privately
 TENANT=6ac4b568cb1a4bc2181cf1a8
 DEVICE=352312095160753
 VEHICLE=6ac4b567cb1a4bc2181cefdb
@@ -246,7 +250,7 @@ VEHICLE=6ac4b567cb1a4bc2181cefdb
 
 ```bash
 curl -s -X POST "$BASE/v1/tracking/applications" \
-  -H "Content-Type: application/json" \
+  -H "X-Api-Key: $KEY" -H "Content-Type: application/json" \
   -d '{"applicationId":"schoolapplication","name":"School tracking","tenantIds":["6ac4b568cb1a4bc2181cf1a8"]}'
 ```
 
@@ -255,17 +259,14 @@ curl -s -X POST "$BASE/v1/tracking/applications" \
 ```http
 POST /api/v1/tracking/applications HTTP/1.1
 Host: fleetel-switchride-pmxt5.ondigitalocean.app
+X-Api-Key: mtx_the_token_you_were_given
 Content-Type: application/json
 Accept: application/json
 
 {"applicationId":"schoolapplication","name":"School tracking","tenantIds":["6ac4b568cb1a4bc2181cf1a8"]}
 ```
 
-Save `apiKey` from the JSON as `KEY`. You can send `tenantIds` as Mongo ids or slugs (`digi-switchride`).
-
-```bash
-KEY=mtx_paste_from_register_response
-```
+You can send `tenantIds` as Mongo ids or slugs (`digi-switchride`).
 
 ### 4.1 Tenant mapping (PUT from the external app)
 
@@ -420,7 +421,7 @@ Accept: application/json
 
 1. Open Postman → **Import** → select [`MoventraX-Vehicle-Tracking.postman_collection.json`](./MoventraX-Vehicle-Tracking.postman_collection.json).  
 2. `baseUrl` is production HTTPS.  
-3. Run **Register application** (saves `apiKey`).  
+3. Paste the shared token into `apiKey`, then run **Register application**.  
 4. Run **Put tenant mapping** and **Put device mapping**.  
 5. Run live and history requests.
 
@@ -586,7 +587,8 @@ Accept: application/json
 
 | Collection | Purpose |
 |------------|---------|
-| `tracking_partner_apps` | applicationId, name, status, hashed API key |
+| `tracking_access_tokens` | hashed shared API tokens used on every tracking call |
+| `tracking_partner_apps` | applicationId, name, status |
 | `tracking_partner_tenants` | applicationId ↔ tenantId |
 | `tracking_partner_assets` | applicationId ↔ tenantId ↔ deviceId ↔ vehicleId |
 | `iot_devices` | Latest telemetry |
@@ -595,11 +597,12 @@ Accept: application/json
 
 ## 8. Integration checklist
 
-1. `POST /v1/tracking/applications` with your `applicationId` and `tenantIds`. Store `apiKey`.  
-2. `PUT /v1/tracking/{applicationId}/tenants` if you need to change companies later.  
-3. `PUT /v1/tracking/{applicationId}/assets` with device/vehicle rows.  
-4. Poll `GET .../live` for the fleet map.  
-5. Poll `GET .../live/vehicle` when a user opens one vehicle.  
-6. Call `GET .../history` for playback (max 31 days per request).
+1. Store the shared tracking token MoventraX sent you.  
+2. `POST /v1/tracking/applications` with that token, your `applicationId`, and `tenantIds`.  
+3. `PUT /v1/tracking/{applicationId}/tenants` if you need to change companies later.  
+4. `PUT /v1/tracking/{applicationId}/assets` with device/vehicle rows.  
+5. Poll `GET .../live` for the fleet map.  
+6. Poll `GET .../live/vehicle` when a user opens one vehicle.  
+7. Call `GET .../history` for playback (max 31 days per request).
 
 Do not embed the API key in a public mobile app. Keep it on your backend and proxy map requests from your application.

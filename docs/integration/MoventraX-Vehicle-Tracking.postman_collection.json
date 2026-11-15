@@ -30,7 +30,6 @@
                 "type": "text/javascript",
                 "exec": [
                   "const json = pm.response.json();",
-                  "if (json.apiKey) { pm.collectionVariables.set('apiKey', json.apiKey); }",
                   "if (json.applicationId) { pm.collectionVariables.set('applicationId', json.applicationId); }"
                 ]
               }
@@ -38,13 +37,16 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"applicationId\": \"{{applicationId}}\",\n  \"name\": \"School tracking\",\n  \"tenantIds\": [\"{{tenantId}}\"]\n}"
             },
             "url": "{{baseUrl}}/v1/tracking/applications",
-            "description": "Called by the external application. apiKey is returned once."
+            "description": "Requires the shared tracking token in X-Api-Key."
           }
         },
         {

@@ -31,6 +31,18 @@ export class TrackingPartnerAdminController {
     return this.partners.listApps();
   }
 
+  @Get('access-tokens')
+  @Roles('SuperAdmin', 'Administrator')
+  listTokens() {
+    return this.partners.listAccessTokens();
+  }
+
+  @Post('access-tokens')
+  @Roles('SuperAdmin', 'Administrator')
+  createToken(@Body() body: { name?: string }) {
+    return this.partners.issueAccessToken(body.name || 'customer');
+  }
+
   @Get(':applicationId')
   @Roles('SuperAdmin', 'Administrator', 'CommandCenter', 'Operations')
   get(@Param('applicationId') applicationId: string) {
@@ -75,19 +87,14 @@ export class TrackingPartnerAdminController {
 }
 
 @Controller('v1/tracking')
-export class TrackingPartnerRegisterController {
+@UseGuards(TrackingPartnerGuard)
+export class TrackingPartnerController {
   constructor(private partners: TrackingPartnerService) {}
 
   @Post('applications')
   register(@Body() body: CreateTrackingPartnerDto) {
     return this.partners.createApp(body);
   }
-}
-
-@Controller('v1/tracking')
-@UseGuards(TrackingPartnerGuard)
-export class TrackingPartnerController {
-  constructor(private partners: TrackingPartnerService) {}
 
   @Put(':applicationId/tenants')
   @Post(':applicationId/tenants')

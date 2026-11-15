@@ -19,11 +19,28 @@ export class TrackingPartnerApp {
   @Prop({ required: true, enum: ['Active', 'Disabled'], default: 'Active' })
   status!: 'Active' | 'Disabled';
 
-  @Prop({ required: true })
-  apiKeyHash!: string;
+  @Prop()
+  apiKeyHash?: string;
+
+  @Prop()
+  apiKeyPrefix?: string;
+}
+
+export type TrackingAccessTokenDocument = HydratedDocument<TrackingAccessToken>;
+
+@Schema({ timestamps: true, collection: 'tracking_access_tokens' })
+export class TrackingAccessToken {
+  @Prop({ required: true, trim: true })
+  name!: string;
+
+  @Prop({ required: true, unique: true })
+  tokenHash!: string;
 
   @Prop({ required: true })
-  apiKeyPrefix!: string;
+  tokenPrefix!: string;
+
+  @Prop({ required: true, enum: ['Active', 'Disabled'], default: 'Active' })
+  status!: 'Active' | 'Disabled';
 }
 
 @Schema({ timestamps: true, collection: 'tracking_partner_tenants' })
@@ -53,6 +70,8 @@ export class TrackingPartnerAsset {
 export const TrackingPartnerAppSchema = SchemaFactory.createForClass(TrackingPartnerApp);
 export const TrackingPartnerTenantSchema = SchemaFactory.createForClass(TrackingPartnerTenant);
 export const TrackingPartnerAssetSchema = SchemaFactory.createForClass(TrackingPartnerAsset);
+export const TrackingAccessTokenSchema = SchemaFactory.createForClass(TrackingAccessToken);
+TrackingAccessTokenSchema.index({ tokenHash: 1 }, { unique: true });
 
 TrackingPartnerTenantSchema.index({ applicationId: 1, tenantId: 1 }, { unique: true });
 TrackingPartnerAssetSchema.index({ applicationId: 1, deviceId: 1 }, { unique: true });
