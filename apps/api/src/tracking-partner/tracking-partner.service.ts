@@ -35,10 +35,10 @@ export class TrackingPartnerService implements OnModuleInit {
     await this.appModel.collection.createIndex({ apiKeyHash: 1 }, { unique: true }).catch(() => undefined);
   }
 
-  async createApp(data: { applicationId: string; name: string; notes?: string }) {
+  async createApp(data: { applicationId: string; name: string; notes?: string; tenantIds?: string[] }) {
     const applicationId = data.applicationId.trim().toLowerCase();
     if (await this.appModel.findOne({ applicationId })) {
-      throw new ConflictException('An application with this applicationId already exists');
+      throw new ConflictException('An application with this applicationId already exists. Use your API key to update tenant and device mappings.');
     }
     const apiKey = this.newApiKey();
     const doc = await this.appModel.create({
@@ -49,7 +49,11 @@ export class TrackingPartnerService implements OnModuleInit {
       apiKeyHash: hashApiKey(apiKey),
       apiKeyPrefix: apiKey.slice(0, 12),
     });
-    return { ...this.toApp(doc), apiKey };
+    if (data.tenantIds?.length) {
+      await this.replaceTenants(applicationId, data.tenantIds);
+    }
+    const tenants = await this.listTenants(applicationId);
+    return { ...this.toApp(doc), apiKey, tenants: tenants.items };
   }
 
   async listApps() {
@@ -91,11 +95,7 @@ export class TrackingPartnerService implements OnModuleInit {
 
   async replaceTenants(applicationId: string, tenantIds: string[]) {
     await this.requireApp(applicationId);
-    const unique = [...new Set(tenantIds.map((id) => id.trim()).filter(Boolean))];
-    for (const tenantId of unique) {
-      const tenant = await this.tenants.findById(tenantId);
-      if (!tenant) throw new BadRequestException(`Unknown tenantId ${tenantId}`);
-    }
+    const unique = [...new Set(await Promise.all(tenantIds.map((id) => this.resolveTenantRef(id))))];
     await this.tenantMap.deleteMany({ applicationId });
     if (unique.length) {
       await this.tenantMap.insertMany(unique.map((tenantId) => ({ applicationId, tenantId })));
@@ -121,11 +121,9 @@ export class TrackingPartnerService implements OnModuleInit {
     await this.requireApp(applicationId);
     const mapped = [];
     for (const item of items) {
-      const tenantId = item.tenantId.trim();
+      const tenantId = await this.resolveTenantRef(item.tenantId);
       const deviceId = item.deviceId.trim();
-      if (!tenantId || !deviceId) throw new BadRequestException('Each mapping needs tenantId and deviceId');
-      const tenant = await this.tenants.findById(tenantId);
-      if (!tenant) throw new BadRequestException(`Unknown tenantId ${tenantId}`);
+      if (!deviceId) throw new BadRequestException('Each mapping needs tenantId and deviceId');
       const device = await runWithoutTenant(() => this.deviceModel.findOne({ deviceId }));
       if (!device) throw new BadRequestException(`Unknown deviceId ${deviceId}`);
       let vehicleId = item.vehicleId?.trim() || device.vehicleId;
@@ -317,6 +315,19 @@ export class TrackingPartnerService implements OnModuleInit {
       vendorType: live.vendorType,
       connectionStatus: live.connectionStatus,
     };
+  }
+
+  private async resolveTenantRef(ref: string) {
+    const value = ref.trim();
+    if (!value) throw new BadRequestException('tenantId is required');
+    try {
+      const tenant = await this.tenants.findById(value);
+      return tenant._id.toString();
+    } catch {
+      const bySlug = await this.tenants.findBySlug(value);
+      if (bySlug) return bySlug._id.toString();
+      throw new BadRequestException(`Unknown tenantId ${value}`);
+    }
   }
 
   private toApp(doc: TrackingPartnerAppDocument) {

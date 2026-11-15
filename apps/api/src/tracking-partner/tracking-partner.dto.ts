@@ -16,6 +16,12 @@ export class CreateTrackingPartnerDto {
   @IsString()
   @MaxLength(500)
   notes?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @IsString({ each: true })
+  tenantIds?: string[];
 }
 
 export class UpdateTrackingPartnerDto {

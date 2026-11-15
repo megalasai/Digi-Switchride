@@ -1,53 +1,28 @@
 {
   "info": {
     "name": "MoventraX vehicle tracking",
-    "description": "Partner tracking APIs (API key) and operator setup (admin JWT). Default host is production HTTPS. Switch baseUrl to http://localhost:4000/api for local.",
+    "description": "The external application registers itself, then PUTs tenant and device mappings. Live and history use the API key. Default host is production HTTPS.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     { "key": "baseUrl", "value": "https://fleetel-switchride-pmxt5.ondigitalocean.app/api" },
-    { "key": "adminEmail", "value": "admin@digiswitchride.com" },
-    { "key": "adminPassword", "value": "" },
-    { "key": "adminToken", "value": "" },
     { "key": "apiKey", "value": "" },
     { "key": "applicationId", "value": "schoolapplication" },
     { "key": "tenantId", "value": "6ac4b568cb1a4bc2181cf1a8" },
     { "key": "deviceId", "value": "352312095160753" },
     { "key": "vehicleId", "value": "6ac4b567cb1a4bc2181cefdb" },
     { "key": "startDateTime", "value": "2026-11-01T00:00:00.000Z" },
-    { "key": "endDateTime", "value": "2026-11-15T23:59:59.000Z" }
+    { "key": "endDateTime", "value": "2026-11-15T23:59:59.000Z" },
+    { "key": "adminEmail", "value": "admin@digiswitchride.com" },
+    { "key": "adminPassword", "value": "" },
+    { "key": "adminToken", "value": "" }
   ],
   "item": [
     {
-      "name": "1. Operator setup (admin JWT)",
+      "name": "1. External app — one-time mapping",
       "item": [
         {
-          "name": "Admin login",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const json = pm.response.json();",
-                  "if (json.accessToken) { pm.collectionVariables.set('adminToken', json.accessToken); }"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
-            },
-            "url": "{{baseUrl}}/v1/auth/admin/login",
-            "description": "Saves accessToken into collection variable adminToken."
-          }
-        },
-        {
-          "name": "Create tracking application",
+          "name": "Register application",
           "event": [
             {
               "listen": "test",
@@ -63,97 +38,30 @@
           ],
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"applicationId\": \"{{applicationId}}\",\n  \"name\": \"School tracking\",\n  \"notes\": \"Partner map for schoolapplication\"\n}"
+              "raw": "{\n  \"applicationId\": \"{{applicationId}}\",\n  \"name\": \"School tracking\",\n  \"tenantIds\": [\"{{tenantId}}\"]\n}"
             },
-            "url": "{{baseUrl}}/v1/admin/tracking-partners",
-            "description": "apiKey is returned once and saved to the collection."
+            "url": "{{baseUrl}}/v1/tracking/applications",
+            "description": "Called by the external application. apiKey is returned once."
           }
         },
         {
-          "name": "Map tenants",
+          "name": "Put tenant mapping",
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "X-Api-Key", "value": "{{apiKey}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"tenantIds\": [\"{{tenantId}}\"]\n}"
             },
-            "url": "{{baseUrl}}/v1/admin/tracking-partners/{{applicationId}}/tenants"
+            "url": "{{baseUrl}}/v1/tracking/{{applicationId}}/tenants"
           }
         },
-        {
-          "name": "Get tenant mapping",
-          "request": {
-            "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
-            "url": "{{baseUrl}}/v1/admin/tracking-partners/{{applicationId}}/tenants"
-          }
-        },
-        {
-          "name": "Map devices and vehicles",
-          "request": {
-            "method": "PUT",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"items\": [\n    {\n      \"tenantId\": \"{{tenantId}}\",\n      \"deviceId\": \"352312095160753\",\n      \"vehicleId\": \"6ac4b567cb1a4bc2181cefdb\"\n    },\n    {\n      \"tenantId\": \"{{tenantId}}\",\n      \"deviceId\": \"SIM-TRACK-DEMO\",\n      \"vehicleId\": \"6abb799e25bda6ff2d0c3ac7\"\n    }\n  ]\n}"
-            },
-            "url": "{{baseUrl}}/v1/admin/tracking-partners/{{applicationId}}/assets"
-          }
-        },
-        {
-          "name": "Get asset mapping",
-          "request": {
-            "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
-            "url": "{{baseUrl}}/v1/admin/tracking-partners/{{applicationId}}/assets"
-          }
-        },
-        {
-          "name": "List applications",
-          "request": {
-            "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
-            "url": "{{baseUrl}}/v1/admin/tracking-partners"
-          }
-        },
-        {
-          "name": "Rotate API key",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const json = pm.response.json();",
-                  "if (json.apiKey) { pm.collectionVariables.set('apiKey', json.apiKey); }"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
-            "url": "{{baseUrl}}/v1/admin/tracking-partners/{{applicationId}}/rotate-key"
-          }
-        }
-      ]
-    },
-    {
-      "name": "2. Partner tracking (API key)",
-      "item": [
         {
           "name": "Get tenant mapping",
           "request": {
@@ -163,13 +71,33 @@
           }
         },
         {
-          "name": "Get device vehicle tenant mapping",
+          "name": "Put device mapping",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"tenantId\": \"{{tenantId}}\",\n      \"deviceId\": \"352312095160753\",\n      \"vehicleId\": \"6ac4b567cb1a4bc2181cefdb\"\n    },\n    {\n      \"tenantId\": \"{{tenantId}}\",\n      \"deviceId\": \"SIM-TRACK-DEMO\",\n      \"vehicleId\": \"6abb799e25bda6ff2d0c3ac7\"\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/v1/tracking/{{applicationId}}/assets"
+          }
+        },
+        {
+          "name": "Get device mapping",
           "request": {
             "method": "GET",
             "header": [{ "key": "X-Api-Key", "value": "{{apiKey}}" }],
             "url": "{{baseUrl}}/v1/tracking/{{applicationId}}/assets"
           }
-        },
+        }
+      ]
+    },
+    {
+      "name": "2. Live and history",
+      "item": [
         {
           "name": "Live fleet (all tenants for application)",
           "request": {
@@ -208,6 +136,43 @@
             "method": "GET",
             "header": [{ "key": "X-Api-Key", "value": "{{apiKey}}" }],
             "url": "{{baseUrl}}/v1/tracking/{{applicationId}}/history?deviceId={{deviceId}}&startDateTime={{startDateTime}}&endDateTime={{endDateTime}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Optional MoventraX admin",
+      "item": [
+        {
+          "name": "Admin login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.accessToken) { pm.collectionVariables.set('adminToken', json.accessToken); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/v1/auth/admin/login"
+          }
+        },
+        {
+          "name": "List applications",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/v1/admin/tracking-partners"
           }
         }
       ]

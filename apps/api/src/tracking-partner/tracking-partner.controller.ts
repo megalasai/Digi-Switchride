@@ -75,13 +75,35 @@ export class TrackingPartnerAdminController {
 }
 
 @Controller('v1/tracking')
+export class TrackingPartnerRegisterController {
+  constructor(private partners: TrackingPartnerService) {}
+
+  @Post('applications')
+  register(@Body() body: CreateTrackingPartnerDto) {
+    return this.partners.createApp(body);
+  }
+}
+
+@Controller('v1/tracking')
 @UseGuards(TrackingPartnerGuard)
 export class TrackingPartnerController {
   constructor(private partners: TrackingPartnerService) {}
 
+  @Put(':applicationId/tenants')
+  @Post(':applicationId/tenants')
+  putTenants(@Param('applicationId') applicationId: string, @Body() body: PutPartnerTenantsDto) {
+    return this.partners.replaceTenants(applicationId, body.tenantIds);
+  }
+
   @Get(':applicationId/tenants')
   tenants(@Param('applicationId') applicationId: string) {
     return this.partners.listTenants(applicationId);
+  }
+
+  @Put(':applicationId/assets')
+  @Post(':applicationId/assets')
+  putAssets(@Param('applicationId') applicationId: string, @Body() body: PutPartnerAssetsDto) {
+    return this.partners.replaceAssets(applicationId, body.items);
   }
 
   @Get(':applicationId/assets')

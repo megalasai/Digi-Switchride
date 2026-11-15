@@ -11,7 +11,7 @@ import {
   TrackingPartnerTenant,
   TrackingPartnerTenantSchema,
 } from '../schemas/tracking-partner.schema';
-import { TrackingPartnerAdminController, TrackingPartnerController } from './tracking-partner.controller';
+import { TrackingPartnerAdminController, TrackingPartnerController, TrackingPartnerRegisterController } from './tracking-partner.controller';
 import { TrackingPartnerGuard } from './tracking-partner.guard';
 import { TrackingPartnerService } from './tracking-partner.service';
 
@@ -28,7 +28,7 @@ import { TrackingPartnerService } from './tracking-partner.service';
       { name: GpsTrackPoint.name, schema: GpsTrackPointSchema },
     ]),
   ],
-  controllers: [TrackingPartnerAdminController, TrackingPartnerController],
+  controllers: [TrackingPartnerAdminController, TrackingPartnerRegisterController, TrackingPartnerController],
   providers: [TrackingPartnerService, TrackingPartnerGuard],
 })
 export class TrackingPartnerModule {}
