@@ -7,6 +7,18 @@ Use this guide to connect an external product (for example a school or operation
 
 All partner calls send JSON over HTTPS. Dates are ISO-8601 UTC (`2026-11-15T08:00:00.000Z`).
 
+**Postman:** import [`MoventraX-Vehicle-Tracking.postman_collection.json`](./MoventraX-Vehicle-Tracking.postman_collection.json). Set `adminPassword` and run **Admin login**, then **Create tracking application** (saves `apiKey`). Partner requests use production HTTPS by default (`baseUrl`). For local, set `baseUrl` to `http://localhost:4000/api`.
+
+### Sample fleet in this environment
+
+| Field | Value |
+|-------|--------|
+| `applicationId` | `schoolapplication` (create once with the admin API) |
+| `tenantId` | `6ac4b568cb1a4bc2181cf1a8` (`digi-switchride`) |
+| `deviceId` | `352312095160753` (KA01AQ6087) |
+| `vehicleId` | `6ac4b567cb1a4bc2181cefdb` |
+| Demo device | `SIM-TRACK-DEMO` / vehicle `6abb799e25bda6ff2d0c3ac7` (KA01SR9999) |
+
 ## 1. What you receive from MoventraX
 
 A MoventraX operator creates your **application** (slug such as `schoolapplication`) and gives you:
@@ -54,7 +66,7 @@ GET /v1/tracking/{applicationId}/tenants
     {
       "applicationId": "schoolapplication",
       "tenantId": "6ac4b568cb1a4bc2181cf1a8",
-      "tenantName": "Acme Fleet"
+      "tenantName": "Digi-Switchride"
     }
   ]
 }
@@ -73,12 +85,12 @@ GET /v1/tracking/{applicationId}/assets
     {
       "applicationId": "schoolapplication",
       "tenantId": "6ac4b568cb1a4bc2181cf1a8",
-      "tenantName": "Acme Fleet",
-      "deviceId": "864793076543210",
-      "vehicleId": "67ab...",
-      "vehicleRegistration": "KA01AB1234",
-      "displayName": "Bus 12",
-      "vendorType": "WanWay",
+      "tenantName": "Digi-Switchride",
+      "deviceId": "352312095160753",
+      "vehicleId": "6ac4b567cb1a4bc2181cefdb",
+      "vehicleRegistration": "KA01AQ6087",
+      "displayName": "KA01AQ6087",
+      "vendorType": "Track360",
       "connectionStatus": "Connected"
     }
   ]
@@ -109,19 +121,19 @@ GET /v1/tracking/{applicationId}/live?tenantId={tenantId}
     {
       "applicationId": "schoolapplication",
       "tenantId": "6ac4b568cb1a4bc2181cf1a8",
-      "tenantName": "Acme Fleet",
-      "deviceId": "864793076543210",
-      "vehicleId": "67ab...",
-      "vehicleRegistration": "KA01AB1234",
-      "vehicleType": "ECar",
-      "vehicleStatus": "InRide",
-      "displayName": "Bus 12",
-      "vendorType": "WanWay",
-      "imei": "864793076543210",
+      "tenantName": "Digi-Switchride",
+      "deviceId": "352312095160753",
+      "vehicleId": "6ac4b567cb1a4bc2181cefdb",
+      "vehicleRegistration": "KA01AQ6087",
+      "vehicleType": "EScooter",
+      "vehicleStatus": "Available",
+      "displayName": "KA01AQ6087",
+      "vendorType": "Track360",
+      "imei": "352312095160753",
       "connectionStatus": "Connected",
       "lastSeenAt": "2026-11-15T08:40:51.000Z",
-      "lastLocation": { "lat": 12.9784, "lng": 77.6408 },
-      "lastPlace": "Indiranagar, Bengaluru",
+      "lastLocation": { "lat": 13.00520888888889, "lng": 77.50131666666667 },
+      "lastPlace": null,
       "speedKmh": 32,
       "ignition": "On",
       "batteryPercent": 86,
@@ -171,8 +183,8 @@ GET /v1/tracking/{applicationId}/history?vehicleId={vehicleId}&startDateTime={fr
 ```json
 {
   "applicationId": "schoolapplication",
-  "deviceId": "864793076543210",
-  "vehicleId": "67ab...",
+  "deviceId": "352312095160753",
+  "vehicleId": "6ac4b567cb1a4bc2181cefdb",
   "startDateTime": "2026-11-14T00:00:00.000Z",
   "endDateTime": "2026-11-15T00:00:00.000Z",
   "count": 180,
@@ -180,12 +192,12 @@ GET /v1/tracking/{applicationId}/history?vehicleId={vehicleId}&startDateTime={fr
   "items": [
     {
       "at": "2026-11-14T06:01:12.000Z",
-      "lat": 12.9784,
-      "lng": 77.6408,
+      "lat": 13.00520888888889,
+      "lng": 77.50131666666667,
       "speedKmh": 28,
       "ignition": "On",
-      "deviceId": "864793076543210",
-      "vehicleId": "67ab..."
+      "deviceId": "352312095160753",
+      "vehicleId": "6ac4b567cb1a4bc2181cefdb"
     }
   ]
 }
@@ -195,21 +207,152 @@ At most **5,000** points are returned. If `truncated` is `true`, split the time 
 
 GPS history is retained for **180 days**.
 
-## 4. Example (curl)
+## 4. Worked examples (curl and HTTPS)
+
+Host used below is **production HTTPS**. For local, replace the host with `http://localhost:4000`.
+
+```
+https://fleetel-switchride-pmxt5.ondigitalocean.app
+```
+
+Set these once (create the application first — §6 — and paste `apiKey`):
 
 ```bash
 BASE=https://fleetel-switchride-pmxt5.ondigitalocean.app/api
 APP=schoolapplication
-KEY=mtx_your_key_here
-
-curl -s -H "X-Api-Key: $KEY" "$BASE/v1/tracking/$APP/tenants"
-curl -s -H "X-Api-Key: $KEY" "$BASE/v1/tracking/$APP/assets"
-curl -s -H "X-Api-Key: $KEY" "$BASE/v1/tracking/$APP/live"
-curl -s -H "X-Api-Key: $KEY" "$BASE/v1/tracking/$APP/live?tenantId=TENANT_ID"
-curl -s -H "X-Api-Key: $KEY" "$BASE/v1/tracking/$APP/live/vehicle?deviceId=DEVICE_ID"
-curl -s -H "X-Api-Key: $KEY" \
-  "$BASE/v1/tracking/$APP/history?deviceId=DEVICE_ID&startDateTime=2026-11-14T00:00:00.000Z&endDateTime=2026-11-15T00:00:00.000Z"
+KEY=mtx_paste_your_key
+TENANT=6ac4b568cb1a4bc2181cf1a8
+DEVICE=352312095160753
+VEHICLE=6ac4b567cb1a4bc2181cefdb
 ```
+
+### 4.1 Tenant mapping
+
+**curl**
+
+```bash
+curl -s -H "X-Api-Key: $KEY" "$BASE/v1/tracking/$APP/tenants"
+```
+
+**HTTP**
+
+```http
+GET /api/v1/tracking/schoolapplication/tenants HTTP/1.1
+Host: fleetel-switchride-pmxt5.ondigitalocean.app
+X-Api-Key: mtx_paste_your_key
+Accept: application/json
+```
+
+### 4.2 Device / vehicle / tenant / application mapping
+
+**curl**
+
+```bash
+curl -s -H "X-Api-Key: $KEY" "$BASE/v1/tracking/$APP/assets"
+```
+
+**HTTP**
+
+```http
+GET /api/v1/tracking/schoolapplication/assets HTTP/1.1
+Host: fleetel-switchride-pmxt5.ondigitalocean.app
+X-Api-Key: mtx_paste_your_key
+Accept: application/json
+```
+
+### 4.3 Live fleet (all devices for the application)
+
+**curl**
+
+```bash
+curl -s -H "X-Api-Key: $KEY" "$BASE/v1/tracking/$APP/live"
+```
+
+**HTTP**
+
+```http
+GET /api/v1/tracking/schoolapplication/live HTTP/1.1
+Host: fleetel-switchride-pmxt5.ondigitalocean.app
+X-Api-Key: mtx_paste_your_key
+Accept: application/json
+```
+
+### 4.4 Live fleet (one tenant)
+
+**curl**
+
+```bash
+curl -s -H "X-Api-Key: $KEY" "$BASE/v1/tracking/$APP/live?tenantId=$TENANT"
+```
+
+**HTTP**
+
+```http
+GET /api/v1/tracking/schoolapplication/live?tenantId=6ac4b568cb1a4bc2181cf1a8 HTTP/1.1
+Host: fleetel-switchride-pmxt5.ondigitalocean.app
+X-Api-Key: mtx_paste_your_key
+Accept: application/json
+```
+
+### 4.5 Live one vehicle (deviceId)
+
+**curl**
+
+```bash
+curl -s -H "X-Api-Key: $KEY" "$BASE/v1/tracking/$APP/live/vehicle?deviceId=$DEVICE"
+```
+
+**HTTP**
+
+```http
+GET /api/v1/tracking/schoolapplication/live/vehicle?deviceId=352312095160753 HTTP/1.1
+Host: fleetel-switchride-pmxt5.ondigitalocean.app
+X-Api-Key: mtx_paste_your_key
+Accept: application/json
+```
+
+### 4.6 Live one vehicle (vehicleId)
+
+**curl**
+
+```bash
+curl -s -H "X-Api-Key: $KEY" "$BASE/v1/tracking/$APP/live/vehicle?vehicleId=$VEHICLE"
+```
+
+**HTTP**
+
+```http
+GET /api/v1/tracking/schoolapplication/live/vehicle?vehicleId=6ac4b567cb1a4bc2181cefdb HTTP/1.1
+Host: fleetel-switchride-pmxt5.ondigitalocean.app
+X-Api-Key: mtx_paste_your_key
+Accept: application/json
+```
+
+### 4.7 History one vehicle
+
+**curl**
+
+```bash
+curl -s -H "X-Api-Key: $KEY" \
+  "$BASE/v1/tracking/$APP/history?deviceId=$DEVICE&startDateTime=2026-11-01T00:00:00.000Z&endDateTime=2026-11-15T23:59:59.000Z"
+```
+
+**HTTP**
+
+```http
+GET /api/v1/tracking/schoolapplication/history?deviceId=352312095160753&startDateTime=2026-11-01T00:00:00.000Z&endDateTime=2026-11-15T23:59:59.000Z HTTP/1.1
+Host: fleetel-switchride-pmxt5.ondigitalocean.app
+X-Api-Key: mtx_paste_your_key
+Accept: application/json
+```
+
+### 4.8 Postman
+
+1. Open Postman → **Import** → select [`MoventraX-Vehicle-Tracking.postman_collection.json`](./MoventraX-Vehicle-Tracking.postman_collection.json).  
+2. Collection variables: `baseUrl` is already `https://fleetel-switchride-pmxt5.ondigitalocean.app/api`. Set `adminPassword`.  
+3. Run **Admin login** (saves `adminToken`), then **Create tracking application** (saves `apiKey`).  
+4. Run **Map tenants** and **Map devices and vehicles**.  
+5. Run the **Partner tracking** folder. Each request is HTTPS against production unless you change `baseUrl`.
 
 ## 5. HTTP status codes
 
@@ -225,42 +368,119 @@ curl -s -H "X-Api-Key: $KEY" \
 
 These calls use an **admin JWT** (`Authorization: Bearer <admin token>`), not the partner key. SuperAdmin or Administrator.
 
-### 6.1 Register the external application (stores MongoDB `tracking_partner_apps`)
+### 6.1 Admin login
+
+**curl**
+
+```bash
+curl -s -X POST https://fleetel-switchride-pmxt5.ondigitalocean.app/api/v1/auth/admin/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@digiswitchride.com","password":"YOUR_ADMIN_PASSWORD"}'
+```
+
+**HTTP**
 
 ```http
-POST /v1/admin/tracking-partners
+POST /api/v1/auth/admin/login HTTP/1.1
+Host: fleetel-switchride-pmxt5.ondigitalocean.app
 Content-Type: application/json
+Accept: application/json
 
-{ "applicationId": "schoolapplication", "name": "School tracking", "notes": "Bengaluru schools" }
+{"email":"admin@digiswitchride.com","password":"YOUR_ADMIN_PASSWORD"}
+```
+
+Use `accessToken` as `TOKEN` below.
+
+### 6.2 Register the external application (stores MongoDB `tracking_partner_apps`)
+
+**curl**
+
+```bash
+curl -s -X POST https://fleetel-switchride-pmxt5.ondigitalocean.app/api/v1/admin/tracking-partners \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"applicationId":"schoolapplication","name":"School tracking","notes":"Partner map"}'
+```
+
+**HTTP**
+
+```http
+POST /api/v1/admin/tracking-partners HTTP/1.1
+Host: fleetel-switchride-pmxt5.ondigitalocean.app
+Authorization: Bearer TOKEN
+Content-Type: application/json
+Accept: application/json
+
+{"applicationId":"schoolapplication","name":"School tracking","notes":"Partner map"}
 ```
 
 The response includes `apiKey` **once**. Share it with the customer over a secure channel. Prefix `apiKeyPrefix` is stored for support; the full key is hashed.
 
-To issue a new key: `POST /v1/admin/tracking-partners/{applicationId}/rotate-key`.
+To issue a new key:
 
-### 6.2 Map tenants (stores `tracking_partner_tenants`)
-
-```http
-PUT /v1/admin/tracking-partners/schoolapplication/tenants
-Content-Type: application/json
-
-{ "tenantIds": ["6ac4b568cb1a4bc2181cf1a8"] }
+```bash
+curl -s -X POST https://fleetel-switchride-pmxt5.ondigitalocean.app/api/v1/admin/tracking-partners/schoolapplication/rotate-key \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-Read back: `GET /v1/admin/tracking-partners/schoolapplication/tenants`.
+### 6.3 Map tenants (stores `tracking_partner_tenants`)
 
-### 6.3 Map devices and vehicles (stores `tracking_partner_assets`)
+**curl**
+
+```bash
+curl -s -X PUT https://fleetel-switchride-pmxt5.ondigitalocean.app/api/v1/admin/tracking-partners/schoolapplication/tenants \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"tenantIds":["6ac4b568cb1a4bc2181cf1a8"]}'
+```
+
+**HTTP**
 
 ```http
-PUT /v1/admin/tracking-partners/schoolapplication/assets
+PUT /api/v1/admin/tracking-partners/schoolapplication/tenants HTTP/1.1
+Host: fleetel-switchride-pmxt5.ondigitalocean.app
+Authorization: Bearer TOKEN
 Content-Type: application/json
+Accept: application/json
+
+{"tenantIds":["6ac4b568cb1a4bc2181cf1a8"]}
+```
+
+Read back:
+
+```bash
+curl -s https://fleetel-switchride-pmxt5.ondigitalocean.app/api/v1/admin/tracking-partners/schoolapplication/tenants \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### 6.4 Map devices and vehicles (stores `tracking_partner_assets`)
+
+**curl**
+
+```bash
+curl -s -X PUT https://fleetel-switchride-pmxt5.ondigitalocean.app/api/v1/admin/tracking-partners/schoolapplication/assets \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"items":[{"tenantId":"6ac4b568cb1a4bc2181cf1a8","deviceId":"352312095160753","vehicleId":"6ac4b567cb1a4bc2181cefdb"},{"tenantId":"6ac4b568cb1a4bc2181cf1a8","deviceId":"SIM-TRACK-DEMO","vehicleId":"6abb799e25bda6ff2d0c3ac7"}]}'
+```
+
+**HTTP**
+
+```http
+PUT /api/v1/admin/tracking-partners/schoolapplication/assets HTTP/1.1
+Host: fleetel-switchride-pmxt5.ondigitalocean.app
+Authorization: Bearer TOKEN
+Content-Type: application/json
+Accept: application/json
 
 {
   "items": [
     {
       "tenantId": "6ac4b568cb1a4bc2181cf1a8",
-      "deviceId": "864793076543210",
-      "vehicleId": "67ab..."
+      "deviceId": "352312095160753",
+      "vehicleId": "6ac4b567cb1a4bc2181cefdb"
+    },
+    {
+      "tenantId": "6ac4b568cb1a4bc2181cf1a8",
+      "deviceId": "SIM-TRACK-DEMO",
+      "vehicleId": "6abb799e25bda6ff2d0c3ac7"
     }
   ]
 }
@@ -272,14 +492,25 @@ Read back: `GET /v1/admin/tracking-partners/schoolapplication/assets`.
 
 If this list is empty, live queries use **all IoT devices in the mapped tenants**.
 
-### 6.4 List applications
+### 6.5 List applications
 
-```http
-GET /v1/admin/tracking-partners
-PATCH /v1/admin/tracking-partners/{applicationId}
+**curl**
+
+```bash
+curl -s https://fleetel-switchride-pmxt5.ondigitalocean.app/api/v1/admin/tracking-partners \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-`PATCH` can set `"status": "Disabled"` to cut off a partner without deleting mappings.
+**HTTP**
+
+```http
+GET /api/v1/admin/tracking-partners HTTP/1.1
+Host: fleetel-switchride-pmxt5.ondigitalocean.app
+Authorization: Bearer TOKEN
+Accept: application/json
+```
+
+`PATCH /api/v1/admin/tracking-partners/schoolapplication` with `{"status":"Disabled"}` cuts off a partner without deleting mappings.
 
 ## 7. MongoDB collections
 
