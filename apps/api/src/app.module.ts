@@ -17,6 +17,7 @@ import { RiderModule } from './rider/rider.module';
 import { BrandingModule } from './branding/branding.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { GeoModule } from './geo/geo.module';
+import { TrackingPartnerModule } from './tracking-partner/tracking-partner.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -47,6 +48,7 @@ import { HealthController } from './health.controller';
     RiderModule,
     BrandingModule,
     GeoModule,
+    TrackingPartnerModule,
   ],
 })
 export class AppModule {}
