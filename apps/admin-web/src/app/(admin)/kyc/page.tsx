@@ -76,7 +76,7 @@ export default function KycReviewPage() {
 
   return (
     <div>
-      <PageHeader title="KYC documents" description="Review pending files, or open approved Aadhaar, PAN and driving licence documents for any rider. Rider KYC is approved only when those three are approved." />
+      <PageHeader title="KYC documents" description="Review pending files, or open approved Aadhaar, PAN and driving licence documents for any rider. Approving the uploaded documents sets the rider KYC status to approved." />
       <ProvisionPanel
         title="Document vault and KYC vendor"
         description="Image preview from blob storage and Digio/Signzy verification will be planned next. Review can already run on submitted records."

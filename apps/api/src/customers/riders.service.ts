@@ -12,7 +12,7 @@ import { Vehicle, VehicleDocument } from '../schemas/fleet.schema';
 import { Booking, BookingDocument, Payment, PaymentDocument, Ride, RideDocument } from '../schemas/booking.schema';
 import { RentalPlan, RentalPlanDocument, WalletTransaction, WalletTransactionDocument } from '../schemas/rental.schema';
 import { isValidUsername, normalizeIndiaPhone, normalizeUsername, phoneLookupValues, resolveRiderUsername } from '../common/helpers';
-import { ProfileService } from './customers.service';
+import { KycService, ProfileService } from './customers.service';
 import { findByEitherId, removeByEitherId } from '../common/mongo-id';
 
 @Injectable()
@@ -29,6 +29,7 @@ export class RidersService implements OnModuleInit {
     @InjectModel(RentalPlan.name) private planModel: Model<RentalPlanDocument>,
     @InjectModel(WalletTransaction.name) private walletModel: Model<WalletTransactionDocument>,
     private profileService: ProfileService,
+    private kycService: KycService,
     private auditService: AuditService,
   ) {}
 
@@ -261,6 +262,7 @@ export class RidersService implements OnModuleInit {
   }
 
   async getProfile(riderId: string) {
+    await this.kycService.healIfNotSubmitted(riderId);
     const rider = await this.customerModel.findById(riderId);
     if (!rider) throw new NotFoundException('Rider not found');
 

@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Customer, CustomerDocument, KycSubmission, KycSubmissionDocument } from '../schemas/customer.schema';
 import { maskAadhaar, resolveRiderUsername } from '../common/helpers';
+import { findByEitherId, patchByEitherId } from '../common/mongo-id';
 
 @Injectable()
 export class ProfileService {
@@ -88,7 +89,7 @@ export class KycService {
     if (!allowed.includes(documentType)) {
       throw new BadRequestException('Document type must be Aadhaar, PAN, Driving Licence or Selfie');
     }
-    const customer = await this.customerModel.findById(customerId);
+    const customer = await findByEitherId(this.customerModel, customerId);
     if (!customer) throw new NotFoundException('Customer not found');
     if (!blobUrl?.trim()) {
       throw new BadRequestException('Document image is required');
@@ -106,7 +107,7 @@ export class KycService {
       status: 'Pending',
       ...(tenantId ? { tenantId } : {}),
     });
-    await this.customerModel.findByIdAndUpdate(customerId, { kycStatus: 'Pending' });
+    await this.setRiderKycStatus(customerId, 'Pending');
     return {
       id: submission._id.toString(),
       documentType,
@@ -116,7 +117,8 @@ export class KycService {
   }
 
   async getStatus(customerId: string) {
-    const customer = await this.customerModel.findById(customerId);
+    await this.healIfNotSubmitted(customerId);
+    const customer = await findByEitherId(this.customerModel, customerId);
     if (!customer) throw new NotFoundException('Customer not found');
     const submissions = await this.kycModel.find({ customerId }).sort({ createdAt: -1 });
     const rejectionReason = submissions.find((s) => s.status === 'Rejected')?.rejectionReason;
@@ -139,11 +141,11 @@ export class KycService {
       throw new BadRequestException('Rejection reason is required');
     }
     const status = action === 'Approve' ? 'Approved' : 'Rejected';
-    await this.customerModel.findByIdAndUpdate(customerId, { kycStatus: status });
     await this.kycModel.updateMany(
       { customerId, status: { $in: ['Pending', 'UnderReview'] } },
       { status, rejectionReason: reason, reviewedAt: new Date() },
     );
+    await this.recalculateRiderKyc(customerId);
   }
 
   async listSubmissions(status?: string) {
@@ -196,7 +198,7 @@ export class KycService {
   private async recalculateRiderKyc(customerId: string) {
     const submissions = await this.kycModel.find({ customerId });
     if (!submissions.length) {
-      await this.customerModel.findByIdAndUpdate(customerId, { kycStatus: 'NotSubmitted' });
+      await this.setRiderKycStatus(customerId, 'NotSubmitted');
       return;
     }
     const latestByType = new Map<string, (typeof submissions)[number]>();
@@ -205,19 +207,36 @@ export class KycService {
     }
     const latest = [...latestByType.values()];
     if (latest.some((s) => s.status === 'Pending' || s.status === 'UnderReview')) {
-      await this.customerModel.findByIdAndUpdate(customerId, { kycStatus: 'Pending' });
+      await this.setRiderKycStatus(customerId, 'Pending');
       return;
     }
-    const required = ['Aadhaar', 'PAN', 'DrivingLicence'];
-    const approvedRequired = required.every((type) => latestByType.get(type)?.status === 'Approved');
-    if (approvedRequired) {
-      await this.customerModel.findByIdAndUpdate(customerId, { kycStatus: 'Approved' });
+    if (latest.length && latest.every((s) => s.status === 'Approved')) {
+      await this.setRiderKycStatus(customerId, 'Approved');
       return;
     }
     if (latest.some((s) => s.status === 'Rejected')) {
-      await this.customerModel.findByIdAndUpdate(customerId, { kycStatus: 'Rejected' });
+      await this.setRiderKycStatus(customerId, 'Rejected');
       return;
     }
-    await this.customerModel.findByIdAndUpdate(customerId, { kycStatus: 'NotSubmitted' });
+    if (latest.some((s) => s.status === 'Approved')) {
+      await this.setRiderKycStatus(customerId, 'UnderReview');
+      return;
+    }
+    await this.setRiderKycStatus(customerId, 'NotSubmitted');
+  }
+
+  async healIfNotSubmitted(customerId: string) {
+    const customer = await findByEitherId(this.customerModel, customerId);
+    if (!customer || customer.kycStatus !== 'NotSubmitted') return;
+    const count = await this.kycModel.countDocuments({ customerId });
+    if (!count) return;
+    await this.recalculateRiderKyc(customerId);
+  }
+
+  private async setRiderKycStatus(customerId: string, kycStatus: string) {
+    const updated = await patchByEitherId(this.customerModel.collection, customerId, { $set: { kycStatus } });
+    if (!updated) {
+      await this.customerModel.findByIdAndUpdate(customerId, { kycStatus });
+    }
   }
 }

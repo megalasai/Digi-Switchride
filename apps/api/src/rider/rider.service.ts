@@ -293,6 +293,7 @@ export class RiderAppService {
   }
 
   private async requireRider(id: string) {
+    await this.kycSvc.healIfNotSubmitted(id);
     const rider = await this.customerModel.findById(id);
     if (!rider) throw new NotFoundException('Rider not found');
     return rider;
