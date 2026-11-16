@@ -13,6 +13,21 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+private fun effectiveKycStatus(kyc: KycStatusResponse): String {
+    val docs = kyc.submissions
+    if (docs.isEmpty()) return kyc.status
+    val latestByType = LinkedHashMap<String, KycSubmissionItem>()
+    for (item in docs) {
+        if (item.documentType !in latestByType) latestByType[item.documentType] = item
+    }
+    val latest = latestByType.values
+    if (latest.any { it.status == "Pending" || it.status == "UnderReview" }) return "Pending"
+    if (latest.isNotEmpty() && latest.all { it.status == "Approved" }) return "Approved"
+    if (latest.any { it.status == "Rejected" }) return "Rejected"
+    if (latest.any { it.status == "Approved" }) return "UnderReview"
+    return kyc.status
+}
+
 private fun displayAppName(name: String?): String {
     val n = name?.replace("-", " ")?.trim().orEmpty()
     return if (n.isBlank() || n.contains("switch", ignoreCase = true) || n.equals("Fleetel", ignoreCase = true)) {
@@ -201,7 +216,7 @@ class KycViewModel @Inject constructor(private val api: SwitchrideApi) : ViewMod
                 val uploaded = kyc.submissions.map { it.documentType }.toSet()
                 _state.value = _state.value.copy(
                     uploaded = uploaded,
-                    overallStatus = kyc.status,
+                    overallStatus = effectiveKycStatus(kyc),
                     rejectionReason = kyc.rejectionReason,
                 )
             }
@@ -399,8 +414,8 @@ class BookRideViewModel @Inject constructor(private val api: SwitchrideApi) : Vi
             _state.value = _state.value.copy(isLoading = true, error = null)
             try {
                 val hubs = api.getNearbyHubs(21.1458, 79.0882).items
-                val kyc = api.getKycStatus().status
-                _state.value = _state.value.copy(isLoading = false, hubs = hubs, kycStatus = kyc)
+                val kyc = api.getKycStatus()
+                _state.value = _state.value.copy(isLoading = false, hubs = hubs, kycStatus = effectiveKycStatus(kyc))
             } catch (e: Exception) {
                 _state.value = _state.value.copy(isLoading = false, error = ApiErrorParser.message(e))
             }

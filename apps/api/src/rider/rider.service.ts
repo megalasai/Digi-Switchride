@@ -14,6 +14,7 @@ import { RidersService } from '../customers/riders.service';
 import { FleetService } from '../fleet/fleet.service';
 import { SupportService } from '../support/support.service';
 import { coerceInt, coerceNumber, idString } from '../common/coerce';
+import { findByEitherId } from '../common/mongo-id';
 import { runWithoutTenant } from '../common/tenant-als';
 
 @Injectable()
@@ -284,8 +285,10 @@ export class RiderAppService {
     return this.support.create(riderId, data);
   }
 
-  profile(riderId: string) {
-    return this.profileSvc.getProfile(riderId);
+  async profile(riderId: string) {
+    const synced = await this.kycSvc.syncRiderKycFromSubmissions(riderId);
+    const profile = await this.profileSvc.getProfile(riderId);
+    return { ...profile, kycStatus: synced.kycStatus };
   }
 
   updateProfile(riderId: string, data: { email?: string; fullName?: string; address?: string; emergencyContact?: string }) {
@@ -293,9 +296,10 @@ export class RiderAppService {
   }
 
   private async requireRider(id: string) {
-    await this.kycSvc.healIfNotSubmitted(id);
-    const rider = await this.customerModel.findById(id);
+    const synced = await this.kycSvc.syncRiderKycFromSubmissions(id);
+    const rider = await findByEitherId(this.customerModel, id);
     if (!rider) throw new NotFoundException('Rider not found');
+    rider.kycStatus = synced.kycStatus;
     return rider;
   }
 

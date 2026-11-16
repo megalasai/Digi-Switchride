@@ -7,7 +7,7 @@ import type { AuditActor } from '../audit/audit.service';
 import { AuditService } from '../audit/audit.service';
 import { resolveWriteTenantId, runInWriteTenant } from '../common/tenant-write';
 import { runWithoutTenant } from '../common/tenant-als';
-import { Customer, CustomerDocument, KycSubmission, KycSubmissionDocument } from '../schemas/customer.schema';
+import { Customer, CustomerDocument } from '../schemas/customer.schema';
 import { Vehicle, VehicleDocument } from '../schemas/fleet.schema';
 import { Booking, BookingDocument, Payment, PaymentDocument, Ride, RideDocument } from '../schemas/booking.schema';
 import { RentalPlan, RentalPlanDocument, WalletTransaction, WalletTransactionDocument } from '../schemas/rental.schema';
@@ -21,7 +21,6 @@ export class RidersService implements OnModuleInit {
 
   constructor(
     @InjectModel(Customer.name) private customerModel: Model<CustomerDocument>,
-    @InjectModel(KycSubmission.name) private kycModel: Model<KycSubmissionDocument>,
     @InjectModel(Vehicle.name) private vehicleModel: Model<VehicleDocument>,
     @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
     @InjectModel(Booking.name) private bookingModel: Model<BookingDocument>,
@@ -95,6 +94,7 @@ export class RidersService implements OnModuleInit {
       .sort({ createdAt: -1 })
       .skip((page - 1) * pageSize)
       .limit(pageSize);
+    await this.kycService.overlayKycStatuses(items);
     return {
       items: items.map((c) => this.toRiderSummary(c)),
       page,
@@ -262,19 +262,20 @@ export class RidersService implements OnModuleInit {
   }
 
   async getProfile(riderId: string) {
-    await this.kycService.healIfNotSubmitted(riderId);
-    const rider = await this.customerModel.findById(riderId);
+    const synced = await this.kycService.syncRiderKycFromSubmissions(riderId);
+    const rider = await findByEitherId(this.customerModel, riderId);
     if (!rider) throw new NotFoundException('Rider not found');
+    rider.kycStatus = synced.kycStatus;
 
-    const [vehicle, plan, kyc, payments, bookings, rides, walletTx] = await Promise.all([
+    const [vehicle, plan, payments, bookings, rides, walletTx] = await Promise.all([
       rider.assignedVehicleId ? this.vehicleModel.findById(rider.assignedVehicleId) : null,
       rider.rentalPlanId ? this.planModel.findById(rider.rentalPlanId) : null,
-      this.kycModel.find({ customerId: riderId }).sort({ createdAt: -1 }),
       this.paymentModel.find({ customerId: riderId }).sort({ createdAt: -1 }).limit(20),
       this.bookingModel.find({ customerId: riderId }).sort({ createdAt: -1 }).limit(20),
       this.rideModel.find({ customerId: riderId }).sort({ createdAt: -1 }).limit(20),
       this.walletModel.find({ riderId }).sort({ createdAt: -1 }).limit(50),
     ]);
+    const kyc = synced.submissions;
 
     return {
       rider: this.toRiderSummary(rider),
@@ -331,15 +332,15 @@ export class RidersService implements OnModuleInit {
         })),
       },
       kyc: {
-        status: rider.kycStatus,
+        status: synced.kycStatus,
         submissions: kyc.map((s) => ({
-          id: s._id.toString(),
+          id: s._id ? String(s._id) : '',
           documentType: s.documentType,
           status: s.status,
           documentNumberMasked: s.documentNumberMasked,
           blobUrl: s.blobUrl,
           rejectionReason: s.rejectionReason,
-          submittedAt: (s as { createdAt?: Date }).createdAt,
+          submittedAt: s.createdAt,
           reviewedAt: s.reviewedAt,
         })),
       },

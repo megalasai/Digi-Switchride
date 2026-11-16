@@ -17,6 +17,15 @@ export function mongoIdFilter(id: string) {
   return { $or: mongoIdCandidates(id).map((value) => ({ _id: value })) };
 }
 
+export function stringFieldEquals(field: string, id: string) {
+  return { $expr: { $eq: [{ $toString: `$${field}` }, String(id)] } };
+}
+
+export function stringFieldIn(field: string, ids: string[]) {
+  const values = [...new Set(ids.map(String).filter(Boolean))];
+  return { $expr: { $in: [{ $toString: `$${field}` }, values] } };
+}
+
 export async function findByEitherId(
   model: { findOne: (filter: object) => unknown },
   id: string | null | undefined,
