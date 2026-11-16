@@ -128,6 +128,7 @@ export class AdminController {
     if (search) filter.$or = [{ phone: { $regex: search, $options: 'i' } }, { fullName: { $regex: search, $options: 'i' } }];
     const total = await this.customerModel.countDocuments(filter);
     const items = await this.customerModel.find(filter).sort({ createdAt: -1 }).skip((+page - 1) * +pageSize).limit(+pageSize);
+    await this.kycService.overlayKycStatuses(items);
     return {
       items: items.map((c) => this.profileService.toProfile(c)),
       page: +page,

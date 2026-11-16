@@ -13,6 +13,46 @@ export function mongoIdCandidates(id: string): unknown[] {
   return values;
 }
 
+export function extractMongoId(value: unknown): string {
+  if (value == null) return '';
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  if (typeof value === 'object') {
+    const record = value as { $oid?: unknown; oid?: unknown; toHexString?: () => string; toString?: () => string };
+    if (typeof record.$oid === 'string') return record.$oid;
+    if (typeof record.oid === 'string') return record.oid;
+    if (typeof record.toHexString === 'function') return record.toHexString();
+    if (typeof record.toString === 'function') {
+      const text = record.toString();
+      if (text && text !== '[object Object]') return text;
+    }
+  }
+  return '';
+}
+
+export function relatedIdFilter(field: string, id: string) {
+  const value = extractMongoId(id) || String(id);
+  const values = mongoIdCandidates(value);
+  return {
+    $or: [
+      { [field]: { $in: values } },
+      { [`${field}.$oid`]: value },
+      { $expr: { $eq: [{ $toString: { $ifNull: [`$${field}.$oid`, `$${field}`] } }, value] } },
+    ],
+  };
+}
+
+export function relatedIdsFilter(field: string, ids: string[]) {
+  const values = [...new Set(ids.map((id) => extractMongoId(id) || String(id)).filter(Boolean))];
+  const objectIds = values.flatMap((id) => mongoIdCandidates(id));
+  return {
+    $or: [
+      { [field]: { $in: objectIds } },
+      { [`${field}.$oid`]: { $in: values } },
+      { $expr: { $in: [{ $toString: { $ifNull: [`$${field}.$oid`, `$${field}`] } }, values] } },
+    ],
+  };
+}
+
 export function mongoIdFilter(id: string) {
   return { $or: mongoIdCandidates(id).map((value) => ({ _id: value })) };
 }

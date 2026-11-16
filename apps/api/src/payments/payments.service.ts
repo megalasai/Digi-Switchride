@@ -13,6 +13,7 @@ import { currentTenantId } from '../common/tenant-als';
 import { runInWriteTenant } from '../common/tenant-write';
 import { PaymentGatewayService } from './gateway.service';
 import { findByEitherId, removeByEitherId } from '../common/mongo-id';
+import { KycService } from '../customers/customers.service';
 
 @Injectable()
 export class PaymentsService {
@@ -364,6 +365,7 @@ export class DashboardService {
     @InjectModel(Customer.name) private customerModel: Model<CustomerDocument>,
     private operationsService: OperationsService,
     private engagementService: EngagementService,
+    private kycService: KycService,
   ) {}
 
   async getSnapshot() {
@@ -429,6 +431,7 @@ export class DashboardService {
         .limit(500),
     ]);
 
+    await this.kycService.overlayKycStatuses(recentRiders);
     const statusCounts: Record<string, number> = {};
     for (const row of vehiclesByStatus) statusCounts[row._id] = row.count;
     const kycCounts: Record<string, number> = {};

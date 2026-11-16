@@ -3,7 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Customer, CustomerDocument, KycSubmission, KycSubmissionDocument } from '../schemas/customer.schema';
 import { maskAadhaar, resolveRiderUsername } from '../common/helpers';
-import { findByEitherId, patchByEitherId, stringFieldEquals, stringFieldIn } from '../common/mongo-id';
+import { extractMongoId, findByEitherId, relatedIdFilter, relatedIdsFilter } from '../common/mongo-id';
 import { runWithoutTenant } from '../common/tenant-als';
 
 type KycRecord = {
@@ -18,9 +18,17 @@ type KycRecord = {
   createdAt?: Date;
 };
 
-export function deriveKycStatus(submissions: Array<{ documentType: string; status: string; createdAt?: Date | string }>): string {
+function normalizeDocStatus(status: string): string {
+  const value = String(status ?? '').replace(/[\s_-]/g, '').toLowerCase();
+  if (['approved', 'approve', 'accepted', 'verified', 'success'].includes(value)) return 'Approved';
+  if (['pending', 'submitted', 'underreview', 'inreview', 'uploaded', 'review'].includes(value)) return 'Pending';
+  if (['rejected', 'reject', 'declined', 'failed'].includes(value)) return 'Rejected';
+  return String(status ?? '');
+}
+
+export function deriveKycStatus(submissions: Array<{ documentType?: string; status: string; createdAt?: Date | string }>): string {
   if (!submissions.length) return 'NotSubmitted';
-  const latestByType = new Map<string, (typeof submissions)[number]>();
+  const latestByType = new Map<string, { status: string; createdAt?: Date | string }>();
   const timeOf = (value?: Date | string) => {
     if (!value) return 0;
     const t = value instanceof Date ? value.getTime() : Date.parse(String(value));
@@ -28,10 +36,11 @@ export function deriveKycStatus(submissions: Array<{ documentType: string; statu
   };
   const sorted = [...submissions].sort((a, b) => timeOf(b.createdAt) - timeOf(a.createdAt));
   for (const s of sorted) {
-    if (!latestByType.has(s.documentType)) latestByType.set(s.documentType, s);
+    const type = s.documentType || '_doc';
+    if (!latestByType.has(type)) latestByType.set(type, { status: normalizeDocStatus(s.status), createdAt: s.createdAt });
   }
   const latest = [...latestByType.values()];
-  if (latest.some((s) => s.status === 'Pending' || s.status === 'UnderReview')) return 'Pending';
+  if (latest.some((s) => s.status === 'Pending')) return 'Pending';
   if (latest.length && latest.every((s) => s.status === 'Approved')) return 'Approved';
   if (latest.some((s) => s.status === 'Rejected')) return 'Rejected';
   if (latest.some((s) => s.status === 'Approved')) return 'UnderReview';
@@ -179,8 +188,7 @@ export class KycService implements OnModuleInit {
     const status = action === 'Approve' ? 'Approved' : 'Rejected';
     await this.kycModel.collection.updateMany(
       {
-        ...stringFieldEquals('customerId', customerId),
-        status: { $in: ['Pending', 'UnderReview'] },
+        $and: [relatedIdFilter('customerId', customerId), { status: { $in: ['Pending', 'UnderReview'] } }],
       },
       { $set: { status, rejectionReason: reason, reviewedAt: new Date() } },
     );
@@ -192,18 +200,18 @@ export class KycService implements OnModuleInit {
     if (status && status !== 'all') filter.status = status;
     else if (!status) filter.status = { $in: ['Pending', 'UnderReview'] };
     const items = await this.kycModel.find(filter).sort({ createdAt: -1 }).limit(100);
-    const riderIds = [...new Set(items.map((s) => String(s.customerId)))];
+    const riderIds = [...new Set(items.map((s) => extractMongoId(s.customerId) || String(s.customerId)))];
     const riders = riderIds.length
-      ? await this.customerModel.find(stringFieldIn('_id', riderIds) as never)
+      ? await this.customerModel.find(relatedIdsFilter('_id', riderIds) as never)
       : [];
     await this.overlayKycStatuses(riders);
-    const riderMap = Object.fromEntries(riders.map((r) => [r._id.toString(), r]));
+    const riderMap = Object.fromEntries(riders.map((r) => [extractMongoId(r._id), r]));
     return {
       items: items.map((s) => {
-        const rider = riderMap[String(s.customerId)];
+        const rider = riderMap[extractMongoId(s.customerId) || String(s.customerId)];
         return {
           id: s._id.toString(),
-          riderId: String(s.customerId),
+          riderId: extractMongoId(s.customerId) || String(s.customerId),
           riderName: rider?.fullName,
           riderPhone: rider?.phone,
           riderKycStatus: rider?.kycStatus,
@@ -233,7 +241,7 @@ export class KycService implements OnModuleInit {
     submission.reviewedAt = new Date();
     submission.reviewedBy = reviewedBy;
     await submission.save();
-    await this.syncRiderKycFromSubmissions(String(submission.customerId));
+    await this.syncRiderKycFromSubmissions(extractMongoId(submission.customerId) || String(submission.customerId));
     return { id: submission._id.toString(), status: submission.status };
   }
 
@@ -248,31 +256,37 @@ export class KycService implements OnModuleInit {
     return { submissions, kycStatus };
   }
 
-  async overlayKycStatuses(customers: CustomerDocument[]) {
+  async overlayKycStatuses(customers: Array<CustomerDocument | { _id: unknown; phone?: string; kycStatus?: string }>) {
     if (!customers.length) return;
-    const ids = customers.map((c) => c._id.toString());
-    const docs = (await this.kycModel.collection.find(stringFieldIn('customerId', ids) as never).toArray()) as unknown as KycRecord[];
+    const ids = customers.map((c) => extractMongoId(c._id)).filter(Boolean);
+    const phones = customers.map((c) => c.phone).filter((p): p is string => Boolean(p));
+    if (!ids.length && !phones.length) return;
+    const match = ids.length && phones.length
+      ? { $or: [relatedIdsFilter('customerId', ids), { customerId: { $in: phones } }] }
+      : ids.length
+        ? relatedIdsFilter('customerId', ids)
+        : { customerId: { $in: phones } };
+    const docs = (await this.kycModel.collection.find(match as never).toArray()) as unknown as KycRecord[];
     const grouped = new Map<string, KycRecord[]>();
     for (const s of docs) {
-      const key = String(s.customerId ?? '');
+      const key = extractMongoId(s.customerId) || String(s.customerId ?? '');
+      if (!key) continue;
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key)!.push(s);
     }
     for (const customer of customers) {
-      const id = customer._id.toString();
-      const list = grouped.get(id) ?? [];
+      const id = extractMongoId(customer._id);
+      const list = grouped.get(id) ?? grouped.get(customer.phone ?? '') ?? [];
       if (!list.length) continue;
       const kycStatus = deriveKycStatus(list);
-      if (customer.kycStatus !== kycStatus) {
-        customer.kycStatus = kycStatus as CustomerDocument['kycStatus'];
-        await this.setRiderKycStatus(id, kycStatus);
-      }
+      customer.kycStatus = kycStatus as CustomerDocument['kycStatus'];
+      if (id) await this.setRiderKycStatus(id, kycStatus);
     }
   }
 
   private async findSubmissions(customerId: string): Promise<KycRecord[]> {
     const items = await this.kycModel.collection
-      .find(stringFieldEquals('customerId', customerId) as never)
+      .find(relatedIdFilter('customerId', customerId) as never)
       .sort({ createdAt: -1 })
       .toArray();
     return items as unknown as KycRecord[];
@@ -286,8 +300,8 @@ export class KycService implements OnModuleInit {
         .toArray()) as unknown as KycRecord[];
       const grouped = new Map<string, KycRecord[]>();
       for (const s of docs) {
-        const id = String(s.customerId ?? '');
-        if (!id) continue;
+        const id = extractMongoId(s.customerId) || String(s.customerId ?? '');
+        if (!id || id === '[object Object]') continue;
         if (!grouped.has(id)) grouped.set(id, []);
         grouped.get(id)!.push(s);
       }
@@ -298,10 +312,11 @@ export class KycService implements OnModuleInit {
   }
 
   private async setRiderKycStatus(customerId: string, kycStatus: string) {
-    const updated = await patchByEitherId(this.customerModel.collection, customerId, { $set: { kycStatus } });
-    if (!updated) {
+    const id = extractMongoId(customerId) || String(customerId);
+    const res = await this.customerModel.collection.updateMany(relatedIdFilter('_id', id) as never, { $set: { kycStatus } });
+    if (!res.matchedCount) {
       await runWithoutTenant(() =>
-        this.customerModel.findOneAndUpdate(stringFieldEquals('_id', customerId) as never, { kycStatus }),
+        this.customerModel.findOneAndUpdate(relatedIdFilter('_id', id) as never, { kycStatus }),
       );
     }
   }
