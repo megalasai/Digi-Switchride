@@ -14,6 +14,7 @@ import { ACCESS, canAccess } from "@/lib/access";
 import { api, KycDocument, Rider } from "@/lib/api";
 import { ProvisionPanel, DisabledField, DisabledSelect, DisabledAction } from "@/components/ui/Provision";
 import { useAuth } from "@/lib/auth-context";
+import { kycStatusFromSubmissions } from "@/lib/kyc-status";
 import { KycDocView } from "@/components/KycDocView";
 
 export default function KycReviewPage() {
@@ -191,7 +192,12 @@ export default function KycReviewPage() {
                 <div>
                   <p className="font-semibold">{d.documentType}</p>
                   <p className="text-sm text-text-secondary">{d.riderName ?? d.riderPhone} · {d.documentNumberMasked ?? "No number on file"}</p>
-                  <div className="mt-2 flex gap-2"><Badge status={d.status} />{d.riderKycStatus && <Badge status={d.riderKycStatus} />}</div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-text-muted">Document</span>
+                    <Badge status={d.status} />
+                    <span className="text-xs text-text-muted">Rider</span>
+                    <Badge status={kycStatusFromSubmissions(items.filter((item) => item.riderId === d.riderId), d.riderKycStatus ?? "NotSubmitted")} />
+                  </div>
                   <KycDocView blobUrl={d.blobUrl} title={`${d.documentType} · ${d.riderName ?? d.riderPhone ?? "rider"}`} />
                   <div className="mt-2"><Link className="text-sm text-brand" href={`/riders/${d.riderId}`}>Rider profile</Link></div>
                 </div>

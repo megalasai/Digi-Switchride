@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Customer, CustomerDocument, KycSubmission, KycSubmissionDocument } from '../schemas/customer.schema';
 import { maskAadhaar, resolveRiderUsername } from '../common/helpers';
 import { extractMongoId, findByEitherId, relatedIdFilter, relatedIdsFilter } from '../common/mongo-id';
@@ -145,15 +145,16 @@ export class KycService implements OnModuleInit {
     }
     const masked = documentType === 'Aadhaar' && documentNumber ? maskAadhaar(documentNumber) : documentNumber;
     const tenantId = (customer as { tenantId?: string }).tenantId;
+    const riderKey = extractMongoId(customer._id) || String(customerId);
     const submission = await this.kycModel.create({
-      customerId,
+      customerId: riderKey,
       documentType,
       documentNumberMasked: masked,
       blobUrl: blobUrl.trim(),
       status: 'Pending',
       ...(tenantId ? { tenantId } : {}),
     });
-    await this.setRiderKycStatus(customerId, 'Pending');
+    await this.setRiderKycStatus(riderKey, 'Pending');
     return {
       id: submission._id.toString(),
       documentType,
@@ -204,17 +205,25 @@ export class KycService implements OnModuleInit {
     const riders = riderIds.length
       ? await this.customerModel.find(relatedIdsFilter('_id', riderIds) as never)
       : [];
-    await this.overlayKycStatuses(riders);
     const riderMap = Object.fromEntries(riders.map((r) => [extractMongoId(r._id), r]));
+    const riderStatus = new Map<string, string>();
+    for (const id of riderIds) {
+      const synced = await this.syncRiderKycFromSubmissions(id);
+      riderStatus.set(id, synced.kycStatus);
+      const rider = riderMap[id];
+      if (rider) rider.kycStatus = synced.kycStatus as CustomerDocument['kycStatus'];
+    }
     return {
       items: items.map((s) => {
-        const rider = riderMap[extractMongoId(s.customerId) || String(s.customerId)];
+        const riderId = extractMongoId(s.customerId) || String(s.customerId);
+        const rider = riderMap[riderId];
+        const pageDocs = items.filter((doc) => (extractMongoId(doc.customerId) || String(doc.customerId)) === riderId);
         return {
           id: s._id.toString(),
-          riderId: extractMongoId(s.customerId) || String(s.customerId),
+          riderId,
           riderName: rider?.fullName,
           riderPhone: rider?.phone,
-          riderKycStatus: rider?.kycStatus,
+          riderKycStatus: riderStatus.get(riderId) || deriveKycStatus(pageDocs),
           documentType: s.documentType,
           documentNumberMasked: s.documentNumberMasked,
           blobUrl: s.blobUrl,
@@ -260,17 +269,17 @@ export class KycService implements OnModuleInit {
     if (!customers.length) return;
     const ids = customers.map((c) => extractMongoId(c._id)).filter(Boolean);
     const phones = customers.map((c) => c.phone).filter((p): p is string => Boolean(p));
-    if (!ids.length && !phones.length) return;
-    const match = ids.length && phones.length
-      ? { $or: [relatedIdsFilter('customerId', ids), { customerId: { $in: phones } }] }
-      : ids.length
-        ? relatedIdsFilter('customerId', ids)
-        : { customerId: { $in: phones } };
-    const docs = (await this.kycModel.collection.find(match as never).toArray()) as unknown as KycRecord[];
+    const objectIds = ids.filter((id) => Types.ObjectId.isValid(id)).map((id) => new Types.ObjectId(id));
+    const clauses: Record<string, unknown>[] = [];
+    if (ids.length) clauses.push({ customerId: { $in: ids } });
+    if (objectIds.length) clauses.push({ customerId: { $in: objectIds } });
+    if (phones.length) clauses.push({ customerId: { $in: phones } });
+    if (!clauses.length) return;
+    const docs = (await this.nativeKyc().find(clauses.length === 1 ? clauses[0] : { $or: clauses }).toArray()) as unknown as KycRecord[];
     const grouped = new Map<string, KycRecord[]>();
     for (const s of docs) {
       const key = extractMongoId(s.customerId) || String(s.customerId ?? '');
-      if (!key) continue;
+      if (!key || key === '[object Object]') continue;
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key)!.push(s);
     }
@@ -284,17 +293,40 @@ export class KycService implements OnModuleInit {
     }
   }
 
+  private mongoDb() {
+    const connected = this.kycModel.db.db;
+    if (connected) return connected;
+    return this.kycModel.db.getClient().db();
+  }
+
+  private nativeKyc() {
+    return this.mongoDb().collection('kyc_submissions');
+  }
+
+  private nativeCustomers() {
+    return this.mongoDb().collection('customers');
+  }
+
   private async findSubmissions(customerId: string): Promise<KycRecord[]> {
-    const items = await this.kycModel.collection
-      .find(relatedIdFilter('customerId', customerId) as never)
-      .sort({ createdAt: -1 })
-      .toArray();
-    return items as unknown as KycRecord[];
+    const id = extractMongoId(customerId) || String(customerId);
+    const clauses: Record<string, unknown>[] = [{ customerId: id }];
+    if (Types.ObjectId.isValid(id)) clauses.push({ customerId: new Types.ObjectId(id) });
+    const [native, scoped, unscoped] = await Promise.all([
+      this.nativeKyc().find({ $or: clauses }).sort({ createdAt: -1 }).toArray(),
+      this.kycModel.find({ customerId: id }).sort({ createdAt: -1 }).lean(),
+      runWithoutTenant(() => this.kycModel.find({ customerId: id }).sort({ createdAt: -1 }).lean()),
+    ]);
+    const merged = new Map<string, KycRecord>();
+    for (const row of [...native, ...scoped, ...unscoped] as unknown as KycRecord[]) {
+      const key = row._id ? String(row._id) : `${row.documentType}:${row.status}:${String(row.createdAt ?? '')}`;
+      merged.set(key, row);
+    }
+    return [...merged.values()];
   }
 
   private async backfillRiderKycStatuses() {
     await runWithoutTenant(async () => {
-      const docs = (await this.kycModel.collection
+      const docs = (await this.nativeKyc()
         .find({})
         .project({ customerId: 1, documentType: 1, status: 1, createdAt: 1 })
         .toArray()) as unknown as KycRecord[];
@@ -313,11 +345,8 @@ export class KycService implements OnModuleInit {
 
   private async setRiderKycStatus(customerId: string, kycStatus: string) {
     const id = extractMongoId(customerId) || String(customerId);
-    const res = await this.customerModel.collection.updateMany(relatedIdFilter('_id', id) as never, { $set: { kycStatus } });
-    if (!res.matchedCount) {
-      await runWithoutTenant(() =>
-        this.customerModel.findOneAndUpdate(relatedIdFilter('_id', id) as never, { kycStatus }),
-      );
-    }
+    const clauses: Record<string, unknown>[] = [{ _id: id }];
+    if (Types.ObjectId.isValid(id)) clauses.push({ _id: new Types.ObjectId(id) });
+    await this.nativeCustomers().updateMany({ $or: clauses }, { $set: { kycStatus } });
   }
 }

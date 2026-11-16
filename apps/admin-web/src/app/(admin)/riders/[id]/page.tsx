@@ -15,6 +15,7 @@ import { IconUsers } from "@/components/icons";
 import { ACCESS, canAccess } from "@/lib/access";
 import { api, RentalPlan, RiderProfile, Vehicle } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { kycStatusFromSubmissions } from "@/lib/kyc-status";
 import { KycDocView } from "@/components/KycDocView";
 
 const tabs = ["Overview", "Vehicle", "Plan", "Wallet", "Payments", "Service history", "KYC"] as const;
@@ -88,6 +89,7 @@ export default function RiderProfilePage() {
   }
 
   const r = profile.rider;
+  const riderKycStatus = kycStatusFromSubmissions(profile.kyc.submissions, profile.kyc.status);
 
   return (
     <div>
@@ -117,7 +119,7 @@ export default function RiderProfilePage() {
           <p><span className="text-xs text-text-muted">Phone</span><br />{r.phone}</p>
           <p><span className="text-xs text-text-muted">Email</span><br />{r.email ?? "—"}</p>
           <p><span className="text-xs text-text-muted">Account</span><br /><Badge status={r.accountStatus} /></p>
-          <p><span className="text-xs text-text-muted">KYC</span><br /><Badge status={profile.kyc.status} /></p>
+          <p><span className="text-xs text-text-muted">KYC</span><br /><Badge status={riderKycStatus} /></p>
           <p><span className="text-xs text-text-muted">Wallet</span><br />₹{profile.wallet.balance.toLocaleString("en-IN")}</p>
           <p><span className="text-xs text-text-muted">Plan</span><br />{profile.rentalPlan?.name ?? "Not assigned"}</p>
         </Card>
@@ -156,12 +158,12 @@ export default function RiderProfilePage() {
           ) : (
             <EmptyState icon={<IconUsers className="h-7 w-7" />} title="No assigned vehicle" description="Pick an available vehicle below to assign this rider." />
           )}
-          {canWrite && !profile.assignedVehicle && profile.kyc.status !== "Approved" && (
+          {canWrite && !profile.assignedVehicle && riderKycStatus !== "Approved" && (
             <Card className="p-6">
               <p className="text-sm text-text-secondary">Assign a vehicle after KYC is approved (Aadhaar, PAN and driving licence).</p>
             </Card>
           )}
-          {canWrite && !profile.assignedVehicle && profile.kyc.status === "Approved" && (
+          {canWrite && !profile.assignedVehicle && riderKycStatus === "Approved" && (
             <Card className="flex flex-wrap items-end gap-3 p-6">
               <Field label="Available vehicle">
                 <Select value={assignVehicleId} onChange={(e) => setAssignVehicleId(e.target.value)}>
@@ -359,7 +361,7 @@ export default function RiderProfilePage() {
             </Card>
           )}
           {profile.kyc.submissions.length === 0 ? (
-            <EmptyState icon={<IconUsers className="h-7 w-7" />} title="No KYC documents" description={`Current status: ${profile.kyc.status}. Upload a file above or wait for the rider app.`} />
+            <EmptyState icon={<IconUsers className="h-7 w-7" />} title="No KYC documents" description={`Current status: ${riderKycStatus}. Upload a file above or wait for the rider app.`} />
           ) : (
             <DataTable>
               <Table>
