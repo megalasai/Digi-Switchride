@@ -5,6 +5,7 @@ import { Booking, BookingSchema, Payment, PaymentSchema, Promotion, PromotionSch
 import { Customer, CustomerSchema } from '../schemas/customer.schema';
 import { Vehicle, VehicleSchema } from '../schemas/fleet.schema';
 import { IoTModule } from '../iot/iot.module';
+import { EngagementModule } from '../engagement/engagement.module';
 import { BookingsController, BookingsAdminController } from './bookings.controller';
 import { BookingsService } from './bookings.service';
 
@@ -20,6 +21,7 @@ import { BookingsService } from './bookings.service';
       { name: Payment.name, schema: PaymentSchema },
     ]),
     IoTModule,
+    EngagementModule,
   ],
   controllers: [BookingsController, BookingsAdminController],
   providers: [BookingsService],

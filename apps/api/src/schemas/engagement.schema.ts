@@ -44,7 +44,7 @@ export class AppNotification {
   @Prop({ required: true, enum: ['AllRiders', 'ActiveRiders'], default: 'AllRiders' })
   audience!: string;
 
-  @Prop({ required: true, enum: ['InApp'], default: 'InApp' })
+  @Prop({ required: true, enum: ['InApp', 'WhatsApp'], default: 'InApp' })
   channel!: string;
 
   @Prop({ default: 'Queued' })

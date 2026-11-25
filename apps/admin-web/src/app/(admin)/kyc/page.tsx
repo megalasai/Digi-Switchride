@@ -198,7 +198,7 @@ export default function KycReviewPage() {
                     <span className="text-xs text-text-muted">Rider</span>
                     <Badge status={kycStatusFromSubmissions(items.filter((item) => item.riderId === d.riderId), d.riderKycStatus ?? "NotSubmitted")} />
                   </div>
-                  <KycDocView blobUrl={d.blobUrl} title={`${d.documentType} · ${d.riderName ?? d.riderPhone ?? "rider"}`} />
+                  <KycDocView blobUrl={d.blobUrl} fileUrl={d.fileUrl} title={`${d.documentType} · ${d.riderName ?? d.riderPhone ?? "rider"}`} />
                   <div className="mt-2"><Link className="text-sm text-brand" href={`/riders/${d.riderId}`}>Rider profile</Link></div>
                 </div>
                 {canWrite && (d.status === "Pending" || d.status === "UnderReview") && (

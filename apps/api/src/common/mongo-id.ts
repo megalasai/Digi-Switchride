@@ -1,9 +1,13 @@
 import mongoose, { Types } from 'mongoose';
 
 /** JSON restores often store `_id` as a 24-char string; mongoose `findById` only matches ObjectId. */
+export function isHexObjectId(id: string): boolean {
+  return /^[a-fA-F0-9]{24}$/.test(id);
+}
+
 export function mongoIdCandidates(id: string): unknown[] {
   const values: unknown[] = [id];
-  if (Types.ObjectId.isValid(id)) {
+  if (isHexObjectId(id)) {
     try {
       values.push(new Types.ObjectId(id));
     } catch {

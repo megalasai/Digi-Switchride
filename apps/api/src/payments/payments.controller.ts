@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Headers, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, Post, Put, Query, Req, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { AdminGuard, RolesGuard } from '../auth/admin.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -159,6 +160,19 @@ export class AdminController {
   @Roles('SuperAdmin', 'Administrator', 'KycTeam')
   kycSubmissions(@Query('status') status?: string) {
     return this.kycService.listSubmissions(status);
+  }
+
+  @Get('kyc/submissions/:id/file')
+  @Roles('SuperAdmin', 'Administrator', 'KycTeam', 'Operations', 'CommandCenter', 'Finance')
+  async kycSubmissionFile(@Param('id') id: string, @Res() res: Response) {
+    const file = await this.kycService.getSubmissionFile(id);
+    if (file.redirectUrl) {
+      res.redirect(file.redirectUrl);
+      return;
+    }
+    res.setHeader('Content-Type', file.mime);
+    res.setHeader('Cache-Control', 'private, max-age=120');
+    res.send(file.buffer);
   }
 
   @Post('kyc/submissions/:id/review')

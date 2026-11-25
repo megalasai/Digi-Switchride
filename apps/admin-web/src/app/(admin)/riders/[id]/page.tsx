@@ -377,7 +377,7 @@ export default function RiderProfilePage() {
                       <TableCell>{s.documentType}{s.documentNumberMasked ? ` · ${s.documentNumberMasked}` : ""}</TableCell>
                       <TableCell><Badge status={s.status} /></TableCell>
                       <TableCell>
-                        <KycDocView blobUrl={s.blobUrl} title={s.documentType} preview={false} />
+                        <KycDocView blobUrl={s.blobUrl} fileUrl={s.fileUrl} title={s.documentType} preview={false} />
                       </TableCell>
                       <TableCell>{s.rejectionReason ?? "—"}</TableCell>
                     </TableRow>

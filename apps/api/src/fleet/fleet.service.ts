@@ -24,6 +24,7 @@ import { runInWriteTenant } from '../common/tenant-write';
 import { runWithoutTenant } from '../common/tenant-als';
 import { TenantsService } from '../tenants/tenants.service';
 import { parseDay } from '../common/dates';
+import { WhatsAppService } from '../engagement/whatsapp.service';
 
 const BLOCKED_ASSIGN_STATUSES = ['Maintenance', 'Offline', 'InRide'];
 
@@ -39,6 +40,7 @@ export class FleetService {
     private iotService: IoTService,
     private auditService: AuditService,
     private tenants: TenantsService,
+    private whatsapp: WhatsAppService,
   ) {}
 
   async getNearbyHubs(lat: number, lng: number, radiusKm: number) {
@@ -463,6 +465,15 @@ export class FleetService {
       entityType: 'Vehicle',
       entityId: vehicleId,
       after: { riderId, registrationNumber: vehicle.registrationNumber, override: Boolean(options.override), reason: options.reason },
+    });
+    const pickupAt = new Date();
+    await this.whatsapp.notifyBookingConfirmed({
+      riderPhone: rider.phone,
+      tenantId: (rider as { tenantId?: string }).tenantId,
+      vehicleModel: vehicle.model,
+      registrationNumber: vehicle.registrationNumber,
+      pickupAt,
+      returnAt: this.whatsapp.addRentalPeriod(pickupAt, 'Monthly'),
     });
     return this.getVehicleDetail(vehicleId);
   }

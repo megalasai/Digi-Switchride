@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '../auth/auth.module';
 import { IoTModule } from '../iot/iot.module';
 import { TenantsModule } from '../tenants/tenants.module';
+import { EngagementModule } from '../engagement/engagement.module';
 import {
   GpsTrackPoint,
   GpsTrackPointSchema,
@@ -34,6 +35,7 @@ import { FleetService } from './fleet.service';
       { name: IoTDevice.name, schema: IoTDeviceSchema },
     ]),
     IoTModule,
+    EngagementModule,
   ],
   controllers: [FleetController, FleetAdminController],
   providers: [FleetService],

@@ -8,6 +8,7 @@ import { Vehicle, VehicleDocument } from '../schemas/fleet.schema';
 import { calculateGst, calculateRideFare, estimateFare, toGeoLocation } from '../common/helpers';
 import { IoTService } from '../iot/iot.service';
 import { hubAllowed } from '../common/hub-scope';
+import { WhatsAppService } from '../engagement/whatsapp.service';
 
 @Injectable()
 export class BookingsService {
@@ -19,6 +20,7 @@ export class BookingsService {
     @InjectModel(Promotion.name) private promotionModel: Model<PromotionDocument>,
     @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
     private iotService: IoTService,
+    private whatsapp: WhatsAppService,
   ) {}
 
   async create(customerId: string, vehicleId: string, bookingType: BookingType, promoCode?: string) {
@@ -49,6 +51,8 @@ export class BookingsService {
       }
     }
 
+    const pickupAt = new Date();
+    const returnAt = this.whatsapp.addRentalPeriod(pickupAt, bookingType);
     const booking = await this.bookingModel.create({
       customerId,
       vehicleId,
@@ -57,6 +61,8 @@ export class BookingsService {
       status: 'Confirmed',
       estimatedAmount: estimated,
       promoCode,
+      startTime: pickupAt,
+      endTime: returnAt,
     });
 
     const ride = await this.rideModel.create({
@@ -67,6 +73,15 @@ export class BookingsService {
 
     vehicle.status = 'Reserved';
     await vehicle.save();
+
+    await this.whatsapp.notifyBookingConfirmed({
+      riderPhone: customer.phone,
+      tenantId: (customer as { tenantId?: string }).tenantId,
+      vehicleModel: vehicle.model,
+      registrationNumber: vehicle.registrationNumber,
+      pickupAt,
+      returnAt,
+    });
 
     return this.toBooking(booking, ride._id.toString());
   }

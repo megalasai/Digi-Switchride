@@ -92,6 +92,18 @@ services:
         scope: RUN_TIME
         type: SECRET
         value: Admin@123
+      - key: WHATSAPP_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        scope: RUN_TIME
+        type: SECRET
+      - key: DIGILOCKER_VERIFICATION_URL
+        scope: RUN_TIME
+        value: "https://digilocker.gov.in"
+      - key: PUBLIC_APP_URL
+        scope: RUN_TIME
+        value: "https://fleetel-switchride-pmxt5.ondigitalocean.app"
 
   - name: admin
     dockerfile_path: apps/admin-web/Dockerfile

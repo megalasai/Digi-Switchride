@@ -333,16 +333,21 @@ export class RidersService implements OnModuleInit {
       },
       kyc: {
         status: synced.kycStatus,
-        submissions: kyc.map((s) => ({
-          id: s._id ? String(s._id) : '',
-          documentType: s.documentType,
-          status: s.status,
-          documentNumberMasked: s.documentNumberMasked,
-          blobUrl: s.blobUrl,
-          rejectionReason: s.rejectionReason,
-          submittedAt: s.createdAt,
-          reviewedAt: s.reviewedAt,
-        })),
+        submissions: kyc.map((s) => {
+          const id = s._id ? String(s._id) : '';
+          const blob = s.blobUrl || '';
+          return {
+            id,
+            documentType: s.documentType,
+            status: s.status,
+            documentNumberMasked: s.documentNumberMasked,
+            blobUrl: blob.length && blob.length < 20_000 ? blob : undefined,
+            fileUrl: id ? `/admin/kyc/submissions/${id}/file` : undefined,
+            rejectionReason: s.rejectionReason,
+            submittedAt: s.createdAt,
+            reviewedAt: s.reviewedAt,
+          };
+        }),
       },
     };
   }

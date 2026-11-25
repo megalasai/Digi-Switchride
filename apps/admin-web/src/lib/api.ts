@@ -560,7 +560,7 @@ export interface RiderProfile {
   };
   kyc: {
     status: string;
-    submissions: { id: string; documentType: string; status: string; documentNumberMasked?: string; blobUrl?: string; rejectionReason?: string; submittedAt?: string; reviewedAt?: string }[];
+    submissions: { id: string; documentType: string; status: string; documentNumberMasked?: string; blobUrl?: string; fileUrl?: string; rejectionReason?: string; submittedAt?: string; reviewedAt?: string }[];
   };
 }
 
@@ -879,6 +879,8 @@ export interface KycDocument {
   documentType: string;
   documentNumberMasked?: string;
   blobUrl?: string;
+  fileUrl?: string;
+  hasFile?: boolean;
   status: string;
   rejectionReason?: string;
   submittedAt?: string;
