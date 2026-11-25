@@ -108,8 +108,8 @@ export default function KycReviewPage() {
                 <option value="Selfie">Selfie / photograph</option>
               </Select>
             </Field>
-            <Field label="Document number" hint="Optional">
-              <Input value={uploadNumber} onChange={(e) => setUploadNumber(e.target.value)} />
+            <Field label="Document number" hint={uploadType === "Selfie" ? "Not required for a photograph" : "Required for Aadhaar, PAN and driving licence"}>
+              <Input value={uploadNumber} onChange={(e) => setUploadNumber(e.target.value)} disabled={uploadType === "Selfie"} placeholder={uploadType === "Selfie" ? "Not required" : "Enter document number"} />
             </Field>
             <Field label="File">
               <input
@@ -134,11 +134,16 @@ export default function KycReviewPage() {
           </div>
           <Button
             type="button"
-            disabled={!uploadRiderId || !uploadFile || uploading}
+            disabled={!uploadRiderId || !uploadFile || uploading || (uploadType !== "Selfie" && !uploadNumber.trim())}
             onClick={async () => {
               setUploading(true);
               setError("");
               try {
+                if (uploadType !== "Selfie" && !uploadNumber.trim()) {
+                  setError("Enter the Aadhaar, PAN or driving licence number");
+                  setUploading(false);
+                  return;
+                }
                 await api.uploadRiderKyc(uploadRiderId, {
                   documentType: uploadType,
                   documentNumber: uploadNumber.trim() || undefined,
@@ -191,7 +196,8 @@ export default function KycReviewPage() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="font-semibold">{d.documentType}</p>
-                  <p className="text-sm text-text-secondary">{d.riderName ?? d.riderPhone} · {d.documentNumberMasked ?? "No number on file"}</p>
+                  <p className="text-sm text-text-secondary">Rider: {d.riderName ?? "—"} · {d.riderPhone ?? "No rider phone"}</p>
+                  <p className="text-sm text-text-secondary">Document number: {d.documentNumberMasked ?? "No document number on file"}</p>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <span className="text-xs text-text-muted">Document</span>
                     <Badge status={d.status} />

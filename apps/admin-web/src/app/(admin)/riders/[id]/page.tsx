@@ -291,7 +291,7 @@ export default function RiderProfilePage() {
                 {profile.kyc.submissions.filter((s) => s.status === "Approved").map((s) => (
                   <div key={s.id} className="rounded-xl border border-border p-4">
                     <p className="text-sm font-semibold">{s.documentType}</p>
-                    <p className="text-xs text-text-muted">{s.documentNumberMasked ?? "No number on file"}</p>
+                    <p className="text-xs text-text-muted">{s.documentNumberMasked ?? "No document number on file"}</p>
                     <KycDocView blobUrl={s.blobUrl} title={`${s.documentType} · ${r.fullName ?? r.phone}`} />
                   </div>
                 ))}
@@ -310,8 +310,8 @@ export default function RiderProfilePage() {
                     <option value="Selfie">Selfie / photograph</option>
                   </Select>
                 </Field>
-                <Field label="Document number" hint="Optional">
-                  <Input value={kycNumber} onChange={(e) => setKycNumber(e.target.value)} />
+                <Field label="Document number" hint={kycType === "Selfie" ? "Not required for a photograph" : "Required for Aadhaar, PAN and driving licence"}>
+                  <Input value={kycNumber} onChange={(e) => setKycNumber(e.target.value)} disabled={kycType === "Selfie"} placeholder={kycType === "Selfie" ? "Not required" : "Enter document number"} />
                 </Field>
                 <div className="md:col-span-2">
                   <Field label="File" hint="JPG, PNG or PDF, about 5 MB max">
@@ -338,10 +338,14 @@ export default function RiderProfilePage() {
               </div>
               <Button
                 type="button"
-                disabled={!kycFile}
+                disabled={!kycFile || (kycType !== "Selfie" && !kycNumber.trim())}
                 onClick={async () => {
                   setError("");
                   try {
+                    if (kycType !== "Selfie" && !kycNumber.trim()) {
+                      setError("Enter the Aadhaar, PAN or driving licence number");
+                      return;
+                    }
                     await api.uploadRiderKyc(params.id, {
                       documentType: kycType,
                       documentNumber: kycNumber.trim() || undefined,
@@ -374,7 +378,7 @@ export default function RiderProfilePage() {
                 <TableBody>
                   {profile.kyc.submissions.map((s) => (
                     <TableRow key={s.id}>
-                      <TableCell>{s.documentType}{s.documentNumberMasked ? ` · ${s.documentNumberMasked}` : ""}</TableCell>
+                      <TableCell>{s.documentType}{s.documentNumberMasked ? ` · ${s.documentNumberMasked}` : " · No document number"}</TableCell>
                       <TableCell><Badge status={s.status} /></TableCell>
                       <TableCell>
                         <KycDocView blobUrl={s.blobUrl} fileUrl={s.fileUrl} title={s.documentType} preview={false} />

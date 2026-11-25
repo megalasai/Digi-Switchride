@@ -46,7 +46,7 @@ fun KycScreen(onBack: () -> Unit, viewModel: KycViewModel = hiltViewModel()) {
         }
         runCatching {
             pendingDataUrl = KycImageEncoder.uriToDataUrl(context, uri)
-            if (type == "Aadhaar" || type == "PAN") showNumberDialog = true
+            if (type == "Aadhaar" || type == "PAN" || type == "DrivingLicence") showNumberDialog = true
             else viewModel.uploadDocument(type, pendingDataUrl!!, null)
         }.onFailure { e ->
             viewModel.reportError(e.message ?: "Could not read photo")
@@ -58,7 +58,7 @@ fun KycScreen(onBack: () -> Unit, viewModel: KycViewModel = hiltViewModel()) {
         if (uri == null) return@rememberLauncherForActivityResult
         runCatching {
             pendingDataUrl = KycImageEncoder.uriToDataUrl(context, uri)
-            if (type == "Aadhaar" || type == "PAN") showNumberDialog = true
+            if (type == "Aadhaar" || type == "PAN" || type == "DrivingLicence") showNumberDialog = true
             else viewModel.uploadDocument(type, pendingDataUrl!!, null)
         }.onFailure { e ->
             viewModel.reportError(e.message ?: "Could not read image")
@@ -117,15 +117,19 @@ fun KycScreen(onBack: () -> Unit, viewModel: KycViewModel = hiltViewModel()) {
                 OutlinedTextField(
                     value = docNumber,
                     onValueChange = { docNumber = it },
-                    label = { Text("Last 4 digits or full number (optional)") },
+                    label = { Text("Full document number (required)") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
+                    if (docNumber.trim().isEmpty()) {
+                        viewModel.reportError("Enter the ${pendingType} number before uploading.")
+                        return@TextButton
+                    }
                     showNumberDialog = false
-                    viewModel.uploadDocument(pendingType!!, pendingDataUrl!!, docNumber)
+                    viewModel.uploadDocument(pendingType!!, pendingDataUrl!!, docNumber.trim())
                     pendingType = null
                     pendingDataUrl = null
                 }) { Text("Upload") }

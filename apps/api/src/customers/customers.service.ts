@@ -2,7 +2,7 @@ import { ConflictException, Injectable, NotFoundException, BadRequestException, 
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Customer, CustomerDocument, KycSubmission, KycSubmissionDocument } from '../schemas/customer.schema';
-import { maskAadhaar, resolveRiderUsername } from '../common/helpers';
+import { maskAadhaar, normalizeKycDocumentNumber, resolveRiderUsername } from '../common/helpers';
 import { extractMongoId, findByEitherId, isHexObjectId, relatedIdFilter } from '../common/mongo-id';
 import { runWithoutTenant } from '../common/tenant-als';
 
@@ -143,7 +143,13 @@ export class KycService implements OnModuleInit {
     if (blobUrl.length > 7_000_000) {
       throw new BadRequestException('Document file is too large (max about 5 MB)');
     }
-    const masked = documentType === 'Aadhaar' && documentNumber ? maskAadhaar(documentNumber) : documentNumber;
+    let number = '';
+    try {
+      number = normalizeKycDocumentNumber(documentType, documentNumber);
+    } catch (err) {
+      throw new BadRequestException(err instanceof Error ? err.message : 'Document number is required');
+    }
+    const masked = documentType === 'Aadhaar' && number ? maskAadhaar(number) : number || undefined;
     const tenantId = (customer as { tenantId?: string }).tenantId;
     const riderKey = extractMongoId(customer._id) || String(customerId);
     const submission = await this.kycModel.create({

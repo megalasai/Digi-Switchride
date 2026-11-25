@@ -19,6 +19,39 @@ export function maskAadhaar(aadhaar: string): string {
   return `XXXX-XXXX-${aadhaar.slice(-4)}`;
 }
 
+const NUMBERED_KYC_TYPES = new Set(['Aadhaar', 'PAN', 'DrivingLicence']);
+
+export function requiresKycDocumentNumber(documentType: string): boolean {
+  return NUMBERED_KYC_TYPES.has(documentType);
+}
+
+export function normalizeKycDocumentNumber(documentType: string, documentNumber?: string): string {
+  const raw = (documentNumber ?? '').trim();
+  if (!requiresKycDocumentNumber(documentType)) return raw;
+  if (!raw) {
+    throw new Error(`${documentType} number is required`);
+  }
+  if (documentType === 'Aadhaar') {
+    const digits = raw.replace(/\D/g, '');
+    if (digits.length !== 12) {
+      throw new Error('Enter a valid 12-digit Aadhaar number');
+    }
+    return digits;
+  }
+  if (documentType === 'PAN') {
+    const pan = raw.replace(/\s/g, '').toUpperCase();
+    if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
+      throw new Error('Enter a valid PAN (for example ABCDE1234F)');
+    }
+    return pan;
+  }
+  const licence = raw.replace(/\s/g, '').toUpperCase();
+  if (licence.length < 8) {
+    throw new Error('Enter a valid driving licence number');
+  }
+  return licence;
+}
+
 export function estimateFare(bookingType: BookingType, durationMinutes?: number): number {
   const rate = PRICING_RATES[bookingType] ?? 0;
   if (bookingType === 'PerMinute' && durationMinutes != null) return rate * durationMinutes;
