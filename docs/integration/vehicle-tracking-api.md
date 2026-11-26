@@ -9,13 +9,13 @@ All partner calls send JSON over HTTPS. Dates are ISO-8601 UTC (`2026-11-15T08:0
 
 **Postman:** import [`MoventraX-Vehicle-Tracking.postman_collection.json`](./MoventraX-Vehicle-Tracking.postman_collection.json). Paste the shared tracking token into collection variable `apiKey`. Every request (register, mapping, live, history) sends it. Default `baseUrl` is production HTTPS. For local, set `baseUrl` to `http://localhost:4000/api`.
 
-MoventraX does **not** create your application for you. Your product sends `applicationId` and `tenantId` (and later device/vehicle rows). MoventraX stores those mappings and then serves live/history GPS.
+Partner GETs and PUTs create `applicationId` if it is missing. You still send `tenantId` (and later device/vehicle rows). MoventraX stores those mappings and then serves live/history GPS.
 
 ### Sample fleet in this environment
 
 | Field | Value |
 |-------|--------|
-| `applicationId` | `schoolapplication` (you create this once via POST) |
+| `applicationId` | `schoolapplication` (created on first GET/PUT, or via POST) |
 | `tenantId` | `6ac4b568cb1a4bc2181cf1a8` (`digi-switchride`) |
 | `deviceId` | `352312095160753` (KA01AQ6087) |
 | `vehicleId` | `6ac4b567cb1a4bc2181cefdb` |
@@ -27,7 +27,7 @@ The **external application** owns one-time setup. MoventraX only stores what you
 
 | Step | Who calls | What is stored |
 |------|-----------|----------------|
-| 1. Register `applicationId` | External app `POST /v1/tracking/applications` with the shared token | `tracking_partner_apps` |
+| 1. Register `applicationId` | Optional `POST /v1/tracking/applications`, or first GET/PUT of tenants | `tracking_partner_apps` |
 | 2. Map tenants | External app `PUT` or `POST .../tenants` | `tracking_partner_tenants` |
 | 3. Map devices / vehicles | External app `PUT` or `POST .../assets` | `tracking_partner_assets` |
 | 4. Live / history | External app `GET` | Read IoT + GPS |
@@ -51,6 +51,16 @@ Authorization: Bearer mtx_the_token_you_were_given
 A `401` with `Invalid tracking API key` means the token in the header does not match `TRACKING_API_KEY` on the API. On DigitalOcean, an empty App Platform **SECRET** for that name overrides the spec — set the same `mtx_…` value in the API component env, or use a non-secret `TRACKING_API_KEY` so deploys apply it. Do not put a space after the colon in `X-Api-Key` except the usual single space.
 
 A `409` on register means that `applicationId` already exists — `PUT` tenants and devices instead.
+
+A `404` with `Tracking application not found` on older builds means the slug was never registered. Register it once:
+
+```bash
+curl.exe -s -X POST "https://fleetel-switchride-pmxt5.ondigitalocean.app/api/v1/tracking/applications" ^
+  -H "X-Api-Key: mtx_your_token" -H "Content-Type: application/json" ^
+  -d "{\"applicationId\":\"schoolapplication\",\"name\":\"School tracking\",\"tenantIds\":[\"6ac4b568cb1a4bc2181cf1a8\"]}"
+```
+
+Current API creates `schoolapplication` on startup and on first tenant/asset call, so GET tenants returns `{ "applicationId":"schoolapplication","items":[] }` until you PUT mappings.
 
 ## 3. Partner APIs
 

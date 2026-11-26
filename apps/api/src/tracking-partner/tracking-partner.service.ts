@@ -44,6 +44,7 @@ export class TrackingPartnerService implements OnModuleInit {
     const envKey = readSecret(this.config, 'TRACKING_API_KEY', '');
     if (envKey) this.logger.log(`Shared tracking API key is configured (${envKey.length} chars)`);
     else this.logger.warn('TRACKING_API_KEY is empty on this instance; partner calls will return 401 until it is set');
+    await this.ensureApp('schoolapplication', 'School tracking');
   }
 
   async createApp(data: { applicationId: string; name: string; notes?: string; tenantIds?: string[] }) {
@@ -134,7 +135,7 @@ export class TrackingPartnerService implements OnModuleInit {
   }
 
   async replaceTenants(applicationId: string, tenantIds: string[]) {
-    await this.requireApp(applicationId);
+    await this.ensureApp(applicationId);
     const unique = [...new Set(await Promise.all(tenantIds.map((id) => this.resolveTenantRef(id))))];
     await this.tenantMap.deleteMany({ applicationId });
     if (unique.length) {
@@ -144,7 +145,7 @@ export class TrackingPartnerService implements OnModuleInit {
   }
 
   async listTenants(applicationId: string) {
-    await this.requireApp(applicationId);
+    await this.ensureApp(applicationId);
     const rows = await this.tenantMap.find({ applicationId }).sort({ tenantId: 1 });
     const names = await this.tenants.namesByIds(rows.map((row) => row.tenantId));
     return {
@@ -158,7 +159,7 @@ export class TrackingPartnerService implements OnModuleInit {
   }
 
   async replaceAssets(applicationId: string, items: { tenantId: string; deviceId: string; vehicleId?: string }[]) {
-    await this.requireApp(applicationId);
+    await this.ensureApp(applicationId);
     const mapped = [];
     for (const item of items) {
       const tenantId = await this.resolveTenantRef(item.tenantId);
@@ -180,7 +181,7 @@ export class TrackingPartnerService implements OnModuleInit {
   }
 
   async listAssets(applicationId: string) {
-    await this.requireApp(applicationId);
+    await this.ensureApp(applicationId);
     const rows = await this.assetMap.find({ applicationId }).sort({ tenantId: 1, deviceId: 1 });
     const items = await Promise.all(rows.map((row) => this.enrichAsset(row.applicationId, row.tenantId, row.deviceId, row.vehicleId)));
     return { applicationId, items };
@@ -257,8 +258,25 @@ export class TrackingPartnerService implements OnModuleInit {
     return doc;
   }
 
+  private async ensureApp(applicationId: string, name?: string) {
+    const id = applicationId.trim().toLowerCase();
+    const existing = await this.appModel.findOne({ applicationId: id });
+    if (existing) return existing;
+    try {
+      return await this.appModel.create({
+        applicationId: id,
+        name: (name || id).trim() || id,
+        status: 'Active',
+      });
+    } catch {
+      const raced = await this.appModel.findOne({ applicationId: id });
+      if (raced) return raced;
+      throw new NotFoundException('Tracking application not found');
+    }
+  }
+
   private async resolveAssets(applicationId: string, tenantId?: string) {
-    await this.requireApp(applicationId);
+    await this.ensureApp(applicationId);
     const wantedTenant = tenantId?.trim();
     const assetFilter: Record<string, unknown> = { applicationId };
     if (wantedTenant) assetFilter.tenantId = wantedTenant;
