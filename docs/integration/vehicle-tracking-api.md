@@ -48,7 +48,9 @@ or
 Authorization: Bearer mtx_the_token_you_were_given
 ```
 
-A `401` means the token is missing, wrong, or disabled. A `409` on register means that `applicationId` already exists — `PUT` tenants and devices instead.
+A `401` with `Invalid tracking API key` means the token in the header does not match `TRACKING_API_KEY` on the API. On DigitalOcean, an empty App Platform **SECRET** for that name overrides the spec — set the same `mtx_…` value in the API component env, or use a non-secret `TRACKING_API_KEY` so deploys apply it. Do not put a space after the colon in `X-Api-Key` except the usual single space.
+
+A `409` on register means that `applicationId` already exists — `PUT` tenants and devices instead.
 
 ## 3. Partner APIs
 

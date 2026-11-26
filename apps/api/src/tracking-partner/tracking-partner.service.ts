@@ -1,11 +1,11 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, OnModuleInit, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { Model } from 'mongoose';
 import { findByEitherId } from '../common/mongo-id';
 import { runWithoutTenant } from '../common/tenant-als';
-import { readSecret } from '../config/secrets';
+import { normalizeSecret, readSecret } from '../config/secrets';
 import { IoTDevice, IoTDeviceDocument, Vehicle, VehicleDocument, GpsTrackPoint, GpsTrackPointDocument } from '../schemas/fleet.schema';
 import {
   TrackingAccessToken,
@@ -24,6 +24,8 @@ const HISTORY_MAX_POINTS = 5000;
 
 @Injectable()
 export class TrackingPartnerService implements OnModuleInit {
+  private readonly logger = new Logger(TrackingPartnerService.name);
+
   constructor(
     @InjectModel(TrackingPartnerApp.name) private appModel: Model<TrackingPartnerAppDocument>,
     @InjectModel(TrackingPartnerTenant.name) private tenantMap: Model<TrackingPartnerTenantDocument>,
@@ -39,6 +41,9 @@ export class TrackingPartnerService implements OnModuleInit {
   async onModuleInit() {
     await this.appModel.collection.createIndex({ applicationId: 1 }, { unique: true }).catch(() => undefined);
     await this.tokenModel.collection.createIndex({ tokenHash: 1 }, { unique: true }).catch(() => undefined);
+    const envKey = readSecret(this.config, 'TRACKING_API_KEY', '');
+    if (envKey) this.logger.log(`Shared tracking API key is configured (${envKey.length} chars)`);
+    else this.logger.warn('TRACKING_API_KEY is empty on this instance; partner calls will return 401 until it is set');
   }
 
   async createApp(data: { applicationId: string; name: string; notes?: string; tenantIds?: string[] }) {
@@ -110,10 +115,10 @@ export class TrackingPartnerService implements OnModuleInit {
   }
 
   async authenticate(apiKey: string) {
-    const incoming = apiKey.trim();
+    const incoming = normalizeSecret(apiKey);
     const hash = hashApiKey(incoming);
     const envKey = readSecret(this.config, 'TRACKING_API_KEY', '');
-    if (envKey && safeEqual(hashApiKey(envKey), hash)) {
+    if (envKey && (safeEqual(envKey, incoming) || safeEqual(hashApiKey(envKey), hash))) {
       return { applicationId: '*', name: 'shared' };
     }
     const token = await this.tokenModel.findOne({ tokenHash: hash, status: 'Active' });

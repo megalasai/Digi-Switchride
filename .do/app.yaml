@@ -53,9 +53,9 @@ services:
       - key: MONGODB_URI
         scope: RUN_TIME
         type: SECRET
+      # GENERAL so deploys apply this value. App Platform SECRET entries often stay empty after first create and then 401 partner calls.
       - key: TRACKING_API_KEY
         scope: RUN_TIME
-        type: SECRET
         value: mtx_671be8f4dc7c5aea25e622891fe036e95b291c4b31f2c096
       - key: JWT_SECRET
         scope: RUN_TIME
